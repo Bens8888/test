@@ -1,0 +1,37 @@
+/* ---------------------------------------------------------------- CRASH */
+.crash-stage { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 14px; padding: 14px; }
+.crash-chart { position: relative; min-height: 440px; border-radius: 16px; overflow: hidden; background: radial-gradient(ellipse at 20% 110%, rgba(155, 92, 255, 0.35), transparent 60%), radial-gradient(ellipse at 90% -10%, rgba(255, 61, 154, 0.2), transparent 55%), rgba(5, 3, 20, 0.65); border: 1px solid var(--border); box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4); }
+.crash-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.crash-overlay { position: absolute; left: 0; right: 0; top: 26%; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; text-align: center; }
+.crash-mult { --heat: 0; font-family: var(--font-num); font-weight: 800; font-size: clamp(2.8rem, 8vw, 5.2rem); line-height: 1; font-variant-numeric: tabular-nums; color: color-mix(in srgb, #ffffff calc(100% - var(--heat) * 100%), #ffc94d); text-shadow: 0 0 calc(20px + var(--heat) * 30px) rgba(255, 61, 154, calc(0.5 + var(--heat) * 0.4)); }
+.crash-label { min-height: 1.2em; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.8rem; color: var(--muted); }
+.crash-progress { width: min(260px, 60%); height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; display: none; margin-top: 8px; }
+.crash-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--purple), var(--cyan)); box-shadow: 0 0 12px var(--cyan); }
+.crash-chart.betting .crash-progress { display: block; }
+.crash-chart.betting .crash-mult { font-size: clamp(2rem, 5vw, 3.2rem); color: #fff; text-shadow: 0 0 20px rgba(34, 228, 255, 0.6); }
+.crash-chart.flying .crash-label { color: var(--green); letter-spacing: 0.04em; text-transform: none; font-size: 0.9rem; }
+.crash-chart.crashed .crash-mult { color: var(--red); text-shadow: 0 0 30px rgba(255, 61, 110, 0.9); animation: crash-hit 0.5s cubic-bezier(.3,1.8,.5,1); }
+.crash-chart.crashed .crash-label { color: var(--red); font-size: 1rem; text-shadow: 0 0 12px rgba(255, 61, 110, 0.8); }
+@keyframes crash-hit { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+.crash-players { display: flex; flex-direction: column; gap: 8px; min-height: 0; max-height: 440px; padding: 12px; border-radius: 16px; background: rgba(5, 3, 20, 0.45); border: 1px solid var(--border); }
+.crash-players-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; font-size: 0.85rem; }
+.crash-players-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; scrollbar-width: thin; }
+.cp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 0.8rem; background: rgba(255,255,255,0.03); transition: background 0.25s, color 0.25s; animation: row-in 0.35s ease; }
+.cp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d6d8ff; }
+.cp-bet { font-variant-numeric: tabular-nums; color: var(--muted); }
+.cp-out { font-family: var(--font-num); font-size: 0.7rem; min-width: 34px; text-align: right; color: var(--muted); white-space: nowrap; }
+.cp-row.cashed { background: rgba(45, 255, 138, 0.12); }
+.cp-row.cashed .cp-out, .cp-row.cashed .cp-name { color: var(--green); }
+.cp-row.lost { opacity: 0.55; }
+.cp-row.lost .cp-out { color: var(--red); }
+.cp-row.you { background: rgba(155, 92, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(155, 92, 255, 0.5); }
+.cp-row.you .cp-name { font-weight: 800; color: #fff; }
+.cp-row.you.cashed { background: rgba(45, 255, 138, 0.2); box-shadow: inset 0 0 0 1px var(--green); }
+@media (max-width: 1100px) {
+  .crash-stage { grid-template-columns: minmax(0, 1fr) 210px; }
+}
+@media (max-width: 860px) {
+  .crash-stage { grid-template-columns: 1fr; padding: 10px; }
+  .crash-chart { min-height: 320px; }
+  .crash-players { max-height: 230px; }
+}

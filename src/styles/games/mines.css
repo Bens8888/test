@@ -1,0 +1,53 @@
+/* ---------------------------------------------------------------- MINES */
+.mines-stage { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 22px; }
+.mines-hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(100%, 520px); }
+.mines-hud-item { padding: 10px 12px; border-radius: 12px; background: rgba(5, 3, 20, 0.5); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; text-align: center; transition: border-color 0.2s, box-shadow 0.2s; }
+.mines-hud-item span { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.mines-hud-item b { font-family: var(--font-num); font-size: 1.05rem; font-weight: 600; }
+.mines-hud.live .mines-hud-item:first-child { border-color: rgba(45, 255, 138, 0.55); box-shadow: 0 0 18px rgba(45, 255, 138, 0.2); }
+.mines-hud.live .mines-hud-item:first-child b { color: var(--green); text-shadow: 0 0 12px rgba(45, 255, 138, 0.7); }
+.mines-board { position: relative; width: min(100%, 520px); }
+.mines-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: clamp(6px, 1.4vw, 12px); padding: clamp(8px, 1.6vw, 14px); border-radius: 18px; background: rgba(5, 3, 20, 0.5); border: 1px solid var(--border); box-shadow: inset 0 0 40px rgba(45, 255, 138, 0.06); }
+.mine-tile { position: relative; aspect-ratio: 1; border: 0; padding: 0; border-radius: 14px; background: transparent; perspective: 600px; cursor: pointer; transition: transform 0.15s; }
+.mine-face { position: absolute; inset: 0; border-radius: inherit; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: grid; place-items: center; transition: transform 0.45s cubic-bezier(.3,1.4,.5,1); }
+.mine-face.front { background: linear-gradient(180deg, #3b2f78, #261d55); box-shadow: inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -5px 0 rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.35); }
+.mine-face.front::after { content: ''; width: 26%; height: 26%; border-radius: 50%; background: radial-gradient(circle, rgba(155, 92, 255, 0.55), transparent 70%); }
+.mine-face.back { transform: rotateY(180deg); background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), rgba(5, 3, 20, 0.9)); border: 1px solid var(--border); }
+.mine-face.back .svg-wrap { width: 64%; height: 64%; }
+.mine-tile:not(.revealed):hover .front { transform: translateY(-3px); background: linear-gradient(180deg, #4b3d95, #2f2466); box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), inset 0 -5px 0 rgba(0,0,0,0.35), 0 0 18px rgba(155, 92, 255, 0.55); }
+.mine-tile:not(.revealed):active .front { transform: translateY(1px) scale(0.97); }
+.mine-tile.revealed .front { transform: rotateY(180deg); }
+.mine-tile.revealed .back { transform: rotateY(360deg); }
+.mine-tile.gem .back { border-color: rgba(45, 255, 138, 0.6); box-shadow: inset 0 0 22px rgba(45, 255, 138, 0.35), 0 0 18px rgba(45, 255, 138, 0.35); }
+.mine-tile.gem .back .svg-wrap { filter: drop-shadow(0 0 10px rgba(45, 255, 138, 0.8)); }
+.mine-tile.mine .back { border-color: rgba(255, 61, 110, 0.6); box-shadow: inset 0 0 22px rgba(255, 61, 110, 0.35); }
+.mine-tile.mine .back .svg-wrap { filter: drop-shadow(0 0 10px rgba(255, 61, 110, 0.8)); }
+.mine-tile.exploded .back { background: radial-gradient(circle, rgba(255, 138, 61, 0.55), rgba(120, 10, 40, 0.9)); box-shadow: 0 0 30px rgba(255, 61, 110, 0.9), inset 0 0 26px rgba(255, 201, 77, 0.5); animation: mine-blast 0.5s ease; }
+@keyframes mine-blast { 30% { transform: rotateY(360deg) scale(1.18); } }
+.mine-tile.dim { opacity: 0.4; }
+.mine-tile.dim .back { box-shadow: none; }
+.mine-tile.flip .back .svg-wrap { animation: gem-pop 0.5s cubic-bezier(.3,1.8,.5,1); }
+@keyframes gem-pop { 0% { transform: scale(0.2) rotate(-20deg); } 60% { transform: scale(1.15) rotate(4deg); } }
+.mine-tile.picked:not(.revealed) .front, .mine-tile.picked:not(.revealed):hover .front { background: linear-gradient(180deg, #6d3dff, #4a1fd0); box-shadow: 0 0 0 2px var(--purple), 0 0 22px rgba(155, 92, 255, 0.7); }
+.mine-tile.picked:not(.revealed) .front::after { background: radial-gradient(circle, #fff, transparent 70%); }
+.mines-banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; padding: 16px 30px; border-radius: 18px; text-align: center; background: rgba(10, 5, 30, 0.92); border: 2px solid var(--border-2); transition: opacity 0.25s, transform 0.35s cubic-bezier(.3,1.6,.5,1); z-index: 3; }
+.mines-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); animation: mines-banner-out 0.4s ease 1.6s forwards; }
+@keyframes mines-banner-out { to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } }
+.mines-banner.win { border-color: var(--green); box-shadow: 0 0 40px rgba(45, 255, 138, 0.45); }
+.mines-banner.lose { border-color: var(--red); box-shadow: 0 0 40px rgba(255, 61, 110, 0.45); }
+.mb-title { font-family: var(--font-num); font-weight: 800; font-size: 2rem; }
+.mines-banner.win .mb-title { color: var(--green); text-shadow: 0 0 18px rgba(45, 255, 138, 0.8); }
+.mines-banner.lose .mb-title { color: var(--red); text-shadow: 0 0 18px rgba(255, 61, 110, 0.8); }
+.mb-sub { color: #dfe0ff; font-weight: 700; margin-top: 2px; }
+.mines-gems-out { height: 42px; display: flex; align-items: center; padding: 0 12px; border-radius: 10px; background: rgba(5, 3, 20, 0.6); border: 1px solid var(--border); font-family: var(--font-num); font-size: 0.9rem; color: var(--green); }
+.mines-random { width: 100%; }
+.btn-play.nudge { animation: mines-nudge 0.45s ease; }
+@keyframes mines-nudge { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+@media (max-width: 640px) {
+  .mines-stage { padding: 12px; gap: 10px; }
+  .mines-hud { gap: 6px; }
+  .mines-hud-item { padding: 8px 6px; }
+  .mines-hud-item b { font-size: 0.88rem; }
+  .mine-tile { border-radius: 10px; }
+  .mb-title { font-size: 1.5rem; }
+}
