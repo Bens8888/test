@@ -111,7 +111,7 @@ export function rafLoop(fn: (dt: number, now: number) => void | false): () => vo
   let stopped = false;
   const tick = (now: number) => {
     if (stopped) return;
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
     last = now;
     if (fn(dt, now) === false) return;
     id = requestAnimationFrame(tick);

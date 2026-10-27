@@ -45,7 +45,7 @@ function loop() {
   let last = performance.now();
   running = true;
   const step = (now: number) => {
-    const dt = Math.min(0.04, (now - last) / 1000);
+    const dt = Math.max(0, Math.min(0.04, (now - last) / 1000));
     last = now;
     cctx!.clearRect(0, 0, innerWidth, innerHeight);
     parts = parts.filter((p) => (p.life -= dt) > 0);
@@ -79,7 +79,7 @@ function loop() {
         cctx!.strokeStyle = p.color;
         cctx!.lineWidth = 3 * (1 - t) + 0.5;
         cctx!.beginPath();
-        cctx!.arc(0, 0, p.size * (0.2 + easeOutCubic(t) * 1.2), 0, Math.PI * 2);
+        cctx!.arc(0, 0, Math.max(0, p.size * (0.2 + easeOutCubic(Math.min(1, Math.max(0, t))) * 1.2)), 0, Math.PI * 2);
         cctx!.stroke();
       } else {
         cctx!.fillStyle = p.color;

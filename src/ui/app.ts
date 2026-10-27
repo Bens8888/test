@@ -184,7 +184,11 @@ export function startApp(root: HTMLElement) {
     }
   }
   window.addEventListener('hashchange', route);
-  window.addEventListener('beforeunload', () => cleanup?.());
+  window.addEventListener('beforeunload', () => {
+    cleanup?.();
+    cleanup = null;
+    store.save(); // persist anything the game refunded/settled on the way out
+  });
   route();
 
   // ---------------------------------------------------------------- welcome & breaks
