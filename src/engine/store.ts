@@ -145,6 +145,6 @@ export const store = {
   },
 };
 
-window.addEventListener('beforeunload', () => store.save());
+if (typeof window !== 'undefined') window.addEventListener('beforeunload', () => store.save());
 
 export const settings = () => store.data.settings;

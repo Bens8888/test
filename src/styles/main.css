@@ -195,6 +195,9 @@ input[type='range'] { width: 100%; accent-color: var(--cyan); }
 .nav-dot { width: 6px; height: 6px; border-radius: 50%; margin-left: auto; box-shadow: 0 0 8px currentColor; opacity: 0.8; }
 .nav-foot { margin-top: auto; padding: 16px 8px 4px; display: flex; flex-direction: column; gap: 6px; }
 .nav-scrim { display: none; }
+button.nav-link { border: 0; background: none; width: 100%; text-align: left; font-family: inherit; }
+.mobile-only { display: none !important; }
+@media (max-width: 640px) { .mobile-only { display: flex !important; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; } }
 .app-main { flex: 1; min-width: 0; padding: 0 20px 20px; }
 .view { max-width: 1360px; margin: 0 auto; padding-top: 18px; }
 

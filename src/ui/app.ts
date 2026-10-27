@@ -128,6 +128,10 @@ export function startApp(root: HTMLElement) {
     h('div.nav-section', CATEGORIES.filter((c) => c.id !== 'all').map((c) => link(`#/category/${c.id}`, c.icon, c.name))),
     h('div.nav-title', 'Games'),
     h('div.nav-section.games', GAMES.map((g) => link(`#/game/${g.id}`, g.icon, g.name, h('span.nav-dot', { style: { background: g.colors[0] } })))),
+    h('div.nav-section.mobile-only',
+      h('button.nav-link', { type: 'button', onclick: () => { document.body.classList.remove('nav-open'); openFairness(); } }, svg(ICONS.shield), h('span', 'Provably fair')),
+      h('button.nav-link', { type: 'button', onclick: () => { document.body.classList.remove('nav-open'); openStats(); } }, svg(ICONS.stats), h('span', 'My stats')),
+    ),
     h('div.nav-foot', h('div.play-badge', '🎟 Play money only'), h('div.muted.small', 'No real money. No prizes.')),
   );
   const scrim = h('div.nav-scrim', { onclick: () => document.body.classList.remove('nav-open') });
