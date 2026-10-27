@@ -1,0 +1,23 @@
+{
+  "name": "neon-vault-arcade",
+  "private": true,
+  "version": "1.0.0",
+  "description": "NEON VAULT - a free play-money casino arcade. Fake chips only, no real money.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@fontsource-variable/outfit": "^5.3.0",
+    "@fontsource/orbitron": "^5.3.0"
+  }
+}
