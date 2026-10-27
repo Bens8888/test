@@ -1,0 +1,40 @@
+/* ---------------------------------------------------------------- KENO */
+.keno-stage { display: flex; flex-direction: column; gap: 16px; padding: 22px; }
+.keno-board { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.keno-board.locked { pointer-events: none; }
+.keno-cell {
+  position: relative; aspect-ratio: 1 / 0.86; border-radius: 12px; border: 1px solid var(--border); min-width: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); box-shadow: 0 4px 0 rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+  font-family: var(--font-num); font-weight: 600; font-size: clamp(0.78rem, 1.6vw, 1.1rem); color: #d8daff;
+  transition: transform 0.12s, background 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.keno-cell span { position: relative; z-index: 1; }
+.keno-cell:hover { transform: translateY(-2px); border-color: var(--border-2); background: rgba(255,255,255,0.12); }
+.keno-cell:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+.keno-cell.picked { color: #fff; border-color: rgba(155, 92, 255, 0.9); background: linear-gradient(160deg, #a177ff, #5b2fe0); box-shadow: 0 4px 0 #2e157a, 0 0 22px rgba(155, 92, 255, 0.55); }
+.keno-cell.pop-in { animation: keno-pop 0.3s cubic-bezier(.3,1.8,.5,1); }
+@keyframes keno-pop { from { transform: scale(0.6); } }
+.keno-cell.drawn { animation: keno-draw 0.35s cubic-bezier(.3,1.7,.5,1); }
+@keyframes keno-draw { 0% { transform: scale(0.7) rotateY(90deg); } 100% { transform: none; } }
+.keno-cell.miss { background: linear-gradient(160deg, #4a1424, #2a0a15); border-color: rgba(255, 77, 109, 0.55); color: #ff8fa3; box-shadow: 0 4px 0 #1a050c; }
+.keno-cell.miss.picked { background: linear-gradient(160deg, #6a3dc8, #3a1a8f); }
+.keno-cell.hit { color: #062612; border-color: #b6ffd5; background: radial-gradient(circle at 40% 30%, #c8ffe0, #2dff8a 55%, #12b85a); box-shadow: 0 4px 0 #0a6b34, 0 0 28px rgba(45, 255, 138, 0.8); }
+.keno-cell.hit::before { content: '◆'; position: absolute; top: 4px; right: 6px; font-size: 0.6rem; color: rgba(6, 38, 18, 0.6); }
+.keno-pays { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: thin; }
+.keno-empty { padding: 12px; font-size: 0.9rem; }
+.keno-pay { flex: 1 0 58px; padding: 9px 6px; border-radius: 10px; text-align: center; background: rgba(5, 3, 20, 0.55); border: 1px solid var(--border); cursor: default; transition: all 0.2s; }
+.keno-pay .kp-mult { font-family: var(--font-num); font-weight: 600; font-size: 0.78rem; color: #8b8db5; }
+.keno-pay .kp-hits { font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
+.keno-pay.pays .kp-mult { color: #fff; }
+.keno-pay.big .kp-mult { color: var(--gold); }
+.keno-pay.active { border-color: var(--green); background: rgba(45, 255, 138, 0.16); box-shadow: 0 0 20px rgba(45, 255, 138, 0.45); transform: translateY(-3px); }
+.keno-pay.active .kp-mult { color: var(--green); }
+.keno-hint { min-height: 1.1em; margin-top: -8px; }
+.keno-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.keno-count { margin-left: auto; }
+@media (max-width: 640px) {
+  .keno-stage { padding: 12px; gap: 12px; }
+  .keno-board { gap: 5px; }
+  .keno-cell { border-radius: 9px; }
+  .keno-pay { flex-basis: 50px; padding: 7px 4px; }
+}

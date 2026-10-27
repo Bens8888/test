@@ -172,7 +172,7 @@ export const WHEEL = {
    */
   patterns: {
     low: [1.5, 1.2, 1.2, 1.2, 0, 1.2, 1.2, 1.2, 1.2, 0],
-    medium: [0, 1.9, 0, 1.5, 0, 2, 0, 1.5, 0, 3, 0, 1.6, 0, 2, 0, 1.5, 0, 4, 0, 1.5],
+    medium: [0, 1.9, 0, 1.5, 0, 2, 0, 1.5, 0, 3, 0, 1.6, 0, 2, 0, 1.5, 0, 3, 0, 1.8],
     /** high risk: one jackpot segment, the rest are zero */
     high: 'jackpot',
   },
