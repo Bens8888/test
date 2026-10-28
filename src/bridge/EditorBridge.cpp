@@ -6,7 +6,11 @@
 #include <Geode/binding/LevelSettingsObject.hpp>
 #include <Geode/binding/UndoObject.hpp>
 
+#include <al/gen/test_pattern.hpp>
+
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 
 using namespace geode::prelude;
@@ -119,6 +123,15 @@ geode::Result<size_t> EditorBridge::applyLevel(LevelEditorLayer* lel, level::Lev
     st->m_isFlipped = lvl.settings.startFlipped;
     lel->levelSettingsUpdated();
     return res;
+}
+
+geode::Result<size_t> EditorBridge::placePieceTest(LevelEditorLayer* lel) {
+    if (!lel) return Err("Not in the editor");
+    double x0 = 0;
+    if (auto lvl = level::Level::fromLevelString(levelString(lel)))
+        for (auto& o : lvl->objects) x0 = std::max(x0, o.x);
+    x0 = std::ceil((x0 + 300) / 30.0) * 30.0;
+    return apply(lel, gen::makePieceTest(x0), "AutoLayout piece test");
 }
 
 std::filesystem::path EditorBridge::datasetDir() {

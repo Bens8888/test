@@ -850,6 +850,17 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
     saveDir->setPosition({150.f, 10.f});
     misc->addChild(saveDir);
     form->row("Options", misc);
+    auto pieces = CCMenu::create();
+    pieces->setContentSize({280.f, 20.f});
+    pieces->ignoreAnchorPointForPosition(false);
+    auto pieceBtn = ui::button("Place piece test", [this] {
+        auto r = EditorBridge::get().placePieceTest(m_editor);
+        if (r.isErr()) Notification::create(r.unwrapErr(), NotificationIcon::Error)->show();
+        else setStatus("Piece test placed after the last object (Undo removes it).");
+    }, 0.4f, "GJ_button_04.png");
+    pieceBtn->setPosition({70.f, 10.f});
+    pieces->addChild(pieceBtn);
+    form->row("Check outline pieces", pieces);
     form->text("Backups, recordings, presets, the dataset and retrained models live in the save folder.");
     return form;
 }

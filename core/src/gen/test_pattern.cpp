@@ -1,4 +1,6 @@
 #include <al/gen/test_pattern.hpp>
+#include <al/gen/tiles.hpp>
+#include <al/util/codec.hpp>
 
 namespace al::gen {
 
@@ -37,16 +39,54 @@ std::vector<LevelObject> makeTestPattern(double x0) {
     v.push_back(mk(id::PortalSizeMini, X(b + 6), 45));
     v.push_back(mk(id::PortalSizeNormal, X(b + 14), 45));
     v.push_back(mk(id::Speed1, X(b + 20), 45));
-    // a colour trigger for the background
-    LevelObject col = mk(id::TrigColor, X(2), 600);
-    col.setProp(36, std::string("1"));
-    col.setProp(23, 1000.0);
-    col.setProp(7, 40.0);
-    col.setProp(8, 20.0);
-    col.setProp(9, 90.0);
-    col.setProp(10, 0.5);
-    v.push_back(col);
+    return v;
+}
+
+static LevelObject label(const std::string& text, double x, double y) {
+    LevelObject o = mk(914, x, y);
+    o.setProp(31, base64Encode(text, true));
+    o.scale = 0.5;
+    return o;
+}
+
+std::vector<LevelObject> makePieceTest(double x0) {
+    std::vector<LevelObject> v;
+    // rows (bottom to top): the outline pieces at 0 / 90 / 180 / 270 degrees, then the outline
+    // slope in the four orientations the generator uses
+    const int pieces[] = {id::OutlineTop, id::OutlineCorner, id::OutlineTopPillar, id::OutlinePillar};
+    const char* names[] = {"468 edge", "469 corner", "470 cap", "471 pillar"};
+    double y = 135;
+    for (int i = 0; i < 4; ++i, y += 75) {
+        v.push_back(label(names[i], x0 + 45, y));
+        for (int q = 0; q < 4; ++q) {
+            double x = x0 + 165 + q * 90;
+            v.push_back(mk(pieces[i], x, y, q * 90.0));
+            v.push_back(label(std::to_string(q * 90), x, y - 30));
+        }
+    }
+    v.push_back(label("1338 slope", x0 + 45, y));
+    const char* slopeNames[] = {"floor /", "floor \\", "ceil /", "ceil \\"};
+    const CellKind kinds[] = {CellKind::SlopeFloorUp, CellKind::SlopeFloorDown, CellKind::SlopeCeilUp, CellKind::SlopeCeilDown};
+    for (int q = 0; q < 4; ++q) {
+        CellGrid g;
+        int cx = int((x0 + 150 + q * 90) / 30), cy = int(y / 30);
+        g.set(cx, cy, kinds[q]);
+        std::vector<LevelObject> one;
+        tileCells(g, TileLook::Outline, one);
+        for (auto& o : one) if (o.id != id::OutlineTop) v.push_back(o);
+        v.push_back(label(slopeNames[q], cx * 30 + 15, y - 30));
+    }
+    // a tiled structure (a pillar with a slope corner and a hanging pillar) to see the silhouette
+    CellGrid g;
+    const int sx = int((x0 + 600) / 30);
+    g.fill(sx, 0, sx + 2, 3);
+    g.set(sx + 2, 3, CellKind::SlopeFloorDown);
+    g.fill(sx + 5, 7, sx + 6, 12);
+    g.set(sx + 4, 12, CellKind::SlopeCeilDown);
+    tileCells(g, TileLook::Outline, v);
+    v.push_back(label("expected: one clean silhouette, no inner lines", x0 + 690, 420));
     return v;
 }
 
 } // namespace al::gen
+

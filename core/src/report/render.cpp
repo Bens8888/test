@@ -1,5 +1,6 @@
 #include <al/report/render.hpp>
 
+#include <al/gen/tiles.hpp>
 #include <al/physics/sim.hpp>
 
 #include <miniz.h>
@@ -90,19 +91,28 @@ std::string renderPng(const level::Level& lvl, const bot::InputTrack* inputs, co
     const int rows = std::max(1, int(std::ceil((x1 - x0) / rowSpan)));
     const int rowH = int((opt.y1 - opt.y0) * s) + 1;
     const int gap = 8;
-    Image img(rowW, rows * rowH + (rows - 1) * gap, 0x101018ff);
+    Image img(rowW, rows * rowH + (rows - 1) * gap, 0x0a0a20ff);
     auto toPx = [&](float x, float y, int& row, float& px_, float& py_) {
         row = std::clamp(int((x - x0) / rowSpan), 0, rows - 1);
         px_ = (x - x0 - float(row) * rowSpan) * s;
         py_ = float(row * (rowH + gap)) + (opt.y1 - y) * s;
     };
-    // background bands
+    // editor-like background: blue with a faint 30-unit grid, the ground below y = 0
     for (int r = 0; r < rows; ++r) {
         float top = float(r * (rowH + gap));
-        img.fillRect(0, top, float(rowW), top + float(rowH), 0x1c1c34ff);
+        img.fillRect(0, top, float(rowW), top + float(rowH), 0x1f3cb4ff);
+        const float firstX = std::ceil((x0 + float(r) * rowSpan) / 30.0f) * 30.0f;
+        for (float gx = firstX; gx < x0 + float(r + 1) * rowSpan; gx += 30.0f) {
+            float px_ = (gx - x0 - float(r) * rowSpan) * s;
+            img.fillRect(px_, top, px_, top + float(rowH), 0x14288cff, 0.6f);
+        }
+        for (float gy = 0; gy <= opt.y1; gy += 30.0f) {
+            float py_ = top + (opt.y1 - gy) * s;
+            img.fillRect(0, py_, float(rowW), py_, 0x14288cff, 0.6f);
+        }
         float gy = top + (opt.y1 - 0) * s;
-        img.fillRect(0, gy, float(rowW), top + float(rowH), 0x14143aff); // ground
-        img.line(0, gy, float(rowW), gy, 0xffffffaa, 1.0f);
+        img.fillRect(0, gy, float(rowW), top + float(rowH), 0x2a6ef0ff); // ground
+        img.line(0, gy, float(rowW), gy, 0xffffffff, 1.0f);
     }
     auto drawRect = [&](float cx, float cy, float hw, float hh, uint32_t c, float a = 1.0f) {
         int r;
@@ -119,38 +129,78 @@ std::string renderPng(const level::Level& lvl, const bot::InputTrack* inputs, co
         float px_, py_;
         toPx(float(o.x), float(o.y), r, px_, py_);
         switch (info.kind) {
-            case Kind::Solid: case Kind::Breakable:
-                drawRect(so.x, so.y, so.hw, so.hh, o.colorMain == 1 ? 0x5a4bb0ff : 0x7a7a90ff);
-                drawRect(so.x, so.y, so.hw - 1.5f, so.hh - 1.5f, o.colorMain == 1 ? 0x3c2f8aff : 0x4a4a5eff);
+            case Kind::Solid: case Kind::Breakable: {
+                const uint8_t edges = gen::drawnEdges(o);
+                if (o.id == level::id::OutlineTop) {
+                    drawRect(so.x, so.y, std::max(so.hw, 0.75f), std::max(so.hh, 0.75f), 0xffffffff); // a white line
+                } else if (edges) {
+                    const float hw = 15 * s, l = std::max(1.0f, 1.5f * s);
+                    if (edges & gen::EdgeT) img.fillRect(px_ - hw, py_ - hw, px_ + hw, py_ - hw + l, 0xffffffff);
+                    if (edges & gen::EdgeB) img.fillRect(px_ - hw, py_ + hw - l, px_ + hw, py_ + hw, 0xffffffff);
+                    if (edges & gen::EdgeL) img.fillRect(px_ - hw, py_ - hw, px_ - hw + l, py_ + hw, 0xffffffff);
+                    if (edges & gen::EdgeR) img.fillRect(px_ + hw - l, py_ - hw, px_ + hw, py_ + hw, 0xffffffff);
+                } else {
+                    drawRect(so.x, so.y, so.hw, so.hh, 0xffffffff);
+                    drawRect(so.x, so.y, so.hw - 1.5f, so.hh - 1.5f, 0x0c1238ff);
+                }
                 break;
+            }
             case Kind::Hazard: {
                 float hw = std::max(so.hw, 12.0f), hh = std::max(so.hh, 12.0f);
                 bool down = std::fabs(std::fmod(o.rotation + 360.0, 360.0) - 180) < 1 || o.flipY;
                 float base = down ? py_ - hh * s : py_ + hh * s, tip = down ? py_ + hh * s : py_ - hh * s;
                 if (o.id == level::id::HalfSpike) { base = down ? py_ - 6 * s : py_ + 6 * s; tip = down ? py_ + 6 * s : py_ - 6 * s; }
-                img.triangle(px_ - hw * s, base, px_ + hw * s, base, px_, tip, 0xff4060ff);
-                if (sim) drawRect(so.x, so.y, so.hw, so.hh, 0xffffffff, 0.35f);
+                img.triangle(px_ - hw * s, base, px_ + hw * s, base, px_, tip, 0xffffffff);
+                const float in = 2.0f * s;
+                img.triangle(px_ - hw * s + in * 1.5f, base + (down ? in : -in), px_ + hw * s - in * 1.5f, base + (down ? in : -in), px_, tip + (down ? -in * 2 : in * 2), 0x0a0a28ff);
                 break;
             }
             case Kind::Saw:
-                img.circle(px_, py_, so.hw * s, 0xff6070ff);
+                img.circle(px_, py_, so.hw * s * 1.15f, 0x050a30ff);
+                img.circle(px_, py_, so.hw * s * 0.55f, 0x1840a0ff);
                 break;
             case Kind::Orb: {
                 uint32_t c = 0xffe040ff;
-                if (o.id == level::id::OrbPink) c = 0xff70d0ff;
-                if (o.id == level::id::OrbBlue) c = 0x40a0ffff;
-                img.circle(px_, py_, 13 * s, c);
+                switch (o.id) {
+                    case level::id::OrbPink: c = 0xff60e0ff; break;
+                    case level::id::OrbRed: c = 0xff5020ff; break;
+                    case level::id::OrbBlue: c = 0x40e8ffff; break;
+                    case level::id::OrbGreen: c = 0x40ff50ff; break;
+                    case level::id::OrbBlack: c = 0x181818ff; break;
+                    case level::id::OrbDash: c = 0x60ff90ff; break;
+                    case level::id::OrbDashPink: c = 0xff50c0ff; break;
+                    case level::id::OrbSpider: c = 0xb050ffff; break;
+                    default: break;
+                }
+                img.circle(px_, py_, 15 * s, 0xffffffff);
+                img.circle(px_, py_, 12 * s, c);
                 break;
             }
-            case Kind::Pad:
-                drawRect(so.x, so.y, so.hw, so.hh, 0xffe040ff);
+            case Kind::Pad: {
+                uint32_t c = 0xffe040ff;
+                switch (o.id) {
+                    case level::id::PadPink: c = 0xff60e0ff; break;
+                    case level::id::PadRed: c = 0xff5020ff; break;
+                    case level::id::PadBlue: c = 0x40e8ffff; break;
+                    case level::id::PadSpider: c = 0xb050ffff; break;
+                    default: break;
+                }
+                drawRect(so.x, so.y, so.hw, std::max(so.hh, 3.0f), c);
                 break;
+            }
             case Kind::ModePortal: case Kind::GravityPortal: case Kind::SizePortal: case Kind::SpeedPortal: case Kind::DualPortal:
                 drawRect(so.x, so.y, so.hw * 0.5f, so.hh, info.kind == Kind::ModePortal ? 0x40ff90ff : (info.kind == Kind::SpeedPortal ? 0xffb030ff : 0x40c0ffff), 0.8f);
                 break;
             case Kind::Slope: case Kind::HazardSlope: {
                 float hw = so.hw * s, hh = so.hh * s;
-                uint32_t c = info.kind == Kind::Slope ? 0x7a7a90ff : 0xff4060ff;
+                uint32_t c = info.kind == Kind::Slope ? 0x0c1238ff : 0xff4060ff;
+                if (o.id == 1338 || o.id == 1339 || o.id == 665 || o.id == 666) {
+                    // outline slope: only the white diagonal
+                    const bool rising = so.slopeOrient == 0 || so.slopeOrient == 2;
+                    if (rising) img.line(px_ - hw, py_ + hh, px_ + hw, py_ - hh, 0xffffffff, std::max(1.0f, 1.5f * s));
+                    else img.line(px_ - hw, py_ - hh, px_ + hw, py_ + hh, 0xffffffff, std::max(1.0f, 1.5f * s));
+                    break;
+                }
                 switch (so.slopeOrient) {
                     case 0: img.triangle(px_ - hw, py_ + hh, px_ + hw, py_ + hh, px_ + hw, py_ - hh, c); break;
                     case 1: img.triangle(px_ - hw, py_ + hh, px_ + hw, py_ + hh, px_ - hw, py_ - hh, c); break;

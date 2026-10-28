@@ -4,6 +4,7 @@
 #include <al/audio/synth.hpp>
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
+#include <al/gen/test_pattern.hpp>
 #include <al/model/model.hpp>
 #include <al/rec/demo.hpp>
 #include <al/rec/recording.hpp>
@@ -31,6 +32,7 @@ static int usage() {
         "  alcli bench [model.alm] [out.json]        performance benchmark (analysis, generation, physics, bot, model)\n"
         "  alcli validate <level.gmd> <recording> [yOffset=90]  simulator vs a run recorded in GD (position error per input)\n"
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
+        "  alcli render <level.gmd|piece-test> <out.png> [x0] [x1]   draw a level (outline silhouettes, orbs, pads, portals)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
         "               [--density 0-1] [--speed-changes 0-3]\n"
@@ -245,6 +247,27 @@ int main(int argc, char** argv) {
         auto buf = audio::render(audio::demoSong());
         if (!writeFile(argv[2], audio::encodeWav16(buf))) { std::fprintf(stderr, "cannot write %s\n", argv[2]); return 1; }
         std::printf("wrote %s (%.1f s)\n", argv[2], buf.duration());
+        return 0;
+    }
+    if (cmd == "render" && argc >= 4) {
+        level::Level L;
+        if (std::string(argv[2]) == "piece-test") {
+            L.objects = gen::makePieceTest(0);
+        } else {
+            std::string text, err;
+            if (!readFile(argv[2], text)) { std::fprintf(stderr, "cannot read %s\n", argv[2]); return 1; }
+            auto lvl = level::Level::fromGmd(text, &err);
+            if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[2], err.c_str()); return 1; }
+            L = std::move(*lvl);
+        }
+        report::RenderOptions ro;
+        ro.scale = 1.0f;
+        ro.maxWidth = 2400;
+        ro.drawPath = false;
+        if (argc >= 5) ro.x0 = float(std::atof(argv[4]));
+        if (argc >= 6) ro.x1 = float(std::atof(argv[5]));
+        writeFile(argv[3], report::renderPng(L, nullptr, ro));
+        std::printf("wrote %s\n", argv[3]);
         return 0;
     }
     if (cmd == "generate" && argc >= 3) {

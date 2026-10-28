@@ -38,6 +38,9 @@ public:
     // by undoLast.
     geode::Result<size_t> applyLevel(LevelEditorLayer* lel, level::Level const& lvl, std::string const& label);
 
+    // The outline piece test pattern placed after the level's last object (one undo step).
+    geode::Result<size_t> placePieceTest(LevelEditorLayer* lel);
+
     // Number of gameplay (non-trigger) objects in the editor.
     int gameplayObjectCount(LevelEditorLayer* lel) const;
 
