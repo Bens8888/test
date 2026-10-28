@@ -3,7 +3,7 @@
 //   aldata selfplay --out f.jsonl [--songs N] [--variants K] [--keep 0.3] [--seed S] [--threads T] [--model m.alm]
 //       random songs x random settings, K generated variants each, the best fraction by reward kept
 //   aldata extract <level.gmd> <song> --out f.jsonl [--style N] [--difficulty D]
-//   aldata extract-dir <dir> --out f.jsonl          every <name>.gmd with a song next to it (see training/README.md)
+//   aldata extract-dir <dir> --out f.jsonl          every <name>.gmd with a song next to it (see training/RETRAINING.md)
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
 #include <al/data/dataset.hpp>

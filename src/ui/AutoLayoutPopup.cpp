@@ -781,7 +781,7 @@ CCNode* AutoLayoutPopup::buildTrainingTab() {
     openDs->setPosition({140.f, 10.f});
     dsMenu->addChild(openDs);
     form->row("Dataset", dsMenu);
-    form->text("Retrain on a computer with Python 3 + PyTorch (see training/README.md):\n"
+    form->text("Retrain on a computer with Python 3 + PyTorch (see training/RETRAINING.md):\n"
                "  aldata extract-dir <dataset folder> --out real.jsonl\n"
                "  python3 training/train_patterns.py --data real.jsonl selfplay.jsonl --per-style\n"
                "then copy the .alm files into the model folder and press Reload models.", 0.45f);

@@ -79,4 +79,4 @@ deliberately not used: they cannot guarantee beatable output and would need far 
   enters only as relative movement, every pattern is gravity-relative), so they are not applied.
 - Limitation, stated plainly: a model trained only on self-play learns to imitate the rule-based
   generator's best outputs; it does not know human taste. Style learning from human levels needs
-  the user's .gmd files (see training/README.md for how many and how to export them).
+  the user's .gmd files (see training/RETRAINING.md for how many and how to export them).

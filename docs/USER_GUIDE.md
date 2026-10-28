@@ -93,7 +93,7 @@ you need level files plus their songs:
     (`easy`, `normal`, `hard`, `harder`, `insane`, `easy_demon` … `extreme_demon`). Next to it,
     put its song file with the **same name** (`MyLevel.gmd` + `MyLevel.mp3`). Newgrounds songs are
     in GD's song folder as `<song id>.mp3`.
-- **Training** happens on a computer with Python 3 and PyTorch; see `training/README.md`. Then
+- **Training** happens on a computer with Python 3 and PyTorch; see `training/RETRAINING.md`. Then
   copy the new `.alm` files into `<save folder>/models` and press **Reload models**.
 
 ## Files

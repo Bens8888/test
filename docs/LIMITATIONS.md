@@ -50,7 +50,7 @@ Stated plainly, with what each one means in practice.
 - **The shipped models learned from self-play only**, imitating the best third of the rule-based
   generator's own levels judged by the bot. On held-out songs that measurably improves the reward
   (+9-11%), but the models do not know human taste yet. Style learning needs real levels: see
-  training/README.md (60 levels recommended).
+  training/RETRAINING.md (60 levels recommended).
 - More self-play rounds (the model generating its own data) did not improve it further with the
   current reward; the reward function itself is hand-designed.
 - The model chooses patterns. It does not invent new obstacle shapes: everything it places
