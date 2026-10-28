@@ -35,6 +35,10 @@ Stated plainly, with what each one means in practice.
 - **Flying modes** (ship, swing) often have "flow" clicks: skipping one only shifts the path
   slightly, so not every click is strictly forced. Timing windows are guaranteed; necessity is not
   always.
+- **Block tiling**:
+  - One block set per level (classic, coloured, outline, grid or bricks), with interior cells
+    switched to borderless inner tiles.
+  - GD's dedicated edge and corner tile variants are not chosen per neighbour yet.
 - **Decoration** is functional (themes, colours per section, pulses, camera, shake, simple beat
   decoration) rather than artistic. Expect to decorate by hand for a polished look.
 - **Gameplay vs the song after edits.** The layout is timed to the song from x = 0 with the song

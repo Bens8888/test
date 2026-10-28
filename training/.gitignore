@@ -3,3 +3,5 @@ models/*/tmp/
 models/loop/
 __pycache__/
 *.pyc
+models/round*/
+models/vocab.json
