@@ -3,6 +3,7 @@
 #include <Geode/binding/EditorUI.hpp>
 #include <Geode/binding/GameObject.hpp>
 #include <Geode/binding/LevelEditorLayer.hpp>
+#include <Geode/binding/LevelSettingsObject.hpp>
 #include <Geode/binding/UndoObject.hpp>
 
 #include <chrono>
@@ -86,6 +87,80 @@ geode::Result<size_t> EditorBridge::apply(LevelEditorLayer* lel, std::vector<lev
     return Ok(n);
 }
 
+
+int EditorBridge::firstFreeGroup(LevelEditorLayer* lel) const {
+    int maxGroup = 0;
+    auto lvl = level::Level::fromLevelString(levelString(lel));
+    if (lvl) for (auto& o : lvl->objects) for (int g : o.groups) maxGroup = std::max(maxGroup, g);
+    return std::max(1000, maxGroup + 1);
+}
+
+int EditorBridge::gameplayObjectCount(LevelEditorLayer* lel) const {
+    int n = 0;
+    if (!lel || !lel->m_objects) return 0;
+    for (auto obj : CCArrayExt<GameObject*>(lel->m_objects)) if (!obj->m_isTrigger) ++n;
+    return n;
+}
+
+namespace {
+// our speed index (0 = 0.5x .. 4 = 4x) <-> GD's Speed enum (Normal = 1x, Slow = 0.5x, Fast, Faster, Fastest)
+int toGdSpeed(int idx) { static const int m[5] = {1, 0, 2, 3, 4}; return m[std::clamp(idx, 0, 4)]; }
+} // namespace
+
+geode::Result<size_t> EditorBridge::applyLevel(LevelEditorLayer* lel, level::Level const& lvl, std::string const& label) {
+    if (!lel || !lel->m_levelSettings) return Err("Not in the editor");
+    auto st = lel->m_levelSettings;
+    StartSettings prev;
+    prev.mode = st->m_startMode;
+    prev.speed = int(st->m_startSpeed);
+    prev.mini = st->m_startMini;
+    prev.dual = st->m_startDual;
+    prev.flipped = st->m_isFlipped;
+    auto res = apply(lel, lvl.objects, label);
+    if (res.isErr()) return res;
+    m_history.back().previousStart = prev;
+    st->m_startMode = int(lvl.settings.startMode);
+    st->m_startSpeed = static_cast<Speed>(toGdSpeed(lvl.settings.startSpeed));
+    st->m_startMini = lvl.settings.startMini;
+    st->m_startDual = lvl.settings.startDual;
+    st->m_isFlipped = lvl.settings.startFlipped;
+    lel->levelSettingsUpdated();
+    return res;
+}
+
+std::filesystem::path EditorBridge::datasetDir() {
+    auto dir = Mod::get()->getSaveDir() / "dataset" / "levels";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return dir;
+}
+
+geode::Result<std::filesystem::path> EditorBridge::addToDataset(LevelEditorLayer* lel, std::filesystem::path const& song, int difficulty, int style) {
+    if (!lel || !lel->m_level) return Err("Not in the editor");
+    auto lvl = level::Level::fromLevelString(levelString(lel));
+    if (!lvl) return Err("cannot read the level");
+    lvl->name = std::string(lel->m_level->m_levelName);
+    static char const* folders[] = {"easy", "normal", "hard", "harder", "insane", "easy_demon", "medium_demon", "hard_demon", "insane_demon", "extreme_demon"};
+    auto dir = datasetDir() / (difficulty >= 0 && difficulty <= 9 ? folders[difficulty] : "unrated");
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    std::string base;
+    for (char c : lvl->name) base += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    if (base.empty()) base = "level";
+    base += fmt::format("_{}", int(lel->m_level->m_levelID.value()));
+    auto gmd = dir / (base + ".gmd");
+    GEODE_UNWRAP(file::writeString(gmd, lvl->toGmd()));
+    if (!song.empty()) {
+        auto dst = dir / (base + geode::utils::string::pathToString(song.extension()));
+        std::filesystem::copy_file(song, dst, std::filesystem::copy_options::overwrite_existing, ec);
+        if (ec) return Err("level saved, but the song could not be copied: " + ec.message());
+    }
+    static char const* styles[] = {"auto", "flow", "tight", "chaotic", "minimal", "retro", "modern", "memory", "decor"};
+    GEODE_UNWRAP(file::writeString(dir / (base + ".json"),
+                                   fmt::format("{{\"difficulty\": {}, \"style\": \"{}\"}}", difficulty, styles[std::clamp(style, 0, 8)])));
+    return Ok(gmd);
+}
+
 bool EditorBridge::undoLast(LevelEditorLayer* lel) {
     if (!lel || m_history.empty()) return false;
     auto batch = std::move(m_history.back());
@@ -97,6 +172,15 @@ bool EditorBridge::undoLast(LevelEditorLayer* lel) {
         if (!obj || !lel->m_objects || !lel->m_objects->containsObject(obj)) continue; // already deleted by the user
         lel->removeObject(obj, true);
         ++removed;
+    }
+    if (batch.previousStart && lel->m_levelSettings) {
+        auto st = lel->m_levelSettings;
+        st->m_startMode = batch.previousStart->mode;
+        st->m_startSpeed = static_cast<Speed>(batch.previousStart->speed);
+        st->m_startMini = batch.previousStart->mini;
+        st->m_startDual = batch.previousStart->dual;
+        st->m_isFlipped = batch.previousStart->flipped;
+        lel->levelSettingsUpdated();
     }
     log::info("AutoLayout: undo removed {} objects ({})", removed, batch.label);
     return removed > 0;

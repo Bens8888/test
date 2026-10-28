@@ -177,20 +177,19 @@ float feelScore(const GenResult& r, const audio::MusicAnalysis& A) {
     s -= 4.0f * float(rep.dropped) / std::max(1, rep.clicks);
     s -= 2.0f * float(rep.fallbackParts);
     s += 1.0f * float(rep.forced) / std::max(1, rep.clicks);
-    // variety: distinct patterns per click
+    // variety: distinct patterns among the pattern decisions (flying/surface parts decide once)
     std::vector<std::string> ids;
-    for (auto& c : r.clicks) if (!c.dropped) ids.push_back(c.pattern);
-    std::sort(ids.begin(), ids.end());
-    size_t distinct = size_t(std::unique(ids.begin(), ids.end()) - ids.begin());
+    for (auto& c : r.clicks) if (c.decision && !c.dropped) ids.push_back(c.pattern);
+    std::vector<std::string> sorted = ids;
+    std::sort(sorted.begin(), sorted.end());
+    size_t distinct = size_t(std::unique(sorted.begin(), sorted.end()) - sorted.begin());
     s += 1.5f * std::min(1.0f, float(distinct) / std::max(1.0f, 0.35f * float(ids.size())));
     // fairness: penalise very tight spots relative to the difficulty
-    s -= 0.15f * float(rep.risky.size());
-    // repetition: identical pattern 3+ times in a row
-    int run = 1;
-    for (size_t i = 1; i < r.clicks.size(); ++i) {
-        if (r.clicks[i].pattern == r.clicks[i - 1].pattern && !r.clicks[i].dropped) { if (++run >= 3) s -= 0.2f; }
-        else run = 1;
-    }
+    s -= 0.15f * float(std::min<size_t>(rep.risky.size(), 10));
+    // repetition: the same pattern three or more decisions in a row (share of decisions)
+    int repeats = 0;
+    for (size_t i = 2; i < ids.size(); ++i) repeats += ids[i] == ids[i - 1] && ids[i] == ids[i - 2] ? 1 : 0;
+    s -= 2.0f * float(repeats) / std::max(1.0f, float(ids.size()));
     return s;
 }
 

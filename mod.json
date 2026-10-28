@@ -9,7 +9,11 @@
 	"version": "v0.1.0",
 	"developer": "bens8888",
 	"description": "Generates complete, playable layouts from a song, verified by a physics bot.",
-	"tags": ["editor", "music", "utility"],
+	"tags": [
+		"editor",
+		"music",
+		"utility"
+	],
 	"links": {
 		"source": "https://github.com/bens8888/test"
 	},
@@ -21,13 +25,19 @@
 			"type": "keybind",
 			"name": "Open AutoLayout",
 			"description": "Opens the AutoLayout popup in the editor.",
-			"default": { "win": "Ctrl+Alt+L", "mac": "Cmd+Alt+L" }
+			"default": {
+				"win": "Ctrl+Alt+L",
+				"mac": "Cmd+Alt+L"
+			}
 		},
 		"record-toggle": {
 			"type": "keybind",
 			"name": "Start / stop click recording",
 			"description": "Toggles the click recorder while playing a level.",
-			"default": { "win": "Ctrl+Alt+R", "mac": "Cmd+Alt+R" }
+			"default": {
+				"win": "Ctrl+Alt+R",
+				"mac": "Cmd+Alt+R"
+			}
 		},
 		"backup-before-apply": {
 			"type": "bool",
@@ -43,5 +53,10 @@
 			"min": 0,
 			"max": 16
 		}
+	},
+	"resources": {
+		"files": [
+			"resources/models/*.alm"
+		]
 	}
 }

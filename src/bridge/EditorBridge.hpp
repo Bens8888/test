@@ -6,16 +6,23 @@
 #include <al/level/level.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace al::mod {
+
+struct StartSettings {
+    int mode = 0, speed = 0; // speed: GD's Speed enum value
+    bool mini = false, dual = false, flipped = false;
+};
 
 struct AppliedBatch {
     std::vector<geode::Ref<GameObject>> objects;
     std::filesystem::path backup;
     int editorLayer = 0;
     std::string label;
+    std::optional<StartSettings> previousStart; // restored by undo
 };
 
 class EditorBridge {
@@ -25,6 +32,21 @@ public:
     // Writes the objects into the editor on a fresh editor layer as one undo step.
     // Returns the number of objects created.
     geode::Result<size_t> apply(LevelEditorLayer* lel, std::vector<level::LevelObject> objects, std::string const& label);
+
+    // A whole generated level: its objects plus the start settings (gamemode, speed, size,
+    // gravity, dual) of the level start; one undo step, the previous start settings are restored
+    // by undoLast.
+    geode::Result<size_t> applyLevel(LevelEditorLayer* lel, level::Level const& lvl, std::string const& label);
+
+    // Highest group ID used in the editor level + 1 (generated groups start there).
+    int firstFreeGroup(LevelEditorLayer* lel) const;
+    // Number of gameplay (non-trigger) objects in the editor.
+    int gameplayObjectCount(LevelEditorLayer* lel) const;
+
+    // Saves the editor level as .gmd (+ a copy of its song and a label file) into the training
+    // dataset folder (<save dir>/dataset/levels/<difficulty>/). Returns the .gmd path.
+    geode::Result<std::filesystem::path> addToDataset(LevelEditorLayer* lel, std::filesystem::path const& song, int difficulty, int style);
+    static std::filesystem::path datasetDir();
 
     // Removes the objects of the most recent AutoLayout batch (still present in the editor).
     bool undoLast(LevelEditorLayer* lel);

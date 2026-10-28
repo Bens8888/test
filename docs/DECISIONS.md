@@ -39,3 +39,44 @@ beat) and loudness. Kick detection uses absolute percussive bass energy from HPS
 ## D7. Determinism
 PCG32 streams seeded from (seed, purpose, index); no `std::` distributions; `-ffp-contract=off`
 and `/fp:precise` so floating-point physics matches across compilers.
+
+## D8. Model inference: a hand-written C++ engine, not ONNX Runtime
+The pattern model is one GRU layer (hidden 96) with a token embedding and a linear head, about
+66k parameters (260 KB per model file). Running it is ~150 lines of C++ (`core/src/model/model.cpp`):
+no 10+ MB runtime to bundle and load on two platforms, no allocator or threading surprises inside
+GD, thread-safe by construction (the generator builds variants in parallel), and deterministic. The
+file format (`.alm`: header, float32 tensors, CRC-32) is written by `training/autolayout/pattern_model.py`.
+Parity is tested on every build: `tests/test_model.cpp` replays PyTorch reference vectors
+(`tests/data/model_fixture*.{alm,json}`); measured max |logit difference| 1.2e-6.
+Risk: a bigger architecture (attention, several layers) would need the engine extended; ONNX
+Runtime would become worth it above a few MB of weights.
+
+## D9. What the model does — and what it never does
+ML decides pattern choice, style and "feel": given the music at a click (role, strength, gaps,
+melody movement, intensity, intent), the gamemode state, difficulty, style, density and the last
+16 decisions, it scores the patterns. It only ever scores candidates the rules already accept for
+the situation (constrained generation: the builder masks out anything that would break the path),
+and the builder still simulates every placement: survival, timing window, necessity. If the model
+picks something that does not work, the next candidate is tried; the bot verifies the level at the
+end. Correctness never depends on the model. Temperature depends on style (chaotic 1.5, minimal 0.7,
+tight 0.8) and on intensity (calm moments sample closer to the model's favourite).
+Unproven tricks (reinforcement learning on raw object placement, diffusion over level images) are
+deliberately not used: they cannot guarantee beatable output and would need far more data.
+
+## D10. Training data: self-play with the bot as the reward, real levels through a labeller
+- Self-play (`aldata selfplay`): random synthetic songs (tempo 92-176 BPM, key, motifs, drum feel,
+  structure), random style/difficulty/density, K variants each, all bot-verified; the best third
+  by reward (music alignment, forced clicks, dropped clicks, difficulty following the music,
+  variety, fairness) is kept — rejection sampling. Rounds repeat with the newly trained model
+  generating (`training/selfplay_loop.py`).
+- Real levels (`aldata extract-dir`): .gmd + song; filtered (platformer, 2-player, too short,
+  unsolvable by the bot, wrong song); the bot solves the level and every jump's geometry is
+  classified back into the closest pattern token. Measured on generated levels where the truth is
+  known: 80% exact / 95% terrain agreement on regular jumps, 84% on orb jumps (pit widths are
+  ambiguous by one cell). Flying/ball/spider sections are labelled once per section (family).
+- Augmentation: tempo shift (click gaps scaled 0.85-1.18), intensity jitter, random crops of the
+  decision sequence. Transposition and vertical mirroring are no-ops for this representation (pitch
+  enters only as relative movement, every pattern is gravity-relative), so they are not applied.
+- Limitation, stated plainly: a model trained only on self-play learns to imitate the rule-based
+  generator's best outputs; it does not know human taste. Style learning from human levels needs
+  the user's .gmd files (see training/README.md for how many and how to export them).

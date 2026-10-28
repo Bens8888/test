@@ -5,6 +5,7 @@
 #include <Geode/modify/LevelEditorLayer.hpp>
 
 #include "../bridge/EditorBridge.hpp"
+#include "../session/Session.hpp"
 #include "../ui/AutoLayoutPopup.hpp"
 
 using namespace geode::prelude;
@@ -35,6 +36,7 @@ class $modify(ALLevelEditorLayer, LevelEditorLayer) {
     bool init(GJGameLevel* level, bool noUI) {
         // AutoLayout's undo history is per editor session.
         al::mod::EditorBridge::get().reset();
+        al::mod::Session::get().resetForLevel();
         return LevelEditorLayer::init(level, noUI);
     }
 };
