@@ -80,3 +80,19 @@ deliberately not used: they cannot guarantee beatable output and would need far 
 - Limitation, stated plainly: a model trained only on self-play learns to imitate the rule-based
   generator's best outputs; it does not know human taste. Style learning from human levels needs
   the user's .gmd files (see training/RETRAINING.md for how many and how to export them).
+
+## D11. Risk register (versions, bindings, IDs, level format)
+Verified at build time: every GD/Geode binding the mod uses compiles against Geode 5.11.2 /
+GD 2.2081 on Windows and macOS (CI), including `processCommands`' 2.2081 signature, which the
+recorder deliberately avoids hooking. The remaining risks can only be confirmed in the game:
+
+| Risk | Where | Mitigation / how to check |
+|---|---|---|
+| Physics differs from GD in rare cases (slopes, spider teleport, extreme speeds) | core/src/physics | the bot verifies every level against *our* simulator; `alcli validate` compares against runs recorded in GD (LIMITATIONS) |
+| Editor object layer y offset (+90) assumed for the ghost and recorded positions | src/ui/Ghost.cpp `kEditorYOffset` | visible immediately: the ghost path would float or sink |
+| `m_gameState.m_currentProgress` as the step counter (also in editor playtests) | src/recorder | recordings replay in the simulator; `alcli validate` shows any drift |
+| Click-between-steps disabled while recording | LiveRecorder::beginSession | inputs land on whole 240 Hz steps (deterministic) |
+| Object IDs and hitboxes (spikes 6x12, half spikes 6x5.6, orbs, portals, saws) | core/src/level/objects.cpp | taken from the published object tables; any mismatch shows up in `alcli validate` |
+| Level string keys (start mode kA2, speed kA4 with 0 = 1x / 1 = 0.5x, mini kA3, dual kA8, flipped kA11, song offset kA13, colours kS38) | core/src/level/level.cpp | round-trip tests; applied start settings go through `LevelSettingsObject` fields instead of the string |
+| Group IDs of generated triggers colliding with the level's | EditorBridge::firstFreeGroup | generated groups start above the highest group in the level |
+| Resources (models) packaged flat into the mod's resources directory | Session::reloadModels | loads every `*.alm` found; falls back to the rule model with a log message |
