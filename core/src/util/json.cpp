@@ -65,7 +65,11 @@ void Json::dumpTo(std::string& out, int indent, int depth) const {
             double r = std::round(m_num);
             char buf[40];
             if (r == m_num && std::fabs(r) < 9e15) std::snprintf(buf, sizeof(buf), "%lld", (long long)r);
-            else std::snprintf(buf, sizeof(buf), "%.9g", m_num);
+            else {
+                // shortest form that reads back exactly
+                std::snprintf(buf, sizeof(buf), "%.15g", m_num);
+                if (std::strtod(buf, nullptr) != m_num) std::snprintf(buf, sizeof(buf), "%.17g", m_num);
+            }
             out += buf;
             break;
         }
