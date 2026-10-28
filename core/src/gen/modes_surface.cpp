@@ -74,7 +74,11 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     const float feet = p0.y - p0.flip() * h * 0.5f;
     const float surf = std::round(feet / 30.0f) * 30.0f;
     float floorY, ceilY;
-    if (p0.upsideDown) { ceilY = std::clamp(surf, F + H, C); floorY = ceilY - H; }
+    if (!p0.onGround) {
+        // still falling in from the portal: the corridor starts at the bounds it is falling towards
+        if (p0.upsideDown) { ceilY = C; floorY = C - H; }
+        else { floorY = F; ceilY = F + H; }
+    } else if (p0.upsideDown) { ceilY = std::clamp(surf, F + H, C); floorY = ceilY - H; }
     else { floorY = std::clamp(surf, F, C - H); ceilY = floorY + H; }
     const bool needFloor = floorY > F + 0.5f;
     const bool needCeil = ceilY < C - 0.5f || !p0.bounded;
@@ -106,7 +110,15 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
     const int halfWin = minWin / 2 + 1;
     std::vector<PathSample> env;
-    if (!b.pathEnvelope(startTick, endTick, halfWin, part.mode, env)) { debugLog("  surface: intended path died"); return false; }
+    if (!b.pathEnvelope(startTick, endTick, halfWin, part.mode, env)) {
+        if (debugEnabled()) {
+            phys::GameState q = b.cursor();
+            b.runTo(q, endTick);
+            debugLog("  surface: intended path died at tick %d x=%.0f y=%.0f (%s), corridor %.0f-%.0f, bounds %.0f-%.0f", q.tick, q.p[0].x, q.p[0].y,
+                     phys::deathCauseName(q.p[0].deathCause), floorY, ceilY, F, C);
+        }
+        return false;
+    }
     const float margin = std::max(3.0f, prof.clearance * 0.25f);
     const float step = dense ? 30.0f : 60.0f;
     int hazards = 0;

@@ -855,6 +855,20 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
                 switchMode(W, gs, p, Mode(o.sub), o.y, true);
                 p.events |= EvPortal;
                 p.eventObj = i;
+                // dual: a gamemode portal switches both players
+                if (gs.dual) {
+                    PlayerState& q = (&p == &gs.p[0]) ? gs.p[1] : gs.p[0];
+                    if (q.mode != Mode(o.sub)) {
+                        float fy = q.floorY, cy = q.ceilY;
+                        bool bd = q.bounded;
+                        switchMode(W, gs, q, Mode(o.sub), o.y, true);
+                        q.floorY = p.floorY; // both players share the dual bounds
+                        q.ceilY = p.ceilY;
+                        q.bounded = p.bounded || bd;
+                        (void)fy; (void)cy;
+                    }
+                    q.markActivated(i);
+                }
                 break;
             }
             case Kind::GravityPortal: {
@@ -873,6 +887,11 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
                 p.mini = o.sub == 1;
                 p.events |= EvPortal;
                 p.eventObj = i;
+                if (gs.dual) { // size is shared by both players
+                    PlayerState& q = (&p == &gs.p[0]) ? gs.p[1] : gs.p[0];
+                    q.mini = p.mini;
+                    q.markActivated(i);
+                }
                 break;
             }
             case Kind::SpeedPortal: {
@@ -881,6 +900,11 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
                 p.speed = o.sub;
                 p.events |= EvPortal;
                 p.eventObj = i;
+                if (gs.dual) { // speed is global: both players
+                    PlayerState& q = (&p == &gs.p[0]) ? gs.p[1] : gs.p[0];
+                    q.speed = p.speed;
+                    q.markActivated(i);
+                }
                 break;
             }
             case Kind::DualPortal: {
@@ -1134,9 +1158,21 @@ void step(const World& W, GameState& gs, bool pressed) {
         }
         gs.pressed = pressed;
     }
-    for (int i = 0; i < (gs.dual ? 2 : 1); ++i) {
+    // players that existed at the start of the tick (a dual portal touched now creates player 2
+    // from player 1's updated state; it moves from the next tick on)
+    const uint8_t speedAtStart = gs.p[1].speed;
+    for (int i = 0; i < n; ++i) {
+        if (i == 1 && !gs.dual) break;
         PlayerState& p = gs.p[size_t(i)];
-        updatePlayer(W, gs, p);
+        if (i == 1 && p.speed != speedAtStart) {
+            // a speed portal player 1 touched this tick takes effect for both from the next tick
+            uint8_t now = p.speed;
+            p.speed = speedAtStart;
+            updatePlayer(W, gs, p);
+            p.speed = now;
+        } else {
+            updatePlayer(W, gs, p);
+        }
         if (!p.dead) {
             p.wasOnSlope = p.onSlope;
             p.onSlope = false;

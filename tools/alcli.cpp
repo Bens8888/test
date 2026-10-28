@@ -33,6 +33,7 @@ static int usage() {
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
+        "               [--density 0-1] [--speed-changes 0-3]\n"
         "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
     return 2;
 }
@@ -268,6 +269,8 @@ int main(int argc, char** argv) {
             std::string k = argv[i], v = argv[i + 1];
             if (k == "--seed") opt.seed = std::stoull(v);
             else if (k == "--recording") recordingPath = v;
+            else if (k == "--density") opt.density = std::stof(v);
+            else if (k == "--speed-changes") opt.speedChanges = gen::SpeedChanges(std::stoi(v));
             else if (k == "--faith") opt.faithfulness = std::stof(v);
             else if (k == "--variant-seed") { opt.seed = std::stoull(v); exactSeed = true; } // seed of one variant itself
             else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));

@@ -493,42 +493,57 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         }
         if (!s.p[0].onGround) {
             // still airborne (coming from a flying part or a gravity flip with nothing to land on):
-            // build the surface it is heading for from just ahead of the settle start, settle again
-            const auto& p = s.p[0];
-            c.run.g = p.flip();
-            c.run.floor = c.run.g > 0;
-            if (c.run.g > 0) {
-                c.run.surf = 0.0f;
-                c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            // build the surface it is heading for from just ahead of the settle start, settle
+            // again; for a ceiling, candidate heights are tried until the player lands safely
+            const int g = s.p[0].flip();
+            std::vector<std::pair<float, float>> options; // (surface, first cell x)
+            const float minStart = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            if (g > 0) {
+                options.push_back({0.0f, minStart});
             } else {
-                // a ceiling over the free rise: the lowest height (from 150) the player reaches
-                // after passing below the start of the blocks with room to spare
                 std::vector<std::pair<float, float>> rise; // (x, top of the hitbox)
                 phys::GameState q = s0;
                 for (int t = 0; t < 360 && !q.dead; ++t) {
                     b.runTo(q, q.tick + 1);
                     rise.push_back({q.p[0].x, q.p[0].y + q.p[0].height() * 0.5f});
                 }
-                c.run.surf = 300.0f;
-                c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
-                for (float cand = 150.0f; cand <= 600.0f; cand += kCell) {
+                for (float cand = 150.0f; cand <= 660.0f; cand += kCell) {
                     float xs = -1;
                     for (auto& [x, top] : rise) if (top >= cand - 25.0f) { xs = x; break; }
                     if (xs < 0) continue;
                     float start = std::floor((xs - 15.0f) / kCell) * kCell;
-                    if (start < s0.p[0].x + 30.0f) continue;
-                    c.run.surf = cand;
-                    c.run.builtTo = start;
+                    for (float st : {start, start - kCell, start + kCell}) if (st >= minStart) options.push_back({cand, st});
+                }
+                if (options.empty()) options.push_back({300.0f, minStart});
+            }
+            bool landed = false;
+            const Run before = c.run;
+            for (auto [surf, start] : options) {
+                auto mk = b.mark();
+                c.run = before;
+                c.run.g = g;
+                c.run.floor = g > 0;
+                c.run.surf = surf;
+                c.run.builtTo = start;
+                extendRun(c, s.p[0].x + 240.0f);
+                phys::GameState q = s0;
+                bool ok = settle(q);
+                while (ok && !q.p[0].onGround && q.tick < k0 + 240) {
+                    extendRun(c, q.p[0].x + 240.0f);
+                    ok = b.runTo(q, q.tick + 1);
+                }
+                if (ok && q.p[0].onGround && q.p[0].flip() == g) {
+                    debugLog("  ground: airborne after settling (g %d): surface %.0f from x %.0f", g, surf, start);
+                    s = q;
+                    landed = true;
                     break;
                 }
+                b.rollback(mk);
             }
-            extendRun(c, p.x + 240.0f);
-            debugLog("  ground: airborne after settling (tick %d y %.0f g %d): surface %.0f from x %.0f", s.tick, p.y, c.run.g, c.run.surf, s0.p[0].x);
-            s = s0;
-            if (!settle(s)) return false;
-            while (!s.p[0].onGround && s.tick < k0 + 240) {
-                extendRun(c, s.p[0].x + 240.0f);
-                if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while landing at tick %d x=%.0f y=%.0f (%s)", s.tick, s.p[0].x, s.p[0].y, phys::deathCauseName(s.p[0].deathCause)); return false; }
+            if (!landed) {
+                c.run = before;
+                debugLog("  ground: no surface lets the player land after the transition");
+                return false;
             }
         }
         b.setCursor(s);

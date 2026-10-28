@@ -113,7 +113,16 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     auto advanceBand = [&](int untilTick, int nextClickTick) -> bool {
         while (sim.tick < untilTick) {
             phys::GameState before = sim;
-            if (!b.runTo(sim, sim.tick + 1)) { debugLog("  flying: died laying out the inputs at tick %d x=%.0f y=%.0f (%s)", sim.tick, sim.p[0].x, sim.p[0].y, phys::deathCauseName(sim.p[0].deathCause)); return false; }
+            if (!b.runTo(sim, sim.tick + 1)) {
+                if (debugEnabled()) {
+                    int di = sim.p[0].deathObj;
+                    int li = di >= 0 ? b.world().objects()[size_t(di)].levelIndex : -1;
+                    debugLog("  flying: died laying out the inputs at tick %d x=%.0f y=%.0f (%s), killer: level object %d id %d at (%.0f, %.0f) of %zu", sim.tick,
+                             sim.p[0].x, sim.p[0].y, phys::deathCauseName(sim.p[0].deathCause), li, li >= 0 ? b.level().objects[size_t(li)].id : -1,
+                             li >= 0 ? b.level().objects[size_t(li)].x : 0.0, li >= 0 ? b.level().objects[size_t(li)].y : 0.0, b.level().objects.size());
+                }
+                return false;
+            }
             history.push_back(before);
             if (history.size() > 96) history.erase(history.begin());
             if (!toggleMode || sim.p[0].mode != part.mode) continue;
@@ -218,6 +227,14 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     for (auto& sm : path) { xMin = std::min(xMin, sm.x); xMax = std::max(xMax, sm.x); }
     const float c0 = std::floor((xMin + 60.0f) / 30.0f) * 30.0f;  // leave the first 2 blocks after the portal open
     const int ncols = std::max(0, int((xMax - 30.0f - c0) / 30.0f));
+    if (debugEnabled()) {
+        phys::GameState q = b.cursor();
+        b.runTo(q, endTick);
+        debugLog("  flying: carving x %.0f..%.0f (%d columns), path ticks %d..%d; nominal end x %.0f speed %d dead %d", c0, xMax, ncols, startTick, endTick, q.p[0].x, int(q.p[0].speed), q.dead);
+        size_t mi = 0;
+        for (size_t i = 0; i < path.size(); ++i) if (path[i].x > path[mi].x) mi = i;
+        debugLog("  flying: max x sample %zu of %zu: x %.0f y %.0f player %d", mi, path.size(), path[mi].x, path[mi].y, path[mi].player);
+    }
     struct Col { float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f}; };
     std::vector<Col> cols(static_cast<size_t>(ncols));
     for (auto& sm : path) {

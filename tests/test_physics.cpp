@@ -321,3 +321,21 @@ TEST(level_string_roundtrip) {
     REQUIRE(fromGmd.has_value());
     CHECK(fromGmd->toLevelString() == s);
 }
+
+TEST(physics_dual_players_share_speed_size_and_mode) {
+    // in dual mode, speed / size / gamemode portals touched by one player apply to both
+    Level L = emptyLevel();
+    L.objects.push_back(obj(level::id::PortalShip, 150, 45));
+    L.objects.push_back(obj(level::id::PortalDualOn, 300, 45));
+    L.objects.push_back(obj(level::id::Speed3, 600, 45));
+    L.objects.push_back(obj(level::id::PortalSizeMini, 700, 45));
+    L.objects.push_back(obj(level::id::PortalWave, 800, 45));
+    World W(L);
+    GameState g = initialState(W);
+    for (int t = 0; t < 700 && !g.dead; ++t) step(W, g, false);
+    REQUIRE(g.dual);
+    CHECK(int(g.p[0].speed) == 3 && int(g.p[1].speed) == 3);
+    CHECK(g.p[0].mini && g.p[1].mini);
+    CHECK(g.p[0].mode == Mode::Wave && g.p[1].mode == Mode::Wave);
+    CHECK_NEAR(g.p[0].x, g.p[1].x, 1e-3);
+}
