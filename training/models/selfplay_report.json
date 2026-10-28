@@ -1,0 +1,126 @@
+{
+ "rounds": [
+  {
+   "round": 0,
+   "data": [
+    "/home/user/test/training/data/selfplay_r0.jsonl"
+   ],
+   "eval": {
+    "levels": 90,
+    "failed": 0,
+    "mean_reward": 1.386,
+    "mean_kept_reward": 1.83,
+    "mean_dropped": 0.0345,
+    "mean_alignment": 0.9044,
+    "seconds": 20.3
+   },
+   "train_log": [
+    "data: 897 sequences, 47509 decisions, vocab 174; train 808 / val 89 sequences",
+    "baseline (most frequent pattern per gamemode): val accuracy 0.087",
+    "model: GRU hidden 96, embed 24, window 16, 66294 parameters (259 KB)",
+    "  epoch  1/12: loss 4.715  val acc 0.081 top5 0.307 nll 3.942  (1.0 s)",
+    "  epoch  2/12: loss 3.415  val acc 0.141 top5 0.506 nll 3.077  (0.9 s)",
+    "  epoch  3/12: loss 2.817  val acc 0.165 top5 0.561 nll 2.846  (0.9 s)",
+    "  epoch  4/12: loss 2.642  val acc 0.179 top5 0.589 nll 2.705  (0.9 s)",
+    "  epoch  5/12: loss 2.538  val acc 0.179 top5 0.609 nll 2.656  (0.9 s)",
+    "  epoch  6/12: loss 2.493  val acc 0.182 top5 0.603 nll 2.628  (0.9 s)",
+    "  epoch  7/12: loss 2.443  val acc 0.185 top5 0.615 nll 2.593  (0.9 s)",
+    "  epoch  8/12: loss 2.403  val acc 0.188 top5 0.616 nll 2.581  (0.9 s)",
+    "  epoch  9/12: loss 2.387  val acc 0.185 top5 0.616 nll 2.571  (0.9 s)",
+    "  epoch 10/12: loss 2.363  val acc 0.188 top5 0.626 nll 2.565  (0.9 s)",
+    "  epoch 11/12: loss 2.363  val acc 0.186 top5 0.620 nll 2.563  (0.9 s)",
+    "  epoch 12/12: loss 2.365  val acc 0.187 top5 0.622 nll 2.561  (0.9 s)",
+    "wrote training/models/loop/round0/model_all.alm (259 KB)",
+    "training took 11.9 s on Intel(R) Xeon(R) Processor @ 2.30GHz (4 threads, none (CPU only))"
+   ],
+   "selfplay": {
+    "levels": 720,
+    "failed": 1,
+    "mean_reward": 1.4421,
+    "mean_kept_reward": 1.8695,
+    "mean_dropped": 0.0357,
+    "mean_alignment": 0.9032,
+    "seconds": 139.6
+   }
+  },
+  {
+   "round": 1,
+   "data": [
+    "/home/user/test/training/data/selfplay_r0.jsonl",
+    "/home/user/test/training/data/selfplay_r1.jsonl"
+   ],
+   "eval": {
+    "levels": 90,
+    "failed": 0,
+    "mean_reward": 1.3562,
+    "mean_kept_reward": 1.7727,
+    "mean_dropped": 0.0354,
+    "mean_alignment": 0.9041,
+    "seconds": 22.1
+   },
+   "train_log": [
+    "data: 1256 sequences, 66001 decisions, vocab 174; train 1146 / val 110 sequences",
+    "baseline (most frequent pattern per gamemode): val accuracy 0.085",
+    "model: GRU hidden 96, embed 24, window 16, 66294 parameters (259 KB)",
+    "  epoch  1/6: loss 2.344  val acc 0.195 top5 0.627 nll 2.555  (1.3 s)",
+    "  epoch  2/6: loss 2.333  val acc 0.195 top5 0.634 nll 2.549  (1.2 s)",
+    "  epoch  3/6: loss 2.312  val acc 0.195 top5 0.635 nll 2.543  (1.3 s)",
+    "  epoch  4/6: loss 2.297  val acc 0.196 top5 0.635 nll 2.542  (1.3 s)",
+    "  epoch  5/6: loss 2.275  val acc 0.197 top5 0.636 nll 2.540  (1.3 s)",
+    "  epoch  6/6: loss 2.286  val acc 0.196 top5 0.635 nll 2.540  (1.3 s)",
+    "wrote training/models/loop/round1/model_all.alm (259 KB)",
+    "training took 8.6 s on Intel(R) Xeon(R) Processor @ 2.30GHz (4 threads, none (CPU only))"
+   ],
+   "selfplay": {
+    "levels": 720,
+    "failed": 2,
+    "mean_reward": 1.3694,
+    "mean_kept_reward": 1.7982,
+    "mean_dropped": 0.0358,
+    "mean_alignment": 0.9034,
+    "seconds": 189.0
+   }
+  },
+  {
+   "round": 2,
+   "data": [
+    "/home/user/test/training/data/selfplay_r0.jsonl",
+    "/home/user/test/training/data/selfplay_r1.jsonl",
+    "/home/user/test/training/data/selfplay_r2.jsonl"
+   ],
+   "eval": {
+    "levels": 90,
+    "failed": 0,
+    "mean_reward": 1.3211,
+    "mean_kept_reward": 1.7719,
+    "mean_dropped": 0.0365,
+    "mean_alignment": 0.9041,
+    "seconds": 37.4
+   },
+   "train_log": [
+    "data: 1614 sequences, 88339 decisions, vocab 174; train 1483 / val 131 sequences",
+    "baseline (most frequent pattern per gamemode): val accuracy 0.090",
+    "model: GRU hidden 96, embed 24, window 16, 66294 parameters (259 KB)",
+    "  epoch  1/6: loss 2.280  val acc 0.207 top5 0.638 nll 2.525  (1.6 s)",
+    "  epoch  2/6: loss 2.255  val acc 0.206 top5 0.640 nll 2.523  (2.0 s)",
+    "  epoch  3/6: loss 2.252  val acc 0.206 top5 0.642 nll 2.515  (1.9 s)",
+    "  epoch  4/6: loss 2.237  val acc 0.207 top5 0.646 nll 2.513  (1.7 s)",
+    "  epoch  5/6: loss 2.219  val acc 0.205 top5 0.645 nll 2.509  (1.7 s)",
+    "  epoch  6/6: loss 2.215  val acc 0.206 top5 0.645 nll 2.508  (1.8 s)",
+    "wrote training/models/loop/round2/model_all.alm (259 KB)",
+    "training took 11.6 s on Intel(R) Xeon(R) Processor @ 2.30GHz (4 threads, none (CPU only))"
+   ]
+  }
+ ],
+ "eval_seed": 777,
+ "rules_eval": {
+  "levels": 90,
+  "failed": 0,
+  "mean_reward": 1.2727,
+  "mean_kept_reward": 1.723,
+  "mean_dropped": 0.0382,
+  "mean_alignment": 0.9044,
+  "seconds": 20.6
+ },
+ "seconds": 465.9784951210022
+}

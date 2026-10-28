@@ -134,7 +134,7 @@ std::string Session::cacheKey(std::filesystem::path const& p) const {
     std::error_code ec;
     auto size = std::filesystem::file_size(p, ec);
     auto time = std::filesystem::last_write_time(p, ec).time_since_epoch().count();
-    return geode::utils::string::pathToString(p) + "|" + std::to_string(size) + "|" + std::to_string(time);
+    return geode::utils::string::pathToString(p) + "|" + std::to_string(static_cast<unsigned long long>(size)) + "|" + std::to_string(static_cast<long long>(time));
 }
 
 std::shared_ptr<const audio::MusicAnalysis> Session::cachedAnalysis(std::filesystem::path const& p) const {

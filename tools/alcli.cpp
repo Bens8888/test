@@ -4,12 +4,14 @@
 #include <al/audio/synth.hpp>
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
+#include <al/model/model.hpp>
 #include <al/rec/demo.hpp>
 #include <al/rec/recording.hpp>
 #include <al/report/render.hpp>
 #include <al/util/codec.hpp>
 #include <al/util/json.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +27,7 @@ static int usage() {
         "  alcli analyze <audio> [--json out.json]   analyse a song and print the timeline summary\n"
         "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n"
         "  alcli demo-recording <out.alrec|.json>    write the demo click recording\n"
+        "  alcli bench [model.alm] [out.json]        performance benchmark (analysis, generation, physics, bot, model)\n"
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
@@ -108,6 +111,86 @@ int main(int argc, char** argv) {
         for (int i = 3; i + 1 < argc; ++i) {
             if (std::strcmp(argv[i], "--json") == 0) writeFile(argv[i + 1], analysisToJson(A).dump(1));
         }
+        return 0;
+    }
+    if (cmd == "bench") {
+        // Performance targets: analysis < ~20 s for a 3-minute song, < ~10 s per variant,
+        // thousands of rollouts per second, model inference in microseconds.
+        using clk = std::chrono::steady_clock;
+        auto secs = [](clk::time_point a) { return std::chrono::duration<double>(clk::now() - a).count(); };
+        std::string modelPath = argc >= 3 ? argv[2] : "resources/models/model_all.alm";
+        Json out = Json::object();
+        // 1. audio analysis: the demo song and a ~3 minute random song
+        auto demo = audio::render(audio::demoSong());
+        auto t0 = clk::now();
+        auto A = audio::analyze(demo);
+        double tDemo = secs(t0);
+        audio::SynthScore longSong;
+        for (uint64_t s = 1; s < 200; ++s) { longSong = audio::randomSong(s); if (longSong.duration > 170) break; }
+        auto longBuf = audio::render(longSong);
+        t0 = clk::now();
+        auto A2 = audio::analyze(longBuf);
+        double tLong = secs(t0);
+        std::printf("analysis: demo song %.1f s audio in %.2f s; %.1f s song in %.2f s (%.2f s per minute of audio)\n", A.duration, tDemo, A2.duration, tLong,
+                    tLong / (A2.duration / 60.0));
+        out["analysis_demo_seconds"] = tDemo;
+        out["analysis_long_audio_seconds"] = A2.duration;
+        out["analysis_long_seconds"] = tLong;
+        // 2. generation
+        gen::GenOptions opt;
+        opt.difficulty = gen::Difficulty::Insane;
+        std::vector<double> per;
+        for (uint64_t s = 1; s <= 5; ++s) {
+            t0 = clk::now();
+            auto r = gen::generateVariant(A2, opt, s, nullptr);
+            per.push_back(secs(t0));
+        }
+        std::sort(per.begin(), per.end());
+        opt.variants = 5;
+        t0 = clk::now();
+        auto vs = gen::generateVariants(A2, opt, nullptr);
+        double tPar = secs(t0);
+        std::printf("generation (%.0f s song, Insane): per variant median %.2f s, max %.2f s; 5 variants in parallel %.2f s\n", A2.duration, per[2], per.back(), tPar);
+        out["variant_median_seconds"] = per[2];
+        out["variant_max_seconds"] = per.back();
+        out["five_variants_parallel_seconds"] = tPar;
+        // 3. physics and bot
+        const auto& best = vs.front();
+        phys::World W(best.level);
+        t0 = clk::now();
+        long steps = 0;
+        for (int rep = 0; rep < 5; ++rep) { auto rr = bot::run(W, best.inputs); steps += rr.ticks; }
+        double tRun = secs(t0);
+        std::printf("physics: %.1f M steps/s (%.0f full-level rollouts/s of a %.0f s level)\n", steps / tRun / 1e6, 5.0 / tRun, A2.duration);
+        out["physics_msteps_per_second"] = steps / tRun / 1e6;
+        phys::GameState start = phys::initialState(W);
+        bot::InputTrack none;
+        t0 = clk::now();
+        int rollouts = 0;
+        while (secs(t0) < 1.0) { bot::RunOptions ro; ro.maxTicks = 1200; bot::runFrom(W, start, best.inputs, ro); ++rollouts; }
+        std::printf("bot: %d five-second rollouts per second\n", rollouts);
+        out["five_second_rollouts_per_second"] = rollouts;
+        // 4. model inference
+        std::string err;
+        auto m = model::PatternModel::load(modelPath, &err);
+        if (m) {
+            gen::PatternContext ctx;
+            std::vector<gen::HistoryStep> hist(16);
+            for (auto& h : hist) { std::fill(h.f, h.f + gen::kContextFeatures, 0.3f); h.token = 3; }
+            ctx.history = &hist;
+            auto cands = gen::patternsFor(level::Mode::Cube, 5);
+            std::vector<float> w;
+            t0 = clk::now();
+            int n = 0;
+            while (secs(t0) < 0.5) { m->score(ctx, cands, w); ++n; }
+            double us = secs(t0) / n * 1e6;
+            std::printf("model: %zu parameters, %.0f us per decision (17-step GRU window)\n", m->parameterCount(), us);
+            out["model_parameters"] = double(m->parameterCount());
+            out["model_us_per_decision"] = us;
+        } else {
+            std::printf("model: not measured (%s)\n", err.c_str());
+        }
+        if (argc >= 4) writeFile(argv[3], out.dump(1));
         return 0;
     }
     if (cmd == "demo-recording" && argc >= 3) {
