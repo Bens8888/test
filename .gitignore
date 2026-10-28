@@ -1,4 +1,11 @@
-node_modules
-dist
-*.log
+build/
+build-*/
+_build/
+*.geode
+__pycache__/
+*.pyc
+.venv/
+training/runs/
+training/data/raw/
+training/data/cache/
 .DS_Store

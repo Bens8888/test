@@ -1,0 +1,5 @@
+file(GLOB AL_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+add_executable(al_tests ${AL_TEST_SOURCES})
+target_link_libraries(al_tests PRIVATE autolayout_core)
+target_compile_definitions(al_tests PRIVATE AL_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME al_tests COMMAND al_tests)
