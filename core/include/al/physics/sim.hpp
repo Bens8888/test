@@ -173,6 +173,10 @@ GameState initialState(const World& world);
 // Advance one 240 Hz step with the given button state (true = held).
 void step(const World& world, GameState& gs, bool pressed);
 
+// Recompute which orbs each player overlaps (normally carried over from the previous step); used
+// when a state is moved into a world with different objects.
+void refreshTouching(const World& world, GameState& gs);
+
 // Convenience: horizontal speed in units/second for a speed index.
 inline double unitsPerSecond(int speedIndex) { return speedParams(speedIndex).unitsPerSec(); }
 

@@ -4,6 +4,7 @@
 #include <al/audio/synth.hpp>
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
+#include <al/gen/path.hpp>
 #include <al/gen/test_pattern.hpp>
 #include <al/model/model.hpp>
 #include <al/rec/demo.hpp>
@@ -268,6 +269,72 @@ int main(int argc, char** argv) {
         if (argc >= 6) ro.x1 = float(std::atof(argv[5]));
         writeFile(argv[3], report::renderPng(L, nullptr, ro));
         std::printf("wrote %s\n", argv[3]);
+        return 0;
+    }
+    if (cmd == "path" && argc >= 3) {
+        // generator v2, gameplay path only (development view)
+        audio::MusicAnalysis A;
+        std::string src = argv[2];
+        if (src == "demo") A = audio::analyze(audio::render(audio::demoSong()));
+        else if (src.rfind("random:", 0) == 0) A = audio::analyze(audio::render(audio::randomSong(std::stoull(src.substr(7)))));
+        else {
+            std::string err;
+            if (!audio::analyzeFile(src, A, err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+        }
+        gen::GenOptions opt;
+        std::string pngPath;
+        float rate = -1;
+        float x0 = 0, x1 = -1;
+        for (int i = 3; i + 1 < argc; i += 2) {
+            std::string k = argv[i], v = argv[i + 1];
+            if (k == "--seed") opt.seed = std::stoull(v);
+            else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));
+            else if (k == "--style") opt.style = gen::Style(std::stoi(v));
+            else if (k == "--switch") rate = std::stof(v);
+            else if (k == "--png") pngPath = v;
+            else if (k == "--x0") x0 = std::stof(v);
+            else if (k == "--x1") x1 = std::stof(v);
+        }
+        auto t0 = std::chrono::steady_clock::now();
+        Rng rng(opt.seed);
+        gen::DesignPlan plan = gen::planFromMusicV2(A, opt, rng);
+        gen::PathParams prm;
+        prm.switchRate = rate;
+        gen::PathPlan path = gen::planPath(plan, A, opt, rng, prm);
+        double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        std::printf("%zu clicks: %zu used, %zu skipped, %zu objects, %zu platforms, %zu segments, %.2f s\n", plan.clicks.size(), path.clicks.size(),
+                    path.skipped.size(), path.objects.size(), path.surfaces.size(), path.segments.size(), sec);
+        for (auto& sg : path.segments) std::printf("  clicks %3d-%3d  %-6s speed %d%s%s  %s\n", sg.first, sg.last, level::modeName(sg.mode), sg.speed, sg.mini ? " mini" : "", sg.flipped ? " flipped" : "", sg.why.c_str());
+        int counts[16] = {};
+        for (auto& c : path.clicks) counts[int(c.act)]++;
+        for (int a = 0; a < 10; ++a) if (counts[a]) std::printf("  %s: %d\n", gen::actName(gen::Act(a)), counts[a]);
+        for (auto& n : path.notes) std::printf("note: %s\n", n.c_str());
+        level::Level L = gen::pathLevel(path);
+        phys::World W(L);
+        std::printf("bot with the designed inputs: %s\n", bot::isBeatable(W, path.inputs) ? "beats it" : "FAILS");
+        {
+            auto f = bot::firstFailure(W, path.inputs);
+            if (f.failed) {
+                std::printf("  dies at tick %d (%.2f s) x=%.0f y=%.0f cause=%s", f.tick, f.tick / 240.0, f.x, f.y, phys::deathCauseName(f.cause));
+                if (f.levelObject >= 0) { auto& o = L.objects[size_t(f.levelObject)]; std::printf(" object id %d at (%.0f, %.0f) scale %.0fx%.0f", o.id, o.x, o.y, o.scaleX, o.scaleY); }
+                std::printf("\n");
+                for (auto& c : path.clicks) if (c.tick > f.tick - 200 && c.tick < f.tick + 20) std::printf("    click %d tick %d %s obj %d mode %s ground %d (%.0f,%.0f)\n", c.click, c.tick, gen::actName(c.act), c.objId, level::modeName(c.mode), c.grounded, c.x, c.y);
+                for (auto& s2 : path.surfaces) if (s2.cx1 * 30 > f.x - 300 && s2.cx0 * 30 < f.x + 100) std::printf("    surface cells x %d-%d y %d-%d g %d (click %d)\n", s2.cx0, s2.cx1, s2.cy0, s2.cy1, s2.g, s2.click);
+                for (auto& o : path.objects) if (o.o.x > f.x - 300 && o.o.x < f.x + 100) std::printf("    object %d at (%.0f,%.0f) %s click %d\n", o.o.id, o.o.x, o.o.y, gen::actName(o.act), o.click);
+            }
+        }
+        if (!pngPath.empty()) {
+            gen::CellGrid cells;
+            level::Level T = gen::pathLevel(path, &cells);
+            gen::tileCells(cells, gen::TileLook::Outline, T.objects);
+            report::RenderOptions ro;
+            ro.scale = 0.5f;
+            ro.maxWidth = 2400;
+            ro.x0 = x0;
+            ro.x1 = x1;
+            writeFile(pngPath, report::renderPng(T, &path.inputs, ro));
+            std::printf("wrote %s\n", pngPath.c_str());
+        }
         return 0;
     }
     if (cmd == "generate" && argc >= 3) {

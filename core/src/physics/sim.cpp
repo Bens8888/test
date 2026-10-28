@@ -1059,6 +1059,22 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
     (void)landed;
 }
 
+void refreshTouching(const World& W, GameState& gs) {
+    std::vector<int> cand;
+    for (int k = 0; k < (gs.dual ? 2 : 1); ++k) {
+        PlayerState& p = gs.p[size_t(k)];
+        p.touchingRings = {};
+        p.touchingCount = 0;
+        const Rect r = rectOf(p.x, p.y, p.width() * 0.5f, p.height() * 0.5f);
+        W.query(p.x - 40, p.x + 40, cand);
+        for (int i : cand) {
+            const SimObject& o = W.objects()[size_t(i)];
+            if (o.kind != Kind::Orb || !hitsObject(r, o)) continue;
+            if (p.touchingCount < p.touchingRings.size()) p.touchingRings[p.touchingCount++] = i;
+        }
+    }
+}
+
 static void pushButton(const World& W, GameState& gs, PlayerState& p) {
     p.holding = true;
     p.jumpUnused = true;
