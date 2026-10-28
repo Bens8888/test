@@ -209,6 +209,13 @@ int main(int argc, char** argv) {
             std::printf("model: %zu parameters, %.0f us per decision (17-step GRU window)\n", m->parameterCount(), us);
             out["model_parameters"] = double(m->parameterCount());
             out["model_us_per_decision"] = us;
+            gen::GenOptions mo;
+            mo.difficulty = gen::Difficulty::Insane;
+            t0 = clk::now();
+            auto rm = gen::generateVariant(A2, mo, 1, m.get());
+            double tm = secs(t0);
+            std::printf("generation with the model: %.2f s for one variant (%s)\n", tm, rm.report.intendedInputs ? "beaten with the designed clicks" : "needed the bot");
+            out["variant_with_model_seconds"] = tm;
         } else {
             std::printf("model: not measured (%s)\n", err.c_str());
         }
