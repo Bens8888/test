@@ -300,6 +300,43 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     }
     (void)placedBlocks;
 
+    // ---- anti-skip: a click whose omission would not kill gets a saw on the path the player
+    // would take without it, wherever that is clear of every timing variant of the intended path
+    {
+        const float antiMargin = std::max(6.0f, clearance * 0.5f);
+        int added = 0;
+        for (size_t i = 0; i < clickEv.size(); ++i) {
+            const int ev = clickEv[i];
+            if (ev < 0) continue;
+            const auto& E = b.inputs().events;
+            const int tick = E[size_t(ev)].tick;
+            const int hz = std::min(endTick, b.nextPressAfter(ev) + 60);
+            phys::GameState saved = b.cursor();
+            phys::GameState pre = saved;
+            b.runTo(pre, std::max(saved.tick, tick - 40));
+            b.setCursor(pre);
+            const bool forced = b.necessary(ev, hz);
+            b.setCursor(saved);
+            if (forced) continue;
+            bot::InputTrack mod;
+            mod.events = E;
+            size_t n = (size_t(ev) + 1 < E.size() && !E[size_t(ev) + 1].press) ? 2 : 1;
+            mod.events.erase(mod.events.begin() + ev, mod.events.begin() + ev + long(n));
+            phys::GameState q = pre;
+            while (q.tick < hz) {
+                if (!b.runToWithInputs(q, q.tick + 1, mod)) break;
+                if (q.tick < tick + 8 || q.p[0].mode != part.mode) continue;
+                LevelObject o = Builder::obj(oid::SawSmall, std::round(q.p[0].x / 7.5f) * 7.5f, std::round(q.p[0].y / 7.5f) * 7.5f);
+                if (o.y < F + 8 || o.y > C - 8) continue;
+                if (!clearOf(o, path, antiMargin)) continue;
+                b.place(o);
+                ++added;
+                break;
+            }
+        }
+        debugLog("  flying: %d anti-skip saws", added);
+    }
+
     // ---- verify the part and measure windows
     {
         phys::GameState v = b.cursor();

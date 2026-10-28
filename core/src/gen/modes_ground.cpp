@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 
 namespace al::gen {
 
@@ -463,6 +462,9 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         };
         phys::GameState s = s0;
         if (!settle(s)) return false;
+        while (s.p[0].mode != part.mode && s.tick < k0 + 240)
+            if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died before entering the mode at tick %d", s.tick); return false; }
+        if (s.p[0].mode != part.mode) { debugLog("  ground: the player never entered the mode"); return false; }
         while (s.p[0].mode != part.mode && s.tick < k0 + 240)
             if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died before entering the mode at tick %d", s.tick); return false; }
         if (s.p[0].mode != part.mode) { debugLog("  ground: the player never entered the mode"); return false; }
