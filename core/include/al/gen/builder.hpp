@@ -13,6 +13,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,8 @@ public:
     // Rebuild only part `index` (re-roll one section); parts after it are rebuilt too because
     // the player state flows from one part into the next.
     bool rebuildFrom(int index, const Progress* progress = nullptr);
+    // Repair: part `index` is built with the safe fallback (its terrain without clicks) from now on.
+    void forceFallback(int index) { m_forcedFallback.insert(index); }
 
     // ---- results
     level::Level& level() { return m_level; }
@@ -153,6 +156,7 @@ private:
     std::vector<ClickResult> m_clicks;
     std::vector<HistoryStep> m_history;
     std::vector<PartResult> m_parts;
+    std::set<int> m_forcedFallback;
     PatternMemory m_memory;
     double m_endTime = 0;
     int m_nextGroup = 1000;

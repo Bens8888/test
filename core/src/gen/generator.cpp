@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <mutex>
+#include <string>
 #include <thread>
 
 namespace al::gen {
@@ -209,20 +210,22 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
     }
     Builder b(A, opt, res.plan, model, rng.fork(hashStr("build")));
     if (!b.build(progress)) throw Cancelled{};
-    res.level = b.level();
-    res.inputs = b.inputs();
-    res.clicks = b.clickResults();
-    res.parts = b.partResults();
     res.model = model ? model->name() : "rules";
-    // decoration (never touches gameplay hitboxes), then the final bot verification
-    if (progress) progress->report("decorate", 0);
-    Rng dr = rng.fork(hashStr("decorate"));
-    decorate(res.level, res.inputs, res.plan, A, opt, dr, opt.groupBase > 0 ? opt.groupBase : 1000);
-    if (progress) progress->report("verify", 0);
-    phys::World W(res.level);
-    bool beatable = bot::isBeatable(W, res.inputs);
-    bool intended = beatable;
-    if (!beatable) {
+    bool decorationRemoved = false;
+    bot::Failure fail;
+    // decoration (never touches gameplay hitboxes), then the final bot verification with the
+    // designed inputs; returns true if they beat the level
+    auto finishAndVerify = [&]() {
+        res.level = b.level();
+        res.inputs = b.inputs();
+        res.clicks = b.clickResults();
+        res.parts = b.partResults();
+        if (progress) progress->report("decorate", 0);
+        Rng dr = rng.fork(hashStr("decorate"));
+        decorate(res.level, res.inputs, res.plan, A, opt, dr, opt.groupBase > 0 ? opt.groupBase : 1000);
+        if (progress) progress->report("verify", 0);
+        phys::World W(res.level);
+        if (bot::isBeatable(W, res.inputs)) return true;
         auto f = bot::firstFailure(W, res.inputs);
         phys::World W0(b.level());
         auto f0 = bot::firstFailure(W0, res.inputs);
@@ -231,13 +234,37 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
         if (!f0.failed) {
             // the decoration broke it (should not happen): ship the undecorated layout instead
             res.level = b.level();
-            res.notes.push_back("decoration removed: it interfered with the gameplay");
-            beatable = intended = true;
+            decorationRemoved = true;
+            return true;
         }
+        fail = f0;
+        return false;
+    };
+    bool beatable = finishAndVerify();
+    // Repair (should not happen: every part was verified while building): the part where the
+    // designed run dies is rebuilt with the safe fallback, and the parts after it are rebuilt on
+    // top, until the designed inputs beat the level.
+    std::vector<int> repaired;
+    for (int round = 0; !beatable && round < 4; ++round) {
+        const double t = phys::kStepSec * fail.tick;
+        int part = int(res.plan.parts.size()) - 1;
+        for (int i = 0; i < int(res.plan.parts.size()); ++i)
+            if (t < res.plan.parts[size_t(i)].t1) { part = i; break; }
+        // a death in the first ticks of a part usually comes from the end of the previous one
+        if (std::find(repaired.begin(), repaired.end(), part) != repaired.end() && part > 0) --part;
+        if (std::find(repaired.begin(), repaired.end(), part) != repaired.end()) break;
+        debugLog("repair: part %d (death at %.2f s, %s)", part, t, phys::deathCauseName(fail.cause));
+        repaired.push_back(part);
+        b.forceFallback(part);
+        if (!b.rebuildFrom(part, progress)) throw Cancelled{};
+        beatable = finishAndVerify();
     }
-    bot::Failure fail;
+    bool intended = beatable;
+    if (decorationRemoved) res.notes.push_back("decoration removed: it interfered with the gameplay");
+    for (int part : repaired)
+        res.notes.push_back("part " + std::to_string(part) + " repaired: rebuilt without its clicks after the bot found a failure");
     if (!beatable) {
-        // Should not happen (every part was verified); search for any solution before giving up.
+        // last resort: search for any solution before giving up
         phys::World W1(res.level);
         fail = bot::firstFailure(W1, res.inputs);
         bot::SolveOptions so;

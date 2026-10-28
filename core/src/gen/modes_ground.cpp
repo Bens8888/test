@@ -458,12 +458,17 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         const phys::GameState s0 = b.cursor();
         int firstClick = part.clicks.empty() ? k1 : Builder::tickOf(plan.clicks[size_t(part.clicks.front())].time);
         int settleLimit = std::max(s0.tick + 1, std::min(firstClick - c.maxShift - 4, k0 + 120));
+        float modeX = s0.p[0].x; // where the transition portals have taken effect
         {
             // never stop before the transition portals took effect (gamemode and gravity of the part)
             phys::GameState q = s0;
-            while (q.tick < k0 + 240 && (q.p[0].mode != part.mode || q.p[0].upsideDown != part.flipped))
+            bool entered = false;
+            while (q.tick < k0 + 240 && (q.p[0].mode != part.mode || q.p[0].upsideDown != part.flipped)) {
                 if (!b.runTo(q, q.tick + 1)) break;
+                if (!entered && q.p[0].mode == part.mode) { entered = true; modeX = q.p[0].x; }
+            }
             settleLimit = std::max(settleLimit, q.tick + 1);
+            if (!entered) modeX = q.p[0].x;
         }
         auto settle = [&](phys::GameState& s) {
             while (s.tick < settleLimit) {
@@ -497,7 +502,9 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
             // again; for a ceiling, candidate heights are tried until the player lands safely
             const int g = s.p[0].flip();
             std::vector<std::pair<float, float>> options; // (surface, first cell x)
-            const float minStart = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            // (never under the transition portals: a surface there would catch the player in
+            // the previous mode before it reaches them)
+            const float minStart = std::floor((std::max(s0.p[0].x + 30.0f, modeX + 15.0f)) / kCell) * kCell;
             if (g > 0) {
                 options.push_back({0.0f, minStart});
             } else {
@@ -509,7 +516,7 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
                 }
                 for (float cand = 150.0f; cand <= 660.0f; cand += kCell) {
                     float xs = -1;
-                    for (auto& [x, top] : rise) if (top >= cand - 25.0f) { xs = x; break; }
+                    for (auto& [x, top] : rise) if (x >= modeX && top >= cand - 25.0f) { xs = x; break; }
                     if (xs < 0) continue;
                     float start = std::floor((xs - 15.0f) / kCell) * kCell;
                     for (float st : {start, start - kCell, start + kCell}) if (st >= minStart) options.push_back({cand, st});
@@ -532,12 +539,21 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
                     extendRun(c, q.p[0].x + 240.0f);
                     ok = b.runTo(q, q.tick + 1);
                 }
-                if (ok && q.p[0].onGround && q.p[0].flip() == g) {
+                if (ok && q.p[0].onGround && q.p[0].flip() == g && q.p[0].mode == part.mode) {
+                    // and it stays alive on the new surface (it may have landed on what is left of
+                    // the previous part's terrain, just before a wall of the new one)
+                    phys::GameState w = q;
+                    const float ups = float(phys::speedParams(w.p[0].speed).unitsPerStep());
+                    extendRun(c, w.p[0].x + 60.0f * ups + 60.0f);
+                    for (int t = 0; ok && t < 60; ++t) ok = b.runTo(w, w.tick + 1);
+                }
+                if (ok && q.p[0].onGround && q.p[0].flip() == g && q.p[0].mode == part.mode) {
                     debugLog("  ground: airborne after settling (g %d): surface %.0f from x %.0f", g, surf, start);
                     s = q;
                     landed = true;
                     break;
                 }
+                debugLog("  ground: landing option surf %.0f from x %.0f (modeX %.0f s0.x %.0f): ok %d ground %d g %d mode %d at x %.0f tick %d (%s)", surf, start, modeX, s0.p[0].x, ok, q.p[0].onGround, q.p[0].flip(), int(q.p[0].mode), q.p[0].x, q.tick, phys::deathCauseName(q.p[0].deathCause));
                 b.rollback(mk);
             }
             if (!landed) {

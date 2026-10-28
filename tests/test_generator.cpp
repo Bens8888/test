@@ -70,7 +70,10 @@ TEST(generator_fuzz_zero_unbeatable) {
         auto opt = optionsFor(rng.next(), d, -1, st);
         auto t0 = std::chrono::steady_clock::now();
         auto res = generateVariant(A, opt, opt.seed, nullptr);
-        worst = std::max(worst, std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        const double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        worst = std::max(worst, sec);
+        if (sec > 5.0)
+            std::printf("    slow: seed %llu difficulty %d style %d: %.2f s\n", (unsigned long long)opt.seed, int(d), int(st), sec);
         ++n;
         // independent re-verification of the shipped level with the shipped inputs
         phys::World W(res.level);
@@ -80,6 +83,9 @@ TEST(generator_fuzz_zero_unbeatable) {
             std::printf("    UNBEATABLE: seed %llu difficulty %d style %d: %s\n", (unsigned long long)opt.seed, int(d), int(st),
                         res.report.notes.empty() ? "" : res.report.notes.back().c_str());
         }
+        for (auto& note : res.report.notes)
+            if (note.find("repaired") != std::string::npos)
+                std::printf("    repair: seed %llu difficulty %d style %d: %s\n", (unsigned long long)opt.seed, int(d), int(st), note.c_str());
         if (!res.report.intendedInputs) {
             ++intendedBad;
             std::printf("    designed inputs failed: seed %llu difficulty %d style %d\n", (unsigned long long)opt.seed, int(d), int(st));
@@ -112,3 +118,29 @@ TEST(generator_level_file_roundtrip) {
     phys::World W(back);
     CHECK(bot::isBeatable(W, res.inputs));
 }
+
+TEST(generator_repair_rebuilds_a_part_with_the_safe_fallback) {
+    // the repair path the generator takes if the final verification ever fails: one part is
+    // rebuilt without its clicks, the parts after it on top, and the designed inputs still win
+    const auto& A = demoAnalysis();
+    auto opt = optionsFor(77, Difficulty::Harder);
+    Rng rng(combineSeed(opt.seed, hashStr("autolayout")));
+    DesignPlan plan = planFromMusic(A, opt, rng);
+    Builder b(A, opt, plan, nullptr, rng.fork(hashStr("build")));
+    CHECK(b.build());
+    const int part = int(plan.parts.size()) / 2;
+    const size_t partsBefore = b.partResults().size();
+    b.forceFallback(part);
+    CHECK(b.rebuildFrom(part));
+    CHECK(b.partResults().size() == partsBefore);
+    CHECK(b.partResults()[size_t(part)].fallback);
+    CHECK(b.partResults()[size_t(part)].note == "repaired with the safe fallback");
+    for (int i = 0; i < int(b.partResults().size()); ++i)
+        if (i != part) CHECK_MSG(!b.partResults()[size_t(i)].fallback, "part %d", i);
+    phys::World W(b.level());
+    CHECK(bot::isBeatable(W, b.inputs()));
+    int droppedInPart = 0;
+    for (auto& c : b.clickResults()) if (c.dropped && c.pattern == "fallback") ++droppedInPart;
+    CHECK(droppedInPart == int(plan.parts[size_t(part)].clicks.size()));
+}
+

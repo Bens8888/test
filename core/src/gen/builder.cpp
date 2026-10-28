@@ -110,7 +110,7 @@ bool Builder::runToWithInputs(phys::GameState& s, int tick, const bot::InputTrac
     auto it = std::upper_bound(in.events.begin(), in.events.end(), s.tick, [](int t, const bot::InputEvent& e) { return t < e.tick; });
     size_t ei = size_t(it - in.events.begin());
     bool held = ei > 0 ? in.events[ei - 1].press : false;
-    while (s.tick < tick && !s.dead) {
+    while (s.tick < tick && !s.dead && !s.won) {
         int next = s.tick + 1;
         while (ei < in.events.size() && in.events[ei].tick <= next) { held = in.events[ei].press; ++ei; }
         phys::step(m_world, s, held);
@@ -330,7 +330,7 @@ bool Builder::buildPart(int i, const Progress* progress) {
     const size_t memMark = m_memory.uses.size();
     PartResult res;
     res.part = i;
-    const int maxAttempts = std::max(1, m_opt.maxRetriesPerSection);
+    const int maxAttempts = m_forcedFallback.count(i) ? 0 : std::max(1, m_opt.maxRetriesPerSection);
     const int kEnd = tickOf(part.t1);
     for (int attempt = 0; attempt < maxAttempts; ++attempt) {
         checkCancel(progress);
@@ -375,7 +375,7 @@ bool Builder::buildPart(int i, const Progress* progress) {
         placeTransition(i > 0 ? m_plan.parts[size_t(i - 1)] : part, part, i == 0);
         res.fallback = true;
         res.ok = buildSafeFallback(part);
-        res.note = res.ok ? "rebuilt with the safe fallback" : "fallback failed";
+        res.note = res.ok ? (maxAttempts == 0 ? "repaired with the safe fallback" : "rebuilt with the safe fallback") : "fallback failed";
         phys::GameState s = m_partStart[size_t(i)];
         int until = i + 1 < int(m_plan.parts.size()) ? kEnd - 30 : kEnd;
         if (runTo(s, until)) m_cursor = s;
@@ -426,6 +426,7 @@ bool Builder::build(const Progress* progress) {
 
 bool Builder::rebuildFrom(int index, const Progress* progress) {
     index = std::clamp(index, 0, int(m_plan.parts.size()));
+    m_world.setEndX(1e9f); // the level end is placed again by finish()
     if (index > 0 && size_t(index) < m_partMark.size()) {
         rollback(m_partMark[size_t(index)]);
         m_cursor = m_partStart[size_t(index)];
