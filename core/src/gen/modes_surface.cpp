@@ -90,7 +90,8 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     phys::GameState probe = s;
     b.runTo(probe, endTick);
     const float xStart = std::floor((s.p[0].x + 45.0f) / 30.0f) * 30.0f;
-    const float xEnd = probe.p[0].x;
+    const bool lastPart = part.index + 1 == int(plan.parts.size());
+    const float xEnd = probe.p[0].x + (lastPart ? 900.0f : 0.0f); // the last part runs on to the level end
     for (float x = xStart + 15; x < xEnd; x += 30) {
         if (needFloor) b.place(Builder::obj(oid::Block, x, floorY - 15));
         if (needCeil) b.place(Builder::obj(oid::Block, x, ceilY + 15));
@@ -109,7 +110,7 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
         ++hazards;
         return true;
     };
-    for (float x = xStart + 75; x < xEnd - 30; x += step) {
+    for (float x = xStart + 75; x < probe.p[0].x - 30; x += step) {
         if (family == SuGaps && int(x / 30) % 4 == 0) continue;
         if (family == SuBlocks) {
             // bumps: a half block with a spike behind it, on whichever surface is clear

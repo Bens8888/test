@@ -1,4 +1,5 @@
 #include <al/gen/generator.hpp>
+#include <al/util/codec.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -221,21 +222,41 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
     if (progress) progress->report("verify", 0);
     phys::World W(res.level);
     bool beatable = bot::isBeatable(W, res.inputs);
-    if (!beatable && debugEnabled()) {
+    bool intended = beatable;
+    if (!beatable) {
         auto f = bot::firstFailure(W, res.inputs);
         phys::World W0(b.level());
         auto f0 = bot::firstFailure(W0, res.inputs);
         debugLog("final verification failed: tick %d x=%.0f y=%.0f cause=%s obj=%d | before decoration: failed=%d tick %d x=%.0f",
                  f.tick, f.x, f.y, phys::deathCauseName(f.cause), f.levelObject, f0.failed, f0.tick, f0.x);
+        if (!f0.failed) {
+            // the decoration broke it (should not happen): ship the undecorated layout instead
+            res.level = b.level();
+            res.notes.push_back("decoration removed: it interfered with the gameplay");
+            beatable = intended = true;
+        }
     }
+    bot::Failure fail;
     if (!beatable) {
         // Should not happen (every part was verified); search for any solution before giving up.
+        phys::World W1(res.level);
+        fail = bot::firstFailure(W1, res.inputs);
         bot::SolveOptions so;
         so.progress = progress;
-        auto solved = bot::autoSolve(W, so);
+        auto solved = bot::autoSolve(W1, so);
         if (solved.solved) { res.inputs = solved.inputs; beatable = true; }
     }
     res.report = makeReport(res.level, res.inputs, res.plan, res.clicks, res.parts, A, beatable);
+    res.report.intendedInputs = intended;
+    for (auto& n : res.notes) res.report.notes.push_back(n);
+    if (!beatable) {
+        res.report.failed = true;
+        res.report.failTime = phys::kStepSec * fail.tick;
+        res.report.failX = fail.x;
+        res.report.failY = fail.y;
+        res.report.failCause = phys::deathCauseName(fail.cause);
+        res.report.notes.push_back("NOT BEATABLE: dies at " + fmtNum(std::round(res.report.failTime * 100) / 100) + " s (x " + fmtNum(std::round(fail.x)) + ", " + res.report.failCause + ")");
+    }
     res.score = feelScore(res, A);
     res.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     return res;

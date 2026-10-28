@@ -248,6 +248,8 @@ bool clearOf(const level::LevelObject& o, const std::vector<PathSample>& samples
 void Builder::placeTransition(const Part& prev, const Part& next, bool first) {
     if (first) return;
     const int k0 = tickOf(next.t0);
+    // Inputs never carry over into the next part (a held button would make a cube jump on its own).
+    if (heldAfterInputs()) release(m_cursor.tick + 1);
     // Predict where the player is around the transition (no inputs after the previous part).
     phys::GameState s = m_cursor;
     runTo(s, std::max(s.tick, k0 - 24));
@@ -255,7 +257,7 @@ void Builder::placeTransition(const Part& prev, const Part& next, bool first) {
     float x = p.x;
     auto yAt = [&](float px) {
         phys::GameState q = s;
-        while (q.p[0].x < px - 30 && !q.dead && q.tick < k0 + 240) phys::step(m_world, q, false);
+        while (q.p[0].x < px - 30 && !q.dead && q.tick < k0 + 240) runTo(q, q.tick + 1);
         return q.p[0].y;
     };
     std::vector<std::pair<int, int>> portals; // (id, extra)
@@ -272,15 +274,48 @@ void Builder::placeTransition(const Part& prev, const Part& next, bool first) {
     if (next.mode != prev.mode || bounded) portals.push_back({modeIds[int(next.mode)], 1});
     if (next.dual != s.dual) portals.push_back({next.dual ? oid::PortalDualOn : oid::PortalDualOff, 0});
     float px = std::round((x + 60.0f) / 15.0f) * 15.0f;
-    for (auto [id, isMode] : portals) {
-        float py = yAt(px);
-        // keep bounded-mode floors on the ground when the player is low
-        float y = std::round(py / 15.0f) * 15.0f;
-        if (isMode && y < 45) y = 45;
-        LevelObject o = obj(id, px, y);
-        if (isMode) o.setProp(13, std::string("1"));
-        place(o);
-        px += 30.0f;
+    auto stateAt = [&](float px) {
+        phys::GameState q = s;
+        while (q.p[0].x < px - 30 && !q.dead && q.tick < k0 + 240) runTo(q, q.tick + 1);
+        return q;
+    };
+    auto placeAll = [&](float px) {
+        for (auto [id, isMode] : portals) {
+            if (id == oid::PortalGravFlip || id == oid::PortalGravNormal) {
+                // flip only where the player is grounded or well clear of the floor: flipping while
+                // falling onto the floor would carry the player into it head first
+                for (int tries = 0; tries < 20; ++tries) {
+                    phys::GameState q = stateAt(px);
+                    const auto& qp = q.p[0];
+                    const bool groundMode = qp.mode == Mode::Cube || qp.mode == Mode::Robot;
+                    if (q.dead || !groundMode || qp.onGround || qp.y - qp.height() * 0.5f > 45.0f) break;
+                    px += 15.0f;
+                }
+            }
+            float py = yAt(px);
+            // keep bounded-mode floors on the ground when the player is low
+            float y = std::round(py / 15.0f) * 15.0f;
+            if (isMode && y < 45) y = 45;
+            LevelObject o = obj(id, px, y);
+            if (isMode) o.setProp(13, std::string("1"));
+            debugLog("  transition: portal %d at (%.0f, %.0f), predicted player y %.0f", id, px, y, py);
+            place(o);
+            px += 30.0f;
+        }
+        return px;
+    };
+    // The player must survive passing the portals (a size or gravity change next to the previous
+    // part's last obstacles can kill): otherwise move them further on.
+    const Mark m = mark();
+    for (int shift = 0; shift < 12; ++shift) {
+        float lastX = placeAll(px + 30.0f * float(shift));
+        phys::GameState q = m_cursor;
+        bool alive = true;
+        while (alive && q.p[0].x < lastX + 30.0f && q.tick < k0 + 400) alive = runTo(q, q.tick + 1);
+        if (alive || shift == 11) break;
+        debugLog("  transition: the player dies passing the portals (tick %d x=%.0f %s), moving them", q.tick, q.p[0].x, phys::deathCauseName(q.p[0].deathCause));
+        rollback(m);
+        if (shift == 10) { placeAll(px); break; }
     }
 }
 
@@ -315,12 +350,18 @@ bool Builder::buildPart(int i, const Progress* progress) {
         debugLog("part %d (%s) attempt %d: builder %s", i, level::modeName(part.mode), attempt, ok ? "ok" : "FAILED");
         if (ok) {
             // verify the whole part from its start state
+            // (a little past the part end too: the next part's portals come ~10-40 ticks after
+            // it, and nothing of this part may kill the player before them)
             phys::GameState s = m_partStart[size_t(i)];
             int until = i + 1 < int(m_plan.parts.size()) ? kEnd - 30 : kEnd;
             if (runTo(s, until)) {
-                m_cursor = s;
-                res.ok = true;
-                break;
+                phys::GameState beyond = s;
+                if (i + 1 >= int(m_plan.parts.size()) || runTo(beyond, kEnd + 10)) {
+                    m_cursor = s;
+                    res.ok = true;
+                    break;
+                }
+                s = beyond;
             }
             res.note = "part failed final verification";
             debugLog("part %d: final verification died at tick %d (x=%.0f cause=%s)", i, s.tick, s.p[0].x, phys::deathCauseName(s.p[0].deathCause));
@@ -345,8 +386,9 @@ bool Builder::buildPart(int i, const Progress* progress) {
 }
 
 bool Builder::buildSafeFallback(const Part& part) {
-    // No hazards at all: the player passes through the part without input. The part's clicks are
-    // reported as dropped so the report shows exactly where the generator gave up.
+    // The part's terrain without any of its clicks (no click-forcing hazards): a plain floor or
+    // corridor the player passes without input. The clicks are reported as dropped so the report
+    // shows exactly where the generator gave up.
     for (int ci : part.clicks) {
         ClickResult r;
         r.click = ci;
@@ -354,6 +396,25 @@ bool Builder::buildSafeFallback(const Part& part) {
         r.pattern = "fallback";
         r.x = 0;
         m_clicks.push_back(r);
+    }
+    Part bare = part;
+    bare.clicks.clear();
+    const Mark m = mark();
+    const phys::GameState start = m_cursor;
+    bool ok = false;
+    const int attempt = std::max(1, m_opt.maxRetriesPerSection);
+    switch (part.mode) {
+        case Mode::Cube: case Mode::Robot: ok = buildGroundPart(*this, bare, attempt); break;
+        case Mode::Ship: case Mode::Ufo: case Mode::Wave: case Mode::Swing: ok = buildFlyingPart(*this, bare, attempt); break;
+        case Mode::Ball: case Mode::Spider: ok = buildSurfacePart(*this, bare, attempt); break;
+        default: break;
+    }
+    if (!ok) {
+        // keep the clicks' results, drop whatever the failed builder added
+        Mark keep = m;
+        keep.clickResults = m_clicks.size();
+        rollback(keep);
+        m_cursor = start;
     }
     return true;
 }
@@ -393,7 +454,14 @@ void Builder::finish() {
     phys::GameState s = m_cursor;
     int endTick = tickOf(m_endTime);
     runTo(s, std::max(s.tick, endTick - 1));
-    float endX = std::max(s.p[0].x + 30.0f, float(m_level.lastObjectX()) + 120.0f);
+    // past the song end and every interactive object (the run-out terrain of the last part does
+    // not count: it only carries the player to the end)
+    float lastInteractive = 0;
+    for (const auto& o : m_level.objects) {
+        auto k = o.info().kind;
+        if (k != level::Kind::Solid && k != level::Kind::Deco && k != level::Kind::Trigger) lastInteractive = std::max(lastInteractive, float(o.x));
+    }
+    float endX = std::max(s.p[0].x + 30.0f, lastInteractive + 120.0f);
     auto it = std::find_if(m_level.objects.begin(), m_level.objects.end(), [](const LevelObject& o) { return o.id == oid::TrigEnd; });
     if (it != m_level.objects.end()) m_level.objects.erase(it);
     LevelObject end = obj(oid::TrigEnd, std::round(endX / 30.0f) * 30.0f + 15, 600);

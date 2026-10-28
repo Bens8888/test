@@ -21,6 +21,7 @@ static int usage() {
         "  alcli analyze <audio> [--json out.json]   analyse a song and print the timeline summary\n"
         "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
+        "               [--variant-seed N] [--modes 0,4,...]\n"
         "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
     return 2;
 }
@@ -94,9 +95,11 @@ int main(int argc, char** argv) {
         gen::GenOptions opt;
         opt.variants = 1;
         std::string out, reportPath, inputsPath, pngPath;
+        bool exactSeed = false;
         for (int i = 3; i + 1 < argc; i += 2) {
             std::string k = argv[i], v = argv[i + 1];
             if (k == "--seed") opt.seed = std::stoull(v);
+            else if (k == "--variant-seed") { opt.seed = std::stoull(v); exactSeed = true; } // seed of one variant itself
             else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));
             else if (k == "--variants") opt.variants = std::stoi(v);
             else if (k == "--style") opt.style = gen::Style(std::stoi(v));
@@ -118,7 +121,9 @@ int main(int argc, char** argv) {
             }
         }
         auto t1 = std::chrono::steady_clock::now();
-        auto results = gen::generateVariants(A, opt, nullptr);
+        std::vector<gen::GenResult> results;
+        if (exactSeed) results.push_back(gen::generateVariant(A, opt, opt.seed, nullptr));
+        else results = gen::generateVariants(A, opt, nullptr);
         double tGen = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
         if (results.empty()) { std::fprintf(stderr, "generation failed\n"); return 1; }
         std::printf("analysis %.2f s, %d variant(s) in %.2f s\n", tAnalyze, int(results.size()), tGen);

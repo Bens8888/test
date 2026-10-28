@@ -66,6 +66,7 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     const bool toggleMode = part.mode == Mode::Wave || part.mode == Mode::Swing;
     const float margin = std::max(25.0f, prof.clearance + h);
     const float bandLo = F + margin, bandHi = C - margin;
+    const int descendFrom = k1 - 30 - int(1.2 * phys::kTPS);
     // Timing: every input needs a window of minWin ticks, i.e. room of about half of it to both
     // neighbouring inputs.
     const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
@@ -106,14 +107,17 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     auto advanceBand = [&](int untilTick, int nextClickTick) -> bool {
         while (sim.tick < untilTick) {
             phys::GameState before = sim;
-            if (!b.runTo(sim, sim.tick + 1)) return false;
+            if (!b.runTo(sim, sim.tick + 1)) { debugLog("  flying: died laying out the inputs at tick %d x=%.0f y=%.0f (%s)", sim.tick, sim.p[0].x, sim.p[0].y, phys::deathCauseName(sim.p[0].deathCause)); return false; }
             history.push_back(before);
             if (history.size() > 96) history.erase(history.begin());
             if (!toggleMode || sim.p[0].mode != part.mode) continue;
             if (sim.tick <= b.lastInputTick() + 1) continue; // a scheduled input (e.g. a tap release) is still pending
             float y = sim.p[0].y;
             bool up = movingUp(sim.p[0]);
-            if (!((y > bandHi && up) || (y < bandLo && !up))) continue;
+            // the last stretch of the part descends towards the floor, so the next part (whose
+            // bounds follow the portal height) does not start ever higher
+            const float hiNow = sim.tick >= descendFrom ? std::min(bandHi, bandLo + 45.0f) : bandHi;
+            if (!((y > hiNow && up) || (y < bandLo && !up))) continue;
             int t = sim.tick;
             if (lastClick.valid && t - lastClick.tick < gapT) {
                 // the click just placed sends the player out of the band. The band is soft: if the

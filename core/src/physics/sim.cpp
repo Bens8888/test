@@ -213,6 +213,7 @@ static void flipGravity(PlayerState& p, bool ud, double now) {
     p.lastFlipTime = now;
     p.v *= 0.5;
     p.canJump = false;
+    p.onGround = false; // the old floor is now on the head side; collisions set it again on contact
     p.events |= EvGravity;
 }
 

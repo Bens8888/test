@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace al::gen {
 
@@ -157,6 +158,9 @@ Arc probeArc(GroundCtx& c, int pressTick, int holdTicks, bool orbPress) {
 
 struct Attempt {
     bool ok = false;
+    int deathTick = -1;
+    float deathX = 0, deathY = 0;
+    phys::DeathCause cause = phys::DeathCause::None;
     int early = 0, late = 0;
     bool forced = false;
     int landTick = -1;
@@ -187,14 +191,15 @@ Attempt evaluateImpl(GroundCtx& c, int pressEv, int pressTick, int nextClickTick
     // find landing
     int land = -1;
     bool left = false;
+    auto died = [&]() { r.deathTick = s.tick; r.deathX = s.p[0].x; r.deathY = s.p[0].y; r.cause = s.p[0].deathCause; return r; };
     while (s.tick < horizon) {
-        if (!c.b.runTo(s, s.tick + 1)) return r;
+        if (!c.b.runTo(s, s.tick + 1)) return died();
         if (s.tick < pressTick) continue;
         if (!s.p[0].onGround) left = true;
         if (left && (s.p[0].events & phys::EvLand)) { land = s.tick; break; }
     }
     int check = land > 0 ? std::min(horizon, land + 20) : horizon;
-    if (!c.b.runTo(s, check)) return r;
+    if (!c.b.runTo(s, check)) return died();
     r.landTick = land;
     c.b.window(pressEv, check, c.maxShift, r.early, r.late);
     // necessity: without the press the player must die soon, judged independently of the next
@@ -287,7 +292,9 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
     }
     phys::GameState s = b.cursor();
     b.runTo(s, k);
-    float ox = snap(s.p[0].x + 4 + off * 0.2f, 15.0f), oy = snap(s.p[0].y, 15.0f);
+    // the orb sits on the player's path at the click (offset: the click lands earlier/later in
+    // the time the player overlaps it)
+    float ox = snap(s.p[0].x + 4 + off * 0.5f, 7.5f), oy = snap(s.p[0].y, 15.0f);
     if (std::fabs(oy - s.p[0].y) > 10) oy = s.p[0].y;
     float lx = 0;
     {
@@ -391,7 +398,7 @@ Choice choose(GroundCtx& c, const PatternContext& ctx, int k, int hold, int next
     }
     std::vector<size_t> order;
     std::vector<float> ww = w;
-    for (size_t n = 0; n < std::min<size_t>(filtered.size(), 7); ++n) {
+    for (size_t n = 0; n < std::min<size_t>(filtered.size(), 16); ++n) {
         int pick = b.rng().weighted(ww);
         if (pick < 0) break;
         order.push_back(size_t(pick));
@@ -413,7 +420,7 @@ Choice choose(GroundCtx& c, const PatternContext& ctx, int k, int hold, int next
                 b.release(k + hold);
                 Attempt at = evaluate(c, pressEv, k, nextClickTick);
                 int window = at.early + at.late + 1;
-                debugLog("    tick %d cand %s off %.0f: alive=%d window=%d/%d forced=%d | cursor %d x=%.0f takeoff=%.0f apex=%.0f land=%.0f surf=%.0f", k, d.id.c_str(), off, at.ok, window, c.minWindowTicks, at.forced, b.cursor().tick, b.cursor().p[0].x, arc.takeoffX, arc.apexX, arc.landX, c.run.surf);
+                debugLog("    tick %d cand %s off %.0f: alive=%d window=%d/%d forced=%d | cursor %d x=%.0f takeoff=%.0f apex=%.0f land=%.0f surf=%.0f | death %d (%.0f,%.0f) %s", k, d.id.c_str(), off, at.ok, window, c.minWindowTicks, at.forced, b.cursor().tick, b.cursor().p[0].x, arc.takeoffX, arc.apexX, arc.landX, c.run.surf, at.deathTick, at.deathX, at.deathY, phys::deathCauseName(at.cause));
                 if (at.ok && window >= c.minWindowTicks && at.forced) {
                     float centre = float(at.late - at.early) * 0.5f;
                     float score = -std::fabs(centre) + 0.05f * float(std::min(window, 60));
@@ -449,38 +456,78 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         auto settle = [&](phys::GameState& s) {
             while (s.tick < settleLimit) {
                 if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while settling at tick %d x=%.0f (%s)", s.tick, s.p[0].x, phys::deathCauseName(s.p[0].deathCause)); return false; }
-                if (s.p[0].mode == part.mode && s.p[0].onGround && s.p[0].upsideDown == part.flipped && s.tick > k0) break;
+                if (s.p[0].mode == part.mode && s.p[0].onGround && s.p[0].upsideDown == part.flipped && s.tick > k0 &&
+                    s.time - s.p[0].lastFlipTime > 0.05) break; // (the on-ground flag is stale right after a flip)
             }
             return true;
         };
         phys::GameState s = s0;
         if (!settle(s)) return false;
+        while (s.p[0].mode != part.mode && s.tick < k0 + 240)
+            if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died before entering the mode at tick %d", s.tick); return false; }
+        if (s.p[0].mode != part.mode) { debugLog("  ground: the player never entered the mode"); return false; }
+        if (debugEnabled() && std::getenv("AL_TRACE_SETTLE")) {
+            phys::GameState q = s0;
+            while (q.tick < s.tick) {
+                b.runTo(q, q.tick + 1);
+                debugLog("      settle t %d x %.1f y %.1f v %.2f g %d ground %d ev %x", q.tick, q.p[0].x, q.p[0].y, q.p[0].v, q.p[0].flip(), q.p[0].onGround, q.p[0].events);
+            }
+            std::vector<int> near;
+            b.world().query(s.p[0].x - 40, s.p[0].x + 40, near);
+            for (int si : near) { const auto& so = b.world().objects()[size_t(si)]; debugLog("      obj kind %d at (%.0f, %.0f) %.0fx%.0f", int(so.kind), so.x, so.y, so.hw * 2, so.hh * 2); }
+        }
         if (!s.p[0].onGround) {
             // still airborne (coming from a flying part or a gravity flip with nothing to land on):
             // build the surface it is heading for from just ahead of the settle start, settle again
             const auto& p = s.p[0];
             c.run.g = p.flip();
             c.run.floor = c.run.g > 0;
-            c.run.surf = c.run.g > 0 ? 0.0f : std::clamp(std::ceil((s0.p[0].y + 90.0f) / kCell) * kCell, 150.0f, 300.0f);
-            c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            if (c.run.g > 0) {
+                c.run.surf = 0.0f;
+                c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            } else {
+                // a ceiling over the free rise: the lowest height (from 150) the player reaches
+                // after passing below the start of the blocks with room to spare
+                std::vector<std::pair<float, float>> rise; // (x, top of the hitbox)
+                phys::GameState q = s0;
+                for (int t = 0; t < 360 && !q.dead; ++t) {
+                    b.runTo(q, q.tick + 1);
+                    rise.push_back({q.p[0].x, q.p[0].y + q.p[0].height() * 0.5f});
+                }
+                c.run.surf = 300.0f;
+                c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+                for (float cand = 150.0f; cand <= 600.0f; cand += kCell) {
+                    float xs = -1;
+                    for (auto& [x, top] : rise) if (top >= cand - 25.0f) { xs = x; break; }
+                    if (xs < 0) continue;
+                    float start = std::floor((xs - 15.0f) / kCell) * kCell;
+                    if (start < s0.p[0].x + 30.0f) continue;
+                    c.run.surf = cand;
+                    c.run.builtTo = start;
+                    break;
+                }
+            }
             extendRun(c, p.x + 240.0f);
             debugLog("  ground: airborne after settling (tick %d y %.0f g %d): surface %.0f from x %.0f", s.tick, p.y, c.run.g, c.run.surf, s0.p[0].x);
             s = s0;
             if (!settle(s)) return false;
             while (!s.p[0].onGround && s.tick < k0 + 240) {
                 extendRun(c, s.p[0].x + 240.0f);
-                if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while landing at tick %d", s.tick); return false; }
+                if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while landing at tick %d x=%.0f y=%.0f (%s)", s.tick, s.p[0].x, s.p[0].y, phys::deathCauseName(s.p[0].deathCause)); return false; }
             }
         }
         b.setCursor(s);
+        debugLog("  ground: settled at tick %d (part %d..%d) x=%.0f y=%.1f v=%.2f g %d ground %d mode %d", s.tick, k0, k1, s.p[0].x, s.p[0].y, s.p[0].v, s.p[0].flip(), s.p[0].onGround, int(s.p[0].mode));
         const auto& p = s.p[0];
-        float builtSoFar = c.run.builtTo;
+        const Run pre = c.run;
         c.run.g = p.flip();
         float feet = p.y - c.run.g * p.height() * 0.5f;
         c.run.surf = std::round(feet / 15.0f) * 15.0f;
         c.run.floor = c.run.g > 0 && c.run.surf <= 0.5f;
         if (c.run.floor) c.run.surf = 0;
-        c.run.builtTo = std::max(builtSoFar, p.x + 1);
+        // keep the surface built while settling only if the player actually landed on it
+        const bool same = pre.builtTo > 0 && pre.g == c.run.g && std::fabs(pre.surf - c.run.surf) < 1.0f;
+        c.run.builtTo = same ? std::max(pre.builtTo, p.x + 1) : p.x + 1;
     }
     int dropped = 0;
     for (size_t ci = 0; ci < part.clicks.size(); ++ci) {
@@ -531,7 +578,8 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         Arc arc;
         Choice choice;
         std::vector<int> holds{5};
-        if (part.mode == Mode::Robot) {
+        if (airborne && part.mode == Mode::Cube) holds = {16, 10, 5}; // held into the orb: an early press still catches it
+        else if (part.mode == Mode::Robot) {
             int musical = ck.hold ? std::max(6, Builder::tickOf(ck.release) - k) : 0;
             holds = musical ? std::vector<int>{musical, 67, 40, 20} : std::vector<int>{20, 40, 67, 10};
         }
@@ -539,6 +587,11 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
             hold = hcand;
             if (nextK > 0) hold = std::min(hold, std::max(2, nextK - k - 2));
             arc = probeArc(c, k, hold, airborne);
+            if (!arc.ok && !airborne && debugEnabled()) {
+                phys::GameState q = b.cursor();
+                b.runTo(q, k - 1);
+                debugLog("    no arc at tick %d: player y %.1f g %d ground %d mini %d, run surf %.0f g %d floor %d builtTo %.0f", k, q.p[0].y, q.p[0].flip(), q.p[0].onGround, q.p[0].mini, c.run.surf, c.run.g, c.run.floor, c.run.builtTo);
+            }
             if (!airborne && !arc.ok) continue;
             choice = choose(c, ctx, k, hold, nextK, airborne, arc);
             if (choice.def) break;
@@ -576,7 +629,17 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
     }
     // extend the terrain through the end of the part and verify
     phys::GameState s = b.cursor();
-    extendRun(c, s.p[0].x + float(k1 - s.tick) * 2.6f + 90.0f);
+    const bool lastPart = part.index + 1 == int(plan.parts.size());
+    {
+        // the terrain ends just before the next part's portals (placed ~60 units after the
+        // player's position 24 ticks before the part end); the last part runs on to the level end
+        phys::GameState q = s;
+        const auto& qp0 = q.p[0];
+        float ups = float(phys::speedParams(qp0.speed).unitsPerStep());
+        float xEnd = qp0.x + float(std::max(0, k1 - 24 - q.tick)) * ups;
+        const bool nextGround = !lastPart && (plan.parts[size_t(part.index + 1)].mode == Mode::Cube || plan.parts[size_t(part.index + 1)].mode == Mode::Robot);
+        extendRun(c, lastPart ? xEnd + 900.0f : (nextGround ? xEnd + 120.0f : xEnd - 15.0f));
+    }
     if (dropped * 3 > int(part.clicks.size()) + 1 && attempt + 2 < b.options().maxRetriesPerSection) {
         debugLog("  ground: %d of %zu clicks dropped", dropped, part.clicks.size());
         return false;

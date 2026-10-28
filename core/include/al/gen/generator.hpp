@@ -30,7 +30,9 @@ struct Report {
     int objects = 0, gameplayObjects = 0, portals = 0, triggers = 0;
     std::array<double, 8> modeSeconds{};
     bool beatable = false;
+    bool intendedInputs = false;   // the level is beaten with the designed inputs (not a bot search)
     int fallbackParts = 0;
+    bool failed = false; double failTime = 0; float failX = 0, failY = 0; std::string failCause; // where it fails if not beatable
     std::vector<std::string> notes;
 
     Json toJson() const;
@@ -48,6 +50,7 @@ struct GenResult {
     uint64_t seed = 0;
     double seconds = 0;
     std::string model;
+    std::vector<std::string> notes;
 };
 
 // Decoration pass (skins, deco, colours, triggers). Never changes gameplay hitboxes; the caller
