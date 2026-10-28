@@ -10,8 +10,8 @@ white (green while the button is held). Each image is the whole level, wrapped i
 `alcli generate demo --variant-seed 7 --difficulty 4`
 
 ```
-BEATABLE (bot verified) | 309 clicks (243 forced, 4 dropped) | windows: min 100 ms, mean 214 ms
-longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty follows music: r = 0.67
+BEATABLE (bot verified) | 309 clicks (252 forced, 4 dropped) | windows: min 100 ms, mean 208 ms
+longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty follows music: r = 0.66
 ```
 
 ![demo_auto](gallery/demo_auto.png)
@@ -21,8 +21,8 @@ longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty f
 `alcli generate demo --variant-seed 3 --difficulty 0`
 
 ```
-BEATABLE (bot verified) | 141 clicks (104 forced, 1 dropped) | windows: min 92 ms, mean 405 ms
-longest gap without input: 4.22 s at 127.3 s | music alignment 98% | difficulty follows music: r = 0.55
+BEATABLE (bot verified) | 141 clicks (98 forced, 3 dropped) | windows: min 138 ms, mean 395 ms
+longest gap without input: 6.08 s at 74.8 s | music alignment 98% | difficulty follows music: r = 0.57
 ```
 
 ![demo_easy](gallery/demo_easy.png)
@@ -32,8 +32,8 @@ longest gap without input: 4.22 s at 127.3 s | music alignment 98% | difficulty 
 `alcli generate demo --variant-seed 5 --difficulty 9`
 
 ```
-BEATABLE (bot verified) | 477 clicks (452 forced, 1 dropped) | windows: min 54 ms, mean 99 ms
-longest gap without input: 1.19 s at 0.0 s | music alignment 82% | difficulty follows music: r = 0.75
+BEATABLE (bot verified) | 477 clicks (467 forced, 3 dropped) | windows: min 50 ms, mean 97 ms
+longest gap without input: 1.41 s at 139.5 s | music alignment 82% | difficulty follows music: r = 0.78
 ```
 
 ![demo_extreme](gallery/demo_extreme.png)
@@ -43,8 +43,8 @@ longest gap without input: 1.19 s at 0.0 s | music alignment 82% | difficulty fo
 `alcli generate demo --variant-seed 11 --difficulty 3 --style 5 --modes 0`
 
 ```
-BEATABLE (bot verified) | 219 clicks (191 forced, 0 dropped) | windows: min 108 ms, mean 201 ms
-longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty follows music: r = 0.74
+BEATABLE (bot verified) | 219 clicks (193 forced, 0 dropped) | windows: min 108 ms, mean 197 ms
+longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty follows music: r = 0.73
 ```
 
 ![demo_retro_cube](gallery/demo_retro_cube.png)
@@ -54,8 +54,8 @@ longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty f
 `alcli generate demo --variant-seed 2 --difficulty 4 --style 1`
 
 ```
-BEATABLE (bot verified) | 297 clicks (248 forced, 4 dropped) | windows: min 92 ms, mean 210 ms
-longest gap without input: 2.34 s at 43.4 s | music alignment 95% | difficulty follows music: r = 0.69
+BEATABLE (bot verified) | 297 clicks (250 forced, 1 dropped) | windows: min 88 ms, mean 205 ms
+longest gap without input: 2.34 s at 43.4 s | music alignment 95% | difficulty follows music: r = 0.70
 ```
 
 ![demo_flow](gallery/demo_flow.png)
@@ -76,8 +76,8 @@ longest gap without input: 2.80 s at 74.3 s | music alignment 92% | difficulty f
 `alcli generate demo --variant-seed 9 --difficulty 5 --switch 0.15`
 
 ```
-BEATABLE (bot verified) | 351 clicks (290 forced, 1 dropped) | windows: min 88 ms, mean 187 ms
-longest gap without input: 2.34 s at 88.4 s | music alignment 92% | difficulty follows music: r = 0.78
+BEATABLE (bot verified) | 351 clicks (298 forced, 1 dropped) | windows: min 50 ms, mean 183 ms
+longest gap without input: 2.34 s at 88.4 s | music alignment 92% | difficulty follows music: r = 0.79
 ```
 
 ![demo_few_switches](gallery/demo_few_switches.png)
@@ -88,8 +88,8 @@ longest gap without input: 2.34 s at 88.4 s | music alignment 92% | difficulty f
 
 ```
 recording: 276 clicks: 100% on the music (mean offset 9 ms, your latency +23 ms removed), 8 holds, 15 doubles, 2 streams, 3 motifs
-BEATABLE (bot verified) | 276 clicks (193 forced, 1 dropped) | windows: min 79 ms, mean 220 ms
-longest gap without input: 7.75 s at 0.0 s | music alignment 77% | difficulty follows music: r = 0.69
+BEATABLE (bot verified) | 276 clicks (189 forced, 1 dropped) | windows: min 71 ms, mean 213 ms
+longest gap without input: 7.75 s at 0.0 s | music alignment 77% | difficulty follows music: r = 0.65
 ```
 
 ![demo_recording](gallery/demo_recording.png)
@@ -99,7 +99,7 @@ longest gap without input: 7.75 s at 0.0 s | music alignment 77% | difficulty fo
 `alcli generate random:17 --variant-seed 17 --difficulty 6`
 
 ```
-BEATABLE (bot verified) | 260 clicks (193 forced, 0 dropped) | windows: min 100 ms, mean 166 ms
+BEATABLE (bot verified) | 260 clicks (194 forced, 0 dropped) | windows: min 96 ms, mean 163 ms
 longest gap without input: 1.71 s at 48.1 s | music alignment 92% | difficulty follows music: r = 0.80
 ```
 
@@ -110,7 +110,7 @@ longest gap without input: 1.71 s at 48.1 s | music alignment 92% | difficulty f
 `alcli generate random:23 --variant-seed 23 --difficulty 2 --modes 1,3,4,7`
 
 ```
-BEATABLE (bot verified) | 380 clicks (288 forced, 0 dropped) | windows: min 133 ms, mean 301 ms
+BEATABLE (bot verified) | 380 clicks (276 forced, 0 dropped) | windows: min 146 ms, mean 287 ms
 longest gap without input: 3.19 s at 7.8 s | music alignment 100% | difficulty follows music: r = 0.71
 ```
 

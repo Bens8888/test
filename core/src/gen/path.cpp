@@ -549,6 +549,18 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
     // ---- same segment
     const Mode m = base.end.p[0].mode;
     out.push_back(base); // free: whatever happens without new objects
+    // flying modes with a long gap: a gravity portal turns the player around before it would
+    // slide along the floor or the ceiling
+    if (isFlying(m) && m_opt.gravityFlips != Tri::Off && Tn - T > int(0.4 * phys::kTPS)) {
+        for (double f : {0.35, 0.5, 0.65}) {
+            const int P = T + int(double(Tn - T) * f);
+            const TraceSample& q = at(base, P);
+            Cand gc = base;
+            const bool up = q.g < 0;
+            addObj(gc, make(up ? oid::PortalGravNormal : oid::PortalGravFlip, std::round(q.x / 15.0f) * 15.0f, std::round(q.y)), Act::GravityPortal, k);
+            if (evaluate(gc, until)) out.push_back(std::move(gc));
+        }
+    }
     if (groundMode(m) || surfaceMode(m)) {
         std::vector<Cand> landed;
         addLandings(base, T + 6, Tn, landed, 4);
@@ -650,6 +662,8 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
         }
     };
     s += std::log(prior(c.act, c.sub));
+    // a wave/ship tap barely moves the path: skipping it would not matter, so it is rarely wanted
+    if (c.act == Act::Tap && (c.info.mode == Mode::Wave || c.info.mode == Mode::Ship) && !ck.recorded) s += std::log(0.3);
     // the style learned from real levels: more or less often than the built-in preferences
     if (m_opt.profile && c.used) {
         const int mode = int(c.info.mode);
@@ -689,7 +703,7 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {
         for (auto& q : c.trace) if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
-        s -= (isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
+        s -= (e.mode == Mode::Wave ? 6.0 : isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
         const float mid = (e.floorY + e.ceilY) * 0.5f;
         s -= 0.4 * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
     }

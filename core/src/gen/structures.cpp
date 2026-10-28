@@ -458,6 +458,7 @@ void Structurer::corridors() {
         const int c0 = int(std::floor(m_nominal[size_t(i)].x / kCell)) + 2;
         const int c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell)) - 2;
         const int floorRow = int(std::lround(q.floorY / kCell)), ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
+        const bool wide = q.mode != Mode::Wave; // wave walls are sharp 45-degree triangles
         std::vector<int> top, bottom; // per column: solid floor up to top (exclusive), ceiling from bottom
         for (int c = c0; c <= c1; ++c) {
             // exactly the cells that may be built (the same test the placement uses)
@@ -478,7 +479,7 @@ void Structurer::corridors() {
         for (size_t k = 1; k < m; ++k) bottom[k] = std::max(bottom[k], bottom[k - 1] - 1);
         for (size_t k = m; k-- > 1;) bottom[k - 1] = std::max(bottom[k - 1], bottom[k] - 1);
         // one-column bumps go (lowering a floor / raising a ceiling only makes room)
-        for (size_t k = 1; k + 1 < m; ++k) {
+        for (size_t k = 1; k + 1 < m && wide; ++k) {
             if (top[k] > top[k - 1] && top[k] > top[k + 1]) top[k] = std::max(top[k - 1], top[k + 1]);
             if (bottom[k] < bottom[k - 1] && bottom[k] < bottom[k + 1]) bottom[k] = std::min(bottom[k - 1], bottom[k + 1]);
         }
@@ -488,16 +489,16 @@ void Structurer::corridors() {
         for (size_t k = 0; k < m; ++k) {
             const int dIn = k > 0 ? top[k] - top[k - 1] : 0, dOut = k + 1 < m ? top[k + 1] - top[k] : 0;
             if (fk[k] != CellKind::Solid) continue;
-            if (dIn == 1 && k + 1 < m && dOut == 0) { fk[k] = CellKind::WideFloorUpL; fk[k + 1] = CellKind::WideFloorUpR; continue; }
-            if (dOut == -1 && dIn == 0 && k > 0 && fk[k - 1] == CellKind::Solid) { fk[k - 1] = CellKind::WideFloorDownL; fk[k] = CellKind::WideFloorDownR; continue; }
+            if (wide && dIn == 1 && k + 1 < m && dOut == 0) { fk[k] = CellKind::WideFloorUpL; fk[k + 1] = CellKind::WideFloorUpR; continue; }
+            if (wide && dOut == -1 && dIn == 0 && k > 0 && fk[k - 1] == CellKind::Solid) { fk[k - 1] = CellKind::WideFloorDownL; fk[k] = CellKind::WideFloorDownR; continue; }
             if (dIn == 1 && dOut != -1) fk[k] = CellKind::SlopeFloorUp;
             else if (dOut == -1 && dIn != 1) fk[k] = CellKind::SlopeFloorDown;
         }
         for (size_t k = 0; k < m; ++k) {
             const int dIn = k > 0 ? bottom[k] - bottom[k - 1] : 0, dOut = k + 1 < m ? bottom[k + 1] - bottom[k] : 0;
             if (ck[k] != CellKind::Solid) continue;
-            if (dIn == -1 && k + 1 < m && dOut == 0) { ck[k] = CellKind::WideCeilDownL; ck[k + 1] = CellKind::WideCeilDownR; continue; }
-            if (dOut == 1 && dIn == 0 && k > 0 && ck[k - 1] == CellKind::Solid) { ck[k - 1] = CellKind::WideCeilUpL; ck[k] = CellKind::WideCeilUpR; continue; }
+            if (wide && dIn == -1 && k + 1 < m && dOut == 0) { ck[k] = CellKind::WideCeilDownL; ck[k + 1] = CellKind::WideCeilDownR; continue; }
+            if (wide && dOut == 1 && dIn == 0 && k > 0 && ck[k - 1] == CellKind::Solid) { ck[k - 1] = CellKind::WideCeilUpL; ck[k] = CellKind::WideCeilUpR; continue; }
             if (dIn == -1 && dOut != 1) ck[k] = CellKind::SlopeCeilDown;
             else if (dOut == 1 && dIn != -1) ck[k] = CellKind::SlopeCeilUp;
         }
