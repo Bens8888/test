@@ -6,16 +6,20 @@ layouts from a song, inside the editor. It works in two modes:
 - **Automatic:** the click rhythm comes from the music.
 - **Click recording:** you play along and the layout is built around your clicks.
 
-Every layout is played by a built-in physics bot before you see it. The output is a layout only:
-plain blocks and spikes, orbs, pads and portals, with no decoration.
+It works like a layout maker with a macro: first the gameplay path (what every click does: a
+jump, an orb, a tap, a hold, a flip; pads, portals and gamemode switches in between), then
+structures built around that path (pillars with spike tips, saws, wave and ship corridors with
+slopes), drawn as outline silhouettes. Every layout is played by a built-in physics bot before you
+see it, and it can learn your style from levels you like. The output is a layout only: no
+decoration.
 
 | | |
 |---|---|
 | Install | [docs/INSTALL.md](docs/INSTALL.md) |
 | Use | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) |
 | Build (both platforms) | [docs/BUILD.md](docs/BUILD.md) |
-| Retrain the models | [training/RETRAINING.md](training/RETRAINING.md) (Python audio mirror: [training/README.md](training/README.md)) |
-| How it works | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DECISIONS.md](docs/DECISIONS.md) |
+| Learn a style / retrain | [training/RETRAINING.md](training/RETRAINING.md) (Python audio mirror: [training/README.md](training/README.md)) |
+| How it works | [docs/GENERATOR_V2.md](docs/GENERATOR_V2.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DECISIONS.md](docs/DECISIONS.md) |
 | Known limitations | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) |
 | Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Preview gallery | [docs/GALLERY.md](docs/GALLERY.md) |

@@ -1,4 +1,23 @@
-# Retraining the pattern models
+# Learning a style
+
+There are two kinds of learning, one per builder.
+
+## Path-first builder (the default): the style profile, no Python needed
+
+In the mod: **Training → Learn this level** (the open level) or **Learn from all levels** (the
+dataset folder). The bot plays each level and AutoLayout counts what every click does per gamemode
+(jump, each orb colour, tap, hold), pads and gravity portals, how long gamemode stretches last,
+which mode follows which, and how dense the structures are. The result is
+`<save folder>/style_profile.json`; generation follows it while **Use what was learned** is on.
+
+On a computer, the same from a folder of `.gmd` files (no songs needed):
+```bash
+./build/tools/aldata profile path/to/levels --out style_profile.json
+./build/tools/alcli generate song.mp3 --profile style_profile.json --png preview.png
+```
+Copy the file into the save folder to use it in the mod.
+
+## Classic builder (v1): retraining the pattern models
 
 The models choose which valid pattern fits each musical moment (see docs/DECISIONS.md D8-D10).
 Retraining changes the *style* of the layouts. Correctness never depends on the model; the

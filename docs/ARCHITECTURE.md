@@ -28,16 +28,17 @@ including headless Linux CI. Training code is Python/PyTorch in `training/`.
 │ physics/ deterministic 240 Hz GD 2.2 player physics (8 modes, speeds, mini, gravity, dual,  │
 │          orbs, pads, portals, slopes, hitboxes)                                              │
 │ bot/     run · isBeatable · firstFailure · autoSolve (beam search) · timing windows          │
-│ gen/     plan (parts, gamemodes, speeds, clicks) · fusion (recordings × music) · pattern    │
-│          library + style models · Builder (verified placement) · ground/flying/surface      │
-│          builders · generator (variants, report, feel score, re-roll)                       │
+│ gen/     plan (clicks) · fusion (recordings × music) · generator (variants, report, re-roll)│
+│          v2 (default): path (segments + beam search over click actions) · structures       │
+│          (envelope, necessity, framing, corridors) · tiles (outline silhouettes) · profile │
+│          v1 (classic): pattern library + style models · Builder · ground/flying/surface    │
 │ model/   GRU pattern model inference (.alm files), model sets per style                     │
 │ data/    training sequences: self-play (reward) and real levels (bot + labeller), JSONL     │
 │ level/   object database · level string / .gmd read & write                                 │
 │ report/  PNG renderer for previews and the gallery                                           │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
-   tools/alcli   analyze · generate · demo-song · demo-recording · rec-info · bench
-   tools/aldata  vocab · selfplay · extract · extract-dir
+   tools/alcli   analyze · generate · path · render · demo-song · demo-recording · rec-info · bench
+   tools/aldata  vocab · selfplay · extract · extract-dir · profile
 ┌───────────────────────────────── training/ (Python) ─────────────────────────────────────────┐
 │ autolayout/audio.py         numpy mirror of the C++ analysis (bit-exact parity test)        │
 │ autolayout/pattern_model.py the GRU model, .alm export/import, parity vectors              │
@@ -54,6 +55,23 @@ including headless Linux CI. Training code is Python/PyTorch in `training/`.
 2. **Clicks**: from the music (salience of every musical event, density from difficulty, intensity,
    intent and style; no dead stretches) or from a recording (fusion: roles, latency, figures,
    motifs; the faithfulness slider decides how strictly they are kept).
+Generator v2 (the default, docs/GENERATOR_V2.md) replaces steps 3-5 below:
+- **Segments**: the clicks are cut into gamemode stretches at musical boundaries; the switch rate
+  follows the style, the music and the learned profile; the mode fits the click rhythm.
+- **Path** (gen/path): beam search over what every click does (jump, orb of any colour, tap/hold,
+  flip) and what happens between clicks (platform to land on, pad, gravity portal, the next
+  stretch's portals), judged by the simulator in a local world per search node; a rescue (back to
+  a plain cube) when nothing survives a stretch. Platforms are planned with their exact outline
+  pieces (the game's stair-snap rule depends on them).
+- **Structures** (gen/structures): the envelope of early/late presses is reserved; the run without
+  each click gets a hazard where it leaves the envelope; framing pillars, saws and slope corridors
+  keep off the envelope; cells are tiled into outline silhouettes (gen/tiles); windows measured on
+  the finished level; lighter versions if the final check ever fails.
+- **Profile** (gen/profile): action frequencies per gamemode, stretch lengths, mode transitions and
+  structure density counted on bot runs of real levels; used as preferences by all of the above.
+
+The classic builder (v1, still available) works as follows:
+
 3. **Plan**: sections become gameplay parts with an intent (intro, groove, build, climax, breather,
    outro), a gamemode (affinity per intent × user weights × how well the mode fits the clicks), speed,
    size, gravity and dual, and a difficulty that follows the energy.

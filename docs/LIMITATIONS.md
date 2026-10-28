@@ -21,13 +21,28 @@ Stated plainly, with what each one means in practice.
   units above level-string coordinates. If the ghost path appears shifted, that constant
   (`kEditorYOffset`) is the one to change.
 
-## Generator
-- **Vocabulary.** Layouts use classic gameplay objects:
-  - blocks, slabs, the standard spikes and saws;
-  - yellow and pink orbs, yellow pads;
+## Generator (path-first builder, the default)
+- **Outline pieces unverified in GD.** The silhouettes rely on how GD draws its outline pieces by
+  default; Settings → Place piece test shows it in a minute (see the user guide).
+- **Not every click is strictly necessary.** 83-88% are (skipping them kills); ship and wave taps
+  often only nudge the path, and some jumps have no spot for a hazard that would not also touch a
+  fair early or late press. Timing windows are always kept.
+- **Learning is statistics, not shapes yet.** The style profile learns which actions, how long
+  gamemode stretches last and how dense the structures are. The shapes of the structures still come
+  from the built-in kinds (pillars, spike tips, saws, slope corridors); cutting structure pieces
+  out of your levels is on the roadmap.
+- **Platforms after long gaps** can still be wide boxes (the player has to run somewhere until the
+  next click).
+- **Recording mode** keeps your clicks and hold lengths; the gamemodes are chosen from your click
+  rhythm, not from the modes you played in.
+
+## Generator (both builders)
+- **Vocabulary.** Layouts use gameplay objects only:
+  - blocks/outline pieces, 45-degree and 2-wide slopes, the standard spikes and saws;
+  - every orb colour including dash orbs (path-first builder), yellow/pink/red/blue pads;
   - mode, speed, size, gravity and dual portals.
 
-  They do not use dash orbs, teleport portals, rotate/move gameplay triggers, keys or collision
+  They do not use teleport portals, rotate/move gameplay triggers, keys or collision
   blocks, and there is no platformer support.
 - **Clicks that can't be built fairly are left out** and reported. That is typically 2-5% of
   musical clicks, more for very dense songs in cube mode, where orb chains are capped so the

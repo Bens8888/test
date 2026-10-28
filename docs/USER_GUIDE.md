@@ -24,7 +24,10 @@ decides, and your settings only steer it.
      sustain, purple syncopation, pink = your recording, grey = a click that couldn't be built
      fairly);
    - a detail view of the level with the bot's path. Drag **scroll** to move through the song.
-5. Pick a variant (best first), then press **Apply to level**. The layout goes onto a **new editor
+5. Optional: press **Watch it build**. The menu closes and the camera follows a player icon along
+   the designed path while the layout appears around it (the orbs, pads and portals just ahead,
+   then the structures). It is only a preview; nothing is in the level yet.
+6. Pick a variant (best first), then press **Apply to level**. The layout goes onto a **new editor
    layer** as **one undo step**, and the level is backed up first. **Undo** removes the last
    AutoLayout layout again and restores the start settings.
 
@@ -57,32 +60,55 @@ pattern each time it comes back.
 
 | Tab | What it does |
 |---|---|
-| **Generate** | Song (the level's song or any file), click source, faithfulness, difficulty (Easy to Extreme Demon, or Auto), seed (same seed = same layout), number of variants, Generate / Cancel. Results view: variants, timeline and preview, **Re-roll section** / **Re-roll all**, Apply, Undo, Ghost. |
-| **Style** | Style preset (Auto, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory), density, trained model on/off. |
+| **Generate** | Song (the level's song or any file), click source, faithfulness, difficulty (Easy to Extreme Demon, or Auto), seed (same seed = same layout), number of variants, Generate / Cancel. Results view: variants, timeline and preview, **Re-roll section** (only that gamemode stretch and what follows changes) / **Re-roll all**, Apply, Undo, Ghost, Watch it build. |
+| **Style** | Style preset (Auto, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory), density (how many structures frame the path), **Builder** (path first = v2, the default; classic = v1), **Gamemode switches** (AI decides / few / normal / many), **Look** (outline silhouettes like most layouts, or default blocks), trained model on/off (classic builder only). |
 | **Modes** | Weight per gamemode (*never* … 100%, *All auto*), speed changes (off / subtle / aggressive), start speed, portal frequency, gravity flips, mini/big, dual, hold vs tap. |
 | **Sections** | Per song section (intro, verse, chorus, build-up, drop, break, outro): difficulty −3…+3, and an optional forced gamemode. |
 | **Playtest** | **Bot-verify the editor level** runs the bot on the level as it is now, including your own edits. Ghost on/off and **Play ghost** show the bot's path in the editor. Also shows the playability report: risky spots (tightest timings), the longest gap without input, notes, and the difficulty curve against the music's intensity. |
-| **Training** | Shows the loaded models and lets you reload them. Collects your own levels into the training dataset (see below). |
-| **Settings** | Backup before applying, retries per section, presets (save / load), reset all options, open the save folder. |
+| **Training** | **Learn this level** / **Learn from all levels**: the bot plays your levels and AutoLayout learns your style from them (below). Use what was learned on/off, Forget. Also the classic builder's models and the dataset folder. |
+| **Settings** | Backup before applying, retries per section (classic builder), presets (save / load), reset all options, open the save folder, **Place piece test** (see below). |
 
 ## How generation works (short)
 
 The song is analysed into beats, sections, drums, notes and energy. Clicks come from the strongest
-musical events, or from your recording. Each section gets a gamemode, a speed and a difficulty
-that follows the music. Then every obstacle is placed around the simulated path of the player,
-and it is kept only if all of the following hold:
+musical events, or from your recording. Then, like a layout maker working from a macro:
 
-- the player survives;
-- the click has a fair timing window for the difficulty;
-- skipping the click kills.
+1. **The gameplay path first.** The clicks are cut into gamemode stretches (switching at musical
+   boundaries, more often in drops). At every click AutoLayout decides what it does: a jump, an
+   orb (yellow, pink, red, blue, green, black, dash), a tap or a hold, a ball or spider flip.
+   Between clicks it decides what keeps you moving: a platform to land on, a pad, a gravity
+   portal, the portals of the next stretch. A search tries many combinations with the physics
+   simulator and keeps the best (fair, varied, following the music and the learned style).
+2. **Structures around the path.** Every click is simulated pressed early and late within the
+   difficulty's timing window; that space stays free. Where the run *without* the click goes, a
+   hazard is placed, so every click matters. Then the path is framed: hanging pillars with spike
+   tips over the jumps, rising pillars below, saws in the gaps, wave and ship corridors with
+   45-degree and 2-wide slopes.
+3. **Verified.** The bot plays the finished level with exactly the clicks it was designed for, and
+   the timing window of every click is measured on the finished level. The report says honestly
+   when a click had to be left out or is not strictly necessary.
 
-At the end the bot plays the whole level with exactly the clicks it was designed for. The report
-says honestly when a click had to be left out.
+## Checking the outline pieces (please do this once)
 
-## Teaching it your style (training with real levels)
+The outline look builds structures from GD's outline pieces (edges, corners, pillar caps, slopes).
+Which way GD draws each piece by default could not be verified outside the game. In the editor,
+**Settings → Place piece test** places every piece at every rotation, labelled, plus a sample
+structure, after your level's last object. If the sample structure is not one clean silhouette,
+send a screenshot: the fix is one table in the code. **Undo** removes the test again.
 
-AutoLayout ships with models trained by self-play. To make it learn from real, human-made levels
-you need level files plus their songs:
+## Learning your style
+
+**Training → Learn this level** (with the level open in the editor) saves it to the dataset and
+learns from it right away; **Learn from all levels** relearns from the whole dataset folder. The
+bot plays each level (a few seconds to a minute each, in the background), and AutoLayout counts:
+which orbs, pads, jumps, taps and holds each gamemode uses, how long gamemode stretches last,
+which modes follow which, and how dense the structures are. Generation then follows those numbers.
+Only the layout is read; decoration, colours and triggers are ignored, so decorated levels are
+fine. Levels the bot cannot beat, platformer and 2-player levels are skipped with the reason.
+
+## Which levels to collect
+
+For **Learn my style** (above) and for retraining the classic builder's model:
 
 - **How many:** 60 levels. 30 is the minimum and 100 is better. Spread them roughly like this:
   10 Easy/Normal, 15 Hard/Harder, 15 Insane and 20 demons (Easy to Extreme). Pick levels whose
@@ -100,8 +126,11 @@ you need level files plus their songs:
     (`easy`, `normal`, `hard`, `harder`, `insane`, `easy_demon` … `extreme_demon`). Next to it,
     put its song file with the **same name** (`MyLevel.gmd` + `MyLevel.mp3`). Newgrounds songs are
     in GD's song folder as `<song id>.mp3`.
-- **Training** happens on a computer with Python 3 and PyTorch; see `training/RETRAINING.md`. Then
-  copy the new `.alm` files into `<save folder>/models` and press **Reload models**.
+- **Learning for the default builder** happens in the mod (Learn this level / Learn from all
+  levels); no song file is needed for it.
+- **Retraining the classic builder's model** happens on a computer with Python 3 and PyTorch; see
+  `training/RETRAINING.md`. Then copy the new `.alm` files into `<save folder>/models` and press
+  **Reload models**.
 
 ## Files
 
@@ -111,4 +140,5 @@ Everything below lives in the save folder (**Settings → Save folder**):
 - `recordings/`: your recordings;
 - `presets/`: saved option presets;
 - `dataset/levels/`: levels collected for training;
+- `style_profile.json`: what was learned from your levels (Forget deletes it);
 - `models/`: your retrained models (these override the shipped ones).
