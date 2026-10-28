@@ -1,0 +1,47 @@
+{
+	"geode": "5.11.2",
+	"gd": {
+		"win": "2.2081",
+		"mac": "2.2081"
+	},
+	"id": "bens8888.autolayout",
+	"name": "AutoLayout",
+	"version": "v0.1.0",
+	"developer": "bens8888",
+	"description": "Generates complete, playable layouts from a song, verified by a physics bot.",
+	"tags": ["editor", "music", "utility"],
+	"links": {
+		"source": "https://github.com/bens8888/test"
+	},
+	"dependencies": {
+		"geode.node-ids": ">=v1.22.0"
+	},
+	"settings": {
+		"open-autolayout": {
+			"type": "keybind",
+			"name": "Open AutoLayout",
+			"description": "Opens the AutoLayout popup in the editor.",
+			"default": { "win": "Ctrl+Alt+L", "mac": "Cmd+Alt+L" }
+		},
+		"record-toggle": {
+			"type": "keybind",
+			"name": "Start / stop click recording",
+			"description": "Toggles the click recorder while playing a level.",
+			"default": { "win": "Ctrl+Alt+R", "mac": "Cmd+Alt+R" }
+		},
+		"backup-before-apply": {
+			"type": "bool",
+			"name": "Back up before applying",
+			"description": "Saves the current level string to the mod's save folder before AutoLayout changes the level.",
+			"default": true
+		},
+		"analysis-threads": {
+			"type": "int",
+			"name": "Worker threads",
+			"description": "Threads used for generating variants in parallel (0 = automatic).",
+			"default": 0,
+			"min": 0,
+			"max": 16
+		}
+	}
+}

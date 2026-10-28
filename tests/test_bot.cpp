@@ -104,3 +104,15 @@ TEST(bot_rollout_throughput) {
                 stepsPerSec / 1200.0);
     CHECK(stepsPerSec / 1200.0 > 1000); // thousands of 5-second rollouts per second
 }
+
+#include <al/gen/test_pattern.hpp>
+
+TEST(test_pattern_is_beatable) {
+    Level L;
+    L.settings.fixGravityBug = true;
+    L.objects = gen::makeTestPattern(0);
+    phys::World W(L);
+    auto res = bot::autoSolve(W);
+    std::printf("    test pattern: solved=%d presses=%zu (%.3f s)\n", res.solved, res.inputs.pressCount(), res.seconds);
+    CHECK(res.solved);
+}
