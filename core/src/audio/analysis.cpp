@@ -507,7 +507,7 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         checkCancel(progress);
         long e = std::min<long>(long(nFine), s + winFrames);
         if (e - s < lagMax * 2) { if (!localAcf.empty()) break; e = std::min<long>(long(nFine), s + lagMax * 2 + 2); }
-        std::vector<float> acf(size_t(lagMax + 1), 0);
+        std::vector<float> acf(static_cast<size_t>(lagMax + 1), 0);
         for (int lag = lagMin / 2; lag <= lagMax; ++lag) {
             double acc = 0;
             for (long i = s; i + lag < e; ++i) acc += double(oenv[size_t(i)]) * oenv[size_t(i + lag)];
@@ -606,7 +606,7 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         A.tempo.push_back(cur);
         // Precise BPM per segment from the summed ACF of its windows (parabolic peak near the estimate).
         for (auto& seg : A.tempo) {
-            std::vector<float> sum(size_t(lagMax + 1), 0);
+            std::vector<float> sum(static_cast<size_t>(lagMax + 1), 0);
             for (size_t w = 0; w < localAcf.size(); ++w)
                 if (localCenter[w] >= seg.start && localCenter[w] <= seg.end) for (size_t i = 0; i < sum.size(); ++i) sum[i] += localAcf[w][i];
             double target = 60.0 / seg.bpm / hop;
@@ -631,7 +631,7 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         {
             double period = 60.0 / globalBpm / hop;
             int half = std::max(1, int(period / 32));
-            std::vector<float> g(size_t(2 * half + 1));
+            std::vector<float> g(static_cast<size_t>(2 * half + 1));
             for (int i = -half; i <= half; ++i) g[size_t(i + half)] = float(std::exp(-0.5 * (i * i) / (half * half / 4.0 + 1e-9)));
             for (size_t i = 0; i < nFine; ++i) {
                 double acc = 0;

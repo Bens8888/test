@@ -2,6 +2,8 @@
 // benchmarks). Grows with each milestone.
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
+#include <al/gen/generator.hpp>
+#include <al/report/render.hpp>
 #include <al/util/codec.hpp>
 #include <al/util/json.hpp>
 
@@ -17,7 +19,9 @@ static int usage() {
     std::printf(
         "usage:\n"
         "  alcli analyze <audio> [--json out.json]   analyse a song and print the timeline summary\n"
-        "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n");
+        "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n"
+        "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
+        "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
     return 2;
 }
 
@@ -74,6 +78,74 @@ int main(int argc, char** argv) {
         auto buf = audio::render(audio::demoSong());
         if (!writeFile(argv[2], audio::encodeWav16(buf))) { std::fprintf(stderr, "cannot write %s\n", argv[2]); return 1; }
         std::printf("wrote %s (%.1f s)\n", argv[2], buf.duration());
+        return 0;
+    }
+    if (cmd == "generate" && argc >= 3) {
+        audio::MusicAnalysis A;
+        std::string src = argv[2];
+        auto t0 = std::chrono::steady_clock::now();
+        if (src == "demo") {
+            A = audio::analyze(audio::render(audio::demoSong()));
+        } else {
+            std::string err;
+            if (!audio::analyzeFile(src, A, err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+        }
+        double tAnalyze = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        gen::GenOptions opt;
+        opt.variants = 1;
+        std::string out, reportPath, inputsPath, pngPath;
+        for (int i = 3; i + 1 < argc; i += 2) {
+            std::string k = argv[i], v = argv[i + 1];
+            if (k == "--seed") opt.seed = std::stoull(v);
+            else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));
+            else if (k == "--variants") opt.variants = std::stoi(v);
+            else if (k == "--style") opt.style = gen::Style(std::stoi(v));
+            else if (k == "--out") out = v;
+            else if (k == "--report") reportPath = v;
+            else if (k == "--inputs") inputsPath = v;
+            else if (k == "--png") pngPath = v;
+            else if (k == "--modes") {
+                // comma-separated gamemode indices to allow (0 cube,1 ship,2 ball,3 ufo,4 wave,5 robot,6 spider,7 swing)
+                opt.modeWeights.fill(0.0f);
+                size_t pos = 0;
+                while (pos < v.size()) {
+                    size_t e = v.find(',', pos);
+                    int m = std::stoi(v.substr(pos, e == std::string::npos ? std::string::npos : e - pos));
+                    if (m >= 0 && m < 8) opt.modeWeights[size_t(m)] = 1.0f;
+                    if (e == std::string::npos) break;
+                    pos = e + 1;
+                }
+            }
+        }
+        auto t1 = std::chrono::steady_clock::now();
+        auto results = gen::generateVariants(A, opt, nullptr);
+        double tGen = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+        if (results.empty()) { std::fprintf(stderr, "generation failed\n"); return 1; }
+        std::printf("analysis %.2f s, %d variant(s) in %.2f s\n", tAnalyze, int(results.size()), tGen);
+        for (auto& r : results) std::printf("  seed %llu: score %.2f, %.2f s, %s\n", (unsigned long long)r.seed, r.score, r.seconds, r.report.beatable ? "beatable" : "NOT beatable");
+        const auto& best = results.front();
+        std::printf("\nplan (%s, base difficulty %.1f):\n", gen::styleName(best.plan.style), best.plan.baseDifficulty);
+        for (auto& p : best.plan.parts) std::printf("  %6.2f-%6.2f  %s  [%zu clicks]\n", p.t0, p.t1, p.why.c_str(), p.clicks.size());
+        std::printf("\n%s", best.report.toText().c_str());
+        if (!out.empty()) {
+            level::Level L = best.level;
+            L.name = "AutoLayout";
+            writeFile(out, L.toGmd());
+            std::printf("wrote %s\n", out.c_str());
+        }
+        if (!reportPath.empty()) writeFile(reportPath, best.report.toJson().dump(1));
+        if (!pngPath.empty()) {
+            report::RenderOptions ro;
+            ro.scale = 0.25f;
+            ro.maxWidth = 2400;
+            writeFile(pngPath, report::renderPng(best.level, &best.inputs, ro));
+            std::printf("wrote %s\n", pngPath.c_str());
+        }
+        if (!inputsPath.empty()) {
+            std::string t;
+            for (auto& e : best.inputs.events) t += std::to_string(e.tick) + (e.press ? " down\n" : " up\n");
+            writeFile(inputsPath, t);
+        }
         return 0;
     }
     return usage();

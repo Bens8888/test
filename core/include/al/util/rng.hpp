@@ -89,6 +89,11 @@ public:
         return -1;
     }
     int weighted(const std::vector<double>& w) { return weighted(w.data(), w.size()); }
+    int weighted(const std::vector<float>& w) { return weighted(w.data(), w.size()); }
+    int weighted(const float* w, size_t n) {
+        std::vector<double> tmp(w, w + n);
+        return weighted(tmp.data(), tmp.size());
+    }
 
     template <class T> void shuffle(std::vector<T>& v) {
         for (size_t i = v.size(); i > 1; --i) std::swap(v[i - 1], v[below(uint32_t(i))]);
