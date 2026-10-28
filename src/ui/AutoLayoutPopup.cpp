@@ -422,7 +422,6 @@ void AutoLayoutPopup::onPicked(std::filesystem::path const& p, int what) {
 
 void AutoLayoutPopup::startGenerate() {
     if (S().busy()) return;
-    if (m_editor) O().groupBase = EditorBridge::get().firstFreeGroup(m_editor);
     save();
     m_watching = S().startGenerate(m_editor ? m_editor->m_level : nullptr);
     setStatus("");
@@ -563,17 +562,6 @@ CCNode* AutoLayoutPopup::buildStyleTab() {
         [](float v) { return O().density < 0 ? std::string("auto") : pct(v); },
         [](float v) { O().density = v; save(); }), "drag = set");
     form->row("Density: let the AI decide", ui::ToggleControl::create(O().density < 0, [](bool on) { O().density = on ? -1.f : 0.5f; save(); }));
-    form->row("Block theme", ui::CycleControl::create({"Auto", "Classic", "Colored", "Outline", "Grid", "Bricks"}, int(O().theme), 150.f,
-                                                      [](int i) { O().theme = gen::BlockTheme(i); save(); }));
-    form->row("Spike types", ui::CycleControl::create({"Auto", "Classic", "Colored", "Mixed"}, int(O().spikes), 150.f,
-                                                      [](int i) { O().spikes = gen::SpikeSet(i); save(); }));
-    form->row("Decoration", ui::CycleControl::create({"Auto", "None", "Light", "Medium", "Heavy"}, O().decoLevel + 1, 150.f,
-                                                     [](int i) { O().decoLevel = i - 1; save(); }));
-    form->heading("Triggers");
-    form->row("Camera (zoom / offset)", ui::ToggleControl::create(O().triggerCamera, [](bool on) { O().triggerCamera = on; save(); }));
-    form->row("Beat pulse and move", ui::ToggleControl::create(O().triggerPulse, [](bool on) { O().triggerPulse = on; save(); }));
-    form->row("Colours per section", ui::ToggleControl::create(O().triggerColors, [](bool on) { O().triggerColors = on; save(); }));
-    form->row("Shake on drops", ui::ToggleControl::create(O().triggerShake, [](bool on) { O().triggerShake = on; save(); }));
     form->row("Use the trained model", ui::ToggleControl::create(S().useModel(), [](bool on) { S().setUseModel(on); save(); }),
               S().models().empty() ? "no model found: rules" : "off = rule-based");
     return form;

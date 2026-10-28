@@ -86,7 +86,7 @@ public:
     void rollback(const Mark& m);
 
     int place(level::LevelObject o);                 // gameplay object (also added to the physics world)
-    int placeDeco(level::LevelObject o);             // decoration/trigger (level only)
+    int placeLevelOnly(level::LevelObject o);        // non-gameplay object (the end trigger): level only
     static level::LevelObject obj(int id, double x, double y, double rot = 0);
 
     void press(int tick);
@@ -133,7 +133,6 @@ public:
     // Decision history (for sequence models): appended when a pattern is committed.
     const std::vector<HistoryStep>& history() const { return m_history; }
     void addDecision(const float* f, int token) { HistoryStep h; std::copy(f, f + kContextFeatures, h.f); h.token = token; m_history.push_back(h); }
-    int nextGroup() { return m_nextGroup++; }
 
 private:
     bool buildPart(int index, const Progress* progress);
@@ -159,7 +158,6 @@ private:
     std::set<int> m_forcedFallback;
     PatternMemory m_memory;
     double m_endTime = 0;
-    int m_nextGroup = 1000;
     mutable std::vector<DifficultyProfile> m_profiles;
 };
 

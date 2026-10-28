@@ -88,13 +88,6 @@ geode::Result<size_t> EditorBridge::apply(LevelEditorLayer* lel, std::vector<lev
 }
 
 
-int EditorBridge::firstFreeGroup(LevelEditorLayer* lel) const {
-    int maxGroup = 0;
-    auto lvl = level::Level::fromLevelString(levelString(lel));
-    if (lvl) for (auto& o : lvl->objects) for (int g : o.groups) maxGroup = std::max(maxGroup, g);
-    return std::max(1000, maxGroup + 1);
-}
-
 int EditorBridge::gameplayObjectCount(LevelEditorLayer* lel) const {
     int n = 0;
     if (!lel || !lel->m_objects) return 0;
@@ -155,9 +148,9 @@ geode::Result<std::filesystem::path> EditorBridge::addToDataset(LevelEditorLayer
         std::filesystem::copy_file(song, dst, std::filesystem::copy_options::overwrite_existing, ec);
         if (ec) return Err("level saved, but the song could not be copied: " + ec.message());
     }
-    static char const* styles[] = {"auto", "flow", "tight", "chaotic", "minimal", "retro", "modern", "memory", "decor"};
+    static char const* styles[] = {"auto", "flow", "tight", "chaotic", "minimal", "retro", "modern", "memory"};
     GEODE_UNWRAP(file::writeString(dir / (base + ".json"),
-                                   fmt::format("{{\"difficulty\": {}, \"style\": \"{}\"}}", difficulty, styles[std::clamp(style, 0, 8)])));
+                                   fmt::format("{{\"difficulty\": {}, \"style\": \"{}\"}}", difficulty, styles[std::clamp(style, 0, 7)])));
     return Ok(gmd);
 }
 

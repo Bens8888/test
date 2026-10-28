@@ -71,7 +71,7 @@ void placeHazard(GroundCtx& c, int id, float x, const Run& r) {
     c.b.place(o);
 }
 
-int spikeIdFor(const GenOptions& opt, int obstacle, int idx, Rng& rng);
+int spikeIdFor(int obstacle, int idx);
 
 // A spike pit of `width` cells starting at gapStart in the current run. On the floor the spikes
 // sit on the ground; on raised (or ceiling) runs the pit is one row deep with a solid bottom so
@@ -80,7 +80,7 @@ void placePit(GroundCtx& c, float gapStart, int width) {
     auto& r = c.run;
     if (r.floor) {
         extendRun(c, gapStart + width * kCell);
-        for (int i = 0; i < width; ++i) placeHazard(c, spikeIdFor(c.b.options(), ObSpike1, i, c.b.rng()), gapStart + 15 + i * kCell, r);
+        for (int i = 0; i < width; ++i) placeHazard(c, spikeIdFor(ObSpike1, i), gapStart + 15 + i * kCell, r);
         return;
     }
     extendRun(c, gapStart);
@@ -88,7 +88,7 @@ void placePit(GroundCtx& c, float gapStart, int width) {
     bottom.surf = r.surf - r.g * kCell;
     for (int i = 0; i < width; ++i) {
         float cx = gapStart + 15 + i * kCell;
-        placeHazard(c, spikeIdFor(c.b.options(), ObSpike1, i, c.b.rng()), cx, bottom);
+        placeHazard(c, spikeIdFor(ObSpike1, i), cx, bottom);
         int rows = 1;
         if (r.g > 0) {
             int height = int(std::lround(bottom.surf / kCell));
@@ -99,13 +99,10 @@ void placePit(GroundCtx& c, float gapStart, int width) {
     r.builtTo = gapStart + width * kCell;
 }
 
-int spikeIdFor(const GenOptions& opt, int obstacle, int idx, Rng& rng) {
+int spikeIdFor(int obstacle, int idx) {
     if (obstacle == ObHalf1 || obstacle == ObHalf2) return oid::HalfSpike;
     if (obstacle == ObMix2) return idx == 0 ? oid::Spike : oid::HalfSpike;
-    int id = oid::Spike;
-    if (opt.spikes == SpikeSet::Colored) id = 216;
-    else if (opt.spikes == SpikeSet::Mixed && rng.chance(0.3)) id = 216;
-    return id;
+    return oid::Spike;
 }
 
 int obstacleCount(int ob) {
@@ -223,7 +220,7 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
                     if (d.a == ObBlock1) b.place(Builder::obj(oid::Block, x, c.run.surf + c.run.g * 15.0f));
                     else if (d.a == ObSlab1) b.place(Builder::obj(oid::Slab, x, c.run.surf + c.run.g * 7.0f, c.run.g > 0 ? 0 : 180));
                     else if (d.a == ObSaw) b.place(Builder::obj(oid::SawSmall, x, c.run.surf));
-                    else placeHazard(c, spikeIdFor(b.options(), d.a, i, b.rng()), x, c.run);
+                    else placeHazard(c, spikeIdFor(d.a, i), x, c.run);
                 }
                 return true;
             }
@@ -234,7 +231,7 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
                 extendRun(c, obsEnd - span);
                 for (int i = 0; i < obstacleCount(d.a); ++i) {
                     if (d.a == ObBlock1 || d.a == ObSlab1 || d.a == ObSaw) return false;
-                    placeHazard(c, spikeIdFor(b.options(), d.a, i, b.rng()), obsEnd - span + 15 + i * kCell, c.run);
+                    placeHazard(c, spikeIdFor(d.a, i), obsEnd - span + 15 + i * kCell, c.run);
                 }
                 Run nr;
                 nr.g = c.run.g;
@@ -274,7 +271,7 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
                 if (fallX < 0) return false;
                 int n = std::max(obstacleCount(d.a), int(std::ceil((fallX + 20 - ledge) / kCell)));
                 if (n > c.prof.maxSpikes + 2) return false;
-                for (int i = 0; i < n; ++i) placeHazard(c, spikeIdFor(b.options(), i < obstacleCount(d.a) ? d.a : ObSpike1, i, b.rng()), ledge + 15 + i * kCell, c.run);
+                for (int i = 0; i < n; ++i) placeHazard(c, spikeIdFor(i < obstacleCount(d.a) ? d.a : ObSpike1, i), ledge + 15 + i * kCell, c.run);
                 return true;
             }
             case TrGap2: case TrGap3: case TrGap4: {
@@ -330,7 +327,7 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
                 if (std::fabs(so.y - cy) < 14.0f) occupied = true;
             }
             if (occupied) continue;
-            placeHazard(c, spikeIdFor(b.options(), ObSpike1, i, b.rng()), cx, c.run);
+            placeHazard(c, spikeIdFor(ObSpike1, i), cx, c.run);
             ++placed;
         }
         if (placed == 0) return false;

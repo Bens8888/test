@@ -18,7 +18,7 @@ generation with the model: 0.67 s for one variant (beaten with the designed clic
 | Song analysis < ~20 s for a 3-minute song | 3.6 s for a 3.5-minute song (about 1 s per minute of audio) |
 | Generation < ~10 s per variant | ~0.5-0.7 s per variant (5 variants in parallel in about 1 s) |
 | Thousands of bot rollouts per second | ~15,500 five-second rollouts per second (8 M physics steps/s) |
-| Model runs in seconds on a laptop CPU, < 30 MB | ~0.3 ms per decision; 66k parameters, 259 KB per model, 2.3 MB for all 9 shipped models |
+| Model runs in seconds on a laptop CPU, < 30 MB | ~0.3 ms per decision; 66k parameters, 258 KB per model, 2.1 MB for all 8 shipped models |
 
 The generator fuzz test (`AL_FUZZ_N=400 ./build/tests/al_tests fuzz`: random seeds,
 difficulties and styles on the demo song) and self-play runs count levels that the designed

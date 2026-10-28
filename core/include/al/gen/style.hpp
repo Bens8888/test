@@ -29,7 +29,7 @@ enum PatternTag : uint32_t {
     TagMulti = 1u << 13,     // multi-object / complex
     TagCalm = 1u << 14,      // suits calm moments
     TagIntense = 1u << 15,   // suits intense moments
-    TagDeco = 1u << 16,      // looks decorated
+    TagDense = 1u << 16,     // many obstacles (dense corridor/surface variants)
 };
 
 struct PatternDef {

@@ -20,13 +20,11 @@ enum class Difficulty : uint8_t {
 };
 const char* difficultyName(Difficulty d);
 
-enum class Style : uint8_t { Auto = 0, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory, DecorHeavy, Count };
+enum class Style : uint8_t { Auto = 0, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory, Count };
 const char* styleName(Style s);
 
 enum class SpeedChanges : uint8_t { Auto = 0, Off, Subtle, Aggressive };
 enum class Tri : uint8_t { Auto = 0, Off, On };
-enum class BlockTheme : uint8_t { Auto = 0, Classic, Colored, Outline, Grid, Bricks, Count };
-enum class SpikeSet : uint8_t { Auto = 0, Classic, Colored, Mixed };
 enum class InputSource : uint8_t { Music = 0, Recording };
 
 // Per-music-section steering ("chorus hard, verse easy").
@@ -48,20 +46,11 @@ struct GenOptions {
     Tri sizeChanges = Tri::Auto;
     Tri dual = Tri::Auto;
     float holdBias = 0;                         // -1 tap-heavy .. +1 hold-heavy (0 = balanced/auto)
-    BlockTheme theme = BlockTheme::Auto;
-    SpikeSet spikes = SpikeSet::Auto;
-    int decoLevel = -1;                         // 0..3, -1 = auto
-    bool triggerSpeed = true;
-    bool triggerCamera = true;
-    bool triggerPulse = true;
-    bool triggerColors = true;
-    bool triggerShake = true;
     std::vector<SectionOverride> sectionOverrides;
     uint64_t seed = 1;
     int variants = 5;
     InputSource input = InputSource::Music;
     float faithfulness = 0.8f;                  // recording mode: 1 = strict to the clicks, 0 = creative
-    int groupBase = 0;                          // first free group ID in the target level (0 = 1000)
     int maxRetriesPerSection = 24;
 
     GenOptions() { modeWeights.fill(-1.0f); }

@@ -45,7 +45,6 @@ Builder::Builder(const audio::MusicAnalysis& A, const GenOptions& opt, DesignPla
     m_world.setEndX(1e9f);
     m_cursor = phys::initialState(m_world);
     m_endTime = plan.duration;
-    m_nextGroup = opt.groupBase > 0 ? opt.groupBase : 1000;
     m_profiles.resize(plan.parts.size());
     for (size_t i = 0; i < plan.parts.size(); ++i) m_profiles[i] = profileAt(plan.parts[i].difficulty);
 }
@@ -89,7 +88,7 @@ int Builder::place(LevelObject o) {
     return idx;
 }
 
-int Builder::placeDeco(LevelObject o) {
+int Builder::placeLevelOnly(LevelObject o) {
     m_level.objects.push_back(std::move(o));
     return int(m_level.objects.size() - 1);
 }
@@ -468,7 +467,7 @@ void Builder::finish() {
     if (it != m_level.objects.end()) m_level.objects.erase(it);
     LevelObject end = obj(oid::TrigEnd, std::round(endX / 30.0f) * 30.0f + 15, 600);
     end.setProp(36, std::string("1"));
-    placeDeco(end);
+    placeLevelOnly(end);
     m_world.setEndX(float(end.x));
 }
 

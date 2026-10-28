@@ -6,7 +6,8 @@ layouts from a song, inside the editor. It works in two modes:
 - **Automatic:** the click rhythm comes from the music.
 - **Click recording:** you play along and the layout is built around your clicks.
 
-Every layout is played by a built-in physics bot before you see it.
+Every layout is played by a built-in physics bot before you see it. The output is a layout only:
+plain blocks and spikes, orbs, pads and portals, with no decoration.
 
 | | |
 |---|---|

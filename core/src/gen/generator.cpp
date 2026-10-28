@@ -211,33 +211,18 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
     Builder b(A, opt, res.plan, model, rng.fork(hashStr("build")));
     if (!b.build(progress)) throw Cancelled{};
     res.model = model ? model->name() : "rules";
-    bool decorationRemoved = false;
     bot::Failure fail;
-    // decoration (never touches gameplay hitboxes), then the final bot verification with the
-    // designed inputs; returns true if they beat the level
+    // the final bot verification with the designed inputs; returns true if they beat the level
     auto finishAndVerify = [&]() {
         res.level = b.level();
         res.inputs = b.inputs();
         res.clicks = b.clickResults();
         res.parts = b.partResults();
-        if (progress) progress->report("decorate", 0);
-        Rng dr = rng.fork(hashStr("decorate"));
-        decorate(res.level, res.inputs, res.plan, A, opt, dr, opt.groupBase > 0 ? opt.groupBase : 1000);
         if (progress) progress->report("verify", 0);
         phys::World W(res.level);
         if (bot::isBeatable(W, res.inputs)) return true;
-        auto f = bot::firstFailure(W, res.inputs);
-        phys::World W0(b.level());
-        auto f0 = bot::firstFailure(W0, res.inputs);
-        debugLog("final verification failed: tick %d x=%.0f y=%.0f cause=%s obj=%d | before decoration: failed=%d tick %d x=%.0f",
-                 f.tick, f.x, f.y, phys::deathCauseName(f.cause), f.levelObject, f0.failed, f0.tick, f0.x);
-        if (!f0.failed) {
-            // the decoration broke it (should not happen): ship the undecorated layout instead
-            res.level = b.level();
-            decorationRemoved = true;
-            return true;
-        }
-        fail = f0;
+        fail = bot::firstFailure(W, res.inputs);
+        debugLog("final verification failed: tick %d x=%.0f y=%.0f cause=%s obj=%d", fail.tick, fail.x, fail.y, phys::deathCauseName(fail.cause), fail.levelObject);
         return false;
     };
     bool beatable = finishAndVerify();
@@ -260,7 +245,6 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
         beatable = finishAndVerify();
     }
     bool intended = beatable;
-    if (decorationRemoved) res.notes.push_back("decoration removed: it interfered with the gameplay");
     for (int part : repaired)
         res.notes.push_back("part " + std::to_string(part) + " repaired: rebuilt without its clicks after the bot found a failure");
     if (!beatable) {

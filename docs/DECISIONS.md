@@ -94,5 +94,4 @@ recorder deliberately avoids hooking. The remaining risks can only be confirmed 
 | Click-between-steps disabled while recording | LiveRecorder::beginSession | inputs land on whole 240 Hz steps (deterministic) |
 | Object IDs and hitboxes (spikes 6x12, half spikes 6x5.6, orbs, portals, saws) | core/src/level/objects.cpp | taken from the published object tables; any mismatch shows up in `alcli validate` |
 | Level string keys (start mode kA2, speed kA4 with 0 = 1x / 1 = 0.5x, mini kA3, dual kA8, flipped kA11, song offset kA13, colours kS38) | core/src/level/level.cpp | round-trip tests; applied start settings go through `LevelSettingsObject` fields instead of the string |
-| Group IDs of generated triggers colliding with the level's | EditorBridge::firstFreeGroup | generated groups start above the highest group in the level |
 | Resources (models) packaged flat into the mod's resources directory | Session::reloadModels | loads every `*.alm` found; falls back to the rule model with a log message |

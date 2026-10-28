@@ -32,7 +32,6 @@ const char* styleName(Style s) {
         case Style::Retro: return "Retro";
         case Style::Modern: return "Modern";
         case Style::Memory: return "Memory";
-        case Style::DecorHeavy: return "Decor-heavy";
         default: return "?";
     }
 }
@@ -90,14 +89,6 @@ Json GenOptions::toJson() const {
     j["sizeChanges"] = int(sizeChanges);
     j["dual"] = int(dual);
     j["holdBias"] = holdBias;
-    j["theme"] = int(theme);
-    j["spikes"] = int(spikes);
-    j["decoLevel"] = decoLevel;
-    j["triggerSpeed"] = triggerSpeed;
-    j["triggerCamera"] = triggerCamera;
-    j["triggerPulse"] = triggerPulse;
-    j["triggerColors"] = triggerColors;
-    j["triggerShake"] = triggerShake;
     Json so = Json::array();
     for (auto& o : sectionOverrides) {
         Json e;
@@ -129,14 +120,6 @@ GenOptions GenOptions::fromJson(const Json& j) {
     o.sizeChanges = Tri(std::clamp(j.get("sizeChanges", 0), 0, 2));
     o.dual = Tri(std::clamp(j.get("dual", 0), 0, 2));
     o.holdBias = float(std::clamp(j.get("holdBias", 0.0), -1.0, 1.0));
-    o.theme = BlockTheme(std::clamp(j.get("theme", 0), 0, int(BlockTheme::Count) - 1));
-    o.spikes = SpikeSet(std::clamp(j.get("spikes", 0), 0, 3));
-    o.decoLevel = std::clamp(j.get("decoLevel", -1), -1, 3);
-    o.triggerSpeed = j.get("triggerSpeed", true);
-    o.triggerCamera = j.get("triggerCamera", true);
-    o.triggerPulse = j.get("triggerPulse", true);
-    o.triggerColors = j.get("triggerColors", true);
-    o.triggerShake = j.get("triggerShake", true);
     for (auto& e : j["sectionOverrides"].items()) {
         SectionOverride so;
         so.sectionType = e.get("sectionType", -1);

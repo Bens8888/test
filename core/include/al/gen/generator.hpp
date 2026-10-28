@@ -1,5 +1,5 @@
 #pragma once
-// Top-level generation: plan -> build -> decorate -> verify -> report, for one or many variants.
+// Top-level generation: plan -> build -> verify -> report, for one or many variants.
 #include <al/audio/analysis.hpp>
 #include <al/bot/bot.hpp>
 #include <al/gen/builder.hpp>
@@ -52,10 +52,6 @@ struct GenResult {
     std::string model;
     std::vector<std::string> notes;
 };
-
-// Decoration pass (skins, deco, colours, triggers). Never changes gameplay hitboxes; the caller
-// re-verifies the level afterwards.
-void decorate(level::Level& lvl, const bot::InputTrack& inputs, const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng, int groupBase);
 
 Report makeReport(const level::Level& lvl, const bot::InputTrack& inputs, const DesignPlan& plan, const std::vector<ClickResult>& clicks,
                   const std::vector<PartResult>& parts, const audio::MusicAnalysis& A, bool beatable);

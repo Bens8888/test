@@ -226,7 +226,7 @@ std::shared_ptr<Job> Session::startGenerate(GJGameLevel* level) {
                 plan = gen::planFromRecording(F, *A, opt, rng);
             }
             prog.onProgress = [&](std::string const& stage, float f) {
-                static char const* names[] = {"plan", "build", "decorate", "verify"};
+                static char const* names[] = {"plan", "build", "verify"};
                 std::string s = stage;
                 for (auto n : names) if (stage == n) s = std::string(n);
                 setStage(*job, "Generating " + std::to_string(opt.variants) + " variant(s): " + s, 0.38f + 0.62f * f);

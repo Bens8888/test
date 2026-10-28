@@ -35,7 +35,8 @@ Then extract them:
 ```bash
 ./build/tools/aldata extract-dir path/to/dataset/levels --out training/data/real.jsonl
 ```
-Each level goes through the same steps:
+Only the layout is read: decoration, colours and triggers in the levels are ignored, so
+decorated levels are fine. Each level goes through the same steps:
 1. It is filtered: platformer and 2-player levels, too short, a missing or wrong song, or a
    level the bot cannot beat are rejected with the reason printed.
 2. The bot solves it.
@@ -57,8 +58,8 @@ python3 training/train_patterns.py --data training/data/selfplay.jsonl training/
   - `parity_*.json`, test vectors;
   - `train_report_*.json`, with data sizes, validation accuracy, hardware and wall time.
 
-The reference run (training/models/EVALUATION.md) took **15.7 s** for the general model and 8
-style fine-tunes, on an Intel Xeon @ 2.30 GHz with 4 threads, CPU only.
+The reference run (training/models/EVALUATION.md) took **21.9 s** for the general model and 7
+style fine-tunes, on an Intel Xeon @ 2.10 GHz with 4 threads, CPU only.
 
 ## 4. Check that the new model is better (optional, recommended)
 

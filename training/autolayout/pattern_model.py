@@ -3,7 +3,7 @@
 Mirrors core/src/model/model.cpp exactly (input layout, gate order, window, file format), so a
 model trained here runs unchanged in the mod. See docs/DECISIONS.md (D8, D9).
 
-Step input = [24 context features | style one-hot (9) | density, density-auto flag | embedding of
+Step input = [24 context features | style one-hot (8) | density, density-auto flag | embedding of
 the previous decision's pattern (row V = "none")].  GRU (PyTorch gate order r, z, n), linear head
 to one logit per pattern token.  Each window of up to WINDOW + 1 decisions starts from a zero
 state, at training and at inference time.
@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 N_FEATURES = 24
-N_STYLES = 9          # gen::Style::Count (Auto + 8 styles)
+N_STYLES = 8          # gen::Style::Count (Auto + 7 styles)
 WINDOW = 16
 FORMAT_VERSION = 1
 

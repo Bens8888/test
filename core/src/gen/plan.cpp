@@ -213,7 +213,6 @@ std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt
         int cap = p.difficulty >= 6 ? 4 : (p.difficulty >= 3.5f ? 3 : 2);
         if ((p.mode == Mode::Wave || p.mode == Mode::Spider || p.mode == Mode::Swing) && p.difficulty < 6) cap = std::min(cap, 2);
         p.speed = std::clamp(sp, 0, cap);
-        if (!opt.triggerSpeed && opt.speedChanges != SpeedChanges::Off) p.speed = std::clamp(p.speed, 0, 4);
         // size
         double miniChance = opt.sizeChanges == Tri::Off ? 0 : (opt.sizeChanges == Tri::On ? 0.35 : (p.difficulty >= 3 ? 0.12 : 0));
         if (p.intent == Intent::Intro || p.intent == Intent::Outro) miniChance = 0;

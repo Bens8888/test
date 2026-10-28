@@ -26,7 +26,7 @@ import torch.nn.functional as F
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from autolayout.pattern_model import N_FEATURES, N_STYLES, WINDOW, ModelConfig, PatternModel, parity_vectors  # noqa: E402
 
-STYLE_NAMES = ["auto", "flow", "tight", "chaotic", "minimal", "retro", "modern", "memory", "decor"]
+STYLE_NAMES = ["auto", "flow", "tight", "chaotic", "minimal", "retro", "modern", "memory"]
 
 
 # ---------------------------------------------------------------------------- data

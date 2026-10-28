@@ -1,8 +1,12 @@
 # AutoLayout — User guide
 
 AutoLayout designs a complete, playable layout for a song inside the GD editor. It picks the
-structure, gamemodes, speeds, difficulty curve, obstacles, orbs, colours and triggers. A physics
-bot plays every layout before you see it. Every option defaults to **Auto**: the generator
+structure, gamemodes, speeds, difficulty curve, obstacles, orbs, pads and portals. A physics
+bot plays every layout before you see it.
+
+It makes **layouts only**: plain default blocks and spikes, no decoration, no colour, camera or
+pulse triggers, no background objects. The only trigger it adds is the end trigger that marks
+where the level ends. Your level's colours, background and existing objects are left as they are. Every option defaults to **Auto**: the generator
 decides, and your settings only steer it.
 
 ## Quick start (automatic mode)
@@ -54,7 +58,7 @@ pattern each time it comes back.
 | Tab | What it does |
 |---|---|
 | **Generate** | Song (the level's song or any file), click source, faithfulness, difficulty (Easy to Extreme Demon, or Auto), seed (same seed = same layout), number of variants, Generate / Cancel. Results view: variants, timeline and preview, **Re-roll section** / **Re-roll all**, Apply, Undo, Ghost. |
-| **Style** | Style preset (Auto, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory, Decor-heavy), density, block theme, spike types, decoration level, triggers (camera, beat pulse/move, colours per section, shake on drops), trained model on/off. |
+| **Style** | Style preset (Auto, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory), density, trained model on/off. |
 | **Modes** | Weight per gamemode (*never* … 100%, *All auto*), speed changes (off / subtle / aggressive), start speed, portal frequency, gravity flips, mini/big, dual, hold vs tap. |
 | **Sections** | Per song section (intro, verse, chorus, build-up, drop, break, outro): difficulty −3…+3, and an optional forced gamemode. |
 | **Playtest** | **Bot-verify the editor level** runs the bot on the level as it is now, including your own edits. Ghost on/off and **Play ghost** show the bot's path in the editor. Also shows the playability report: risky spots (tightest timings), the longest gap without input, notes, and the difficulty curve against the music's intensity. |
@@ -84,6 +88,9 @@ you need level files plus their songs:
   10 Easy/Normal, 15 Hard/Harder, 15 Insane and 20 demons (Easy to Extreme). Pick levels whose
   gameplay you like, and prefer classic levels over platformer or 2-player ones (those are skipped
   automatically).
+- **Only the layout is learned.** Decorated levels are fine: decoration, colours, background
+  objects and triggers are ignored. Training reads the gameplay objects the player can touch
+  (solid blocks, spikes, saws, orbs, pads, portals) and the path the bot takes through them.
 - **Exporting a level:**
   - *In the mod:* open the level in the editor (for online levels: copy/save it to your local
     levels first). In **Training**, choose its difficulty and, optionally, a style, then press

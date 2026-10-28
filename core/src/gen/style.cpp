@@ -101,7 +101,7 @@ void addFlying(std::vector<PatternDef>& L, Mode m, const char* prefix) {
             if (f == FlSaw) t |= TagSaw | TagModern | TagIntense;
             if (f == FlStairs) t |= TagBlock | TagFlow | TagClassic;
             if (f == FlOpen) t |= TagCalm | TagFlow;
-            if (dens) t |= TagDeco;
+            if (dens) t |= TagDense;
             d.tags = t;
             d.minDiff = std::max(0.0f, d.complexity - 0.8f);
             d.maxDiff = 9;
@@ -120,7 +120,7 @@ void addSurface(std::vector<PatternDef>& L, Mode m, const char* prefix) {
             d.a = f;
             d.b = dens;
             d.complexity = float(f) * 0.7f + dens * 0.8f + 0.5f;
-            d.tags = (f == SuSpikes ? TagSpike | TagClassic : f == SuBlocks ? TagBlock | TagFlow : TagGap | TagIntense) | (dens ? TagDeco : TagCalm);
+            d.tags = (f == SuSpikes ? TagSpike | TagClassic : f == SuBlocks ? TagBlock | TagFlow : TagGap | TagIntense) | (dens ? TagDense : TagCalm);
             d.minDiff = std::max(0.0f, d.complexity - 1.0f);
             d.maxDiff = 9;
             d.baseWeight = 1.0f;
@@ -216,7 +216,7 @@ void RuleStyleModel::score(const PatternContext& ctx, const std::vector<const Pa
                 break;
             case Style::Minimal:
                 if (t & TagMulti) x *= 0.35f;
-                if (t & TagDeco) x *= 0.4f;
+                if (t & TagDense) x *= 0.4f;
                 if (d.complexity <= 1.0f) x *= 1.5f;
                 break;
             case Style::Retro:
@@ -233,10 +233,6 @@ void RuleStyleModel::score(const PatternContext& ctx, const std::vector<const Pa
             case Style::Memory:
                 if (t & TagGap) x *= 1.4f;
                 if (t & TagOrb) x *= 1.3f;
-                break;
-            case Style::DecorHeavy:
-                if (t & TagDeco) x *= 1.6f;
-                if (t & (TagStep | TagBlock)) x *= 1.3f;
                 break;
             default: break;
         }

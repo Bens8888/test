@@ -38,8 +38,6 @@ public:
     // by undoLast.
     geode::Result<size_t> applyLevel(LevelEditorLayer* lel, level::Level const& lvl, std::string const& label);
 
-    // Highest group ID used in the editor level + 1 (generated groups start there).
-    int firstFreeGroup(LevelEditorLayer* lel) const;
     // Number of gameplay (non-trigger) objects in the editor.
     int gameplayObjectCount(LevelEditorLayer* lel) const;
 

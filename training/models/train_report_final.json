@@ -4,590 +4,536 @@
    "training/data/selfplay.jsonl"
   ],
   "sequences": 900,
-  "decisions": 46112,
+  "decisions": 47698,
   "train_sequences": 810,
   "val_sequences": 90
  },
- "baseline_accuracy": 0.09119960668633235,
+ "baseline_accuracy": 0.09734310581768209,
  "models": {
   "all": {
    "file": "training/models/final/model_all.alm",
-   "bytes": 265472,
+   "bytes": 264321,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 4.73534616609899,
-     "accuracy": 0.0752212389380531,
-     "top5": 0.31563421828908556,
-     "nll": 3.9506682074292687,
-     "decisions": 4068,
-     "seconds": 0.9078412055969238
+     "train_loss": 4.765355592682248,
+     "accuracy": 0.08726523133302794,
+     "top5": 0.34379294548786077,
+     "nll": 3.87985078724928,
+     "decisions": 4366,
+     "seconds": 1.3096632957458496
     },
     {
      "epoch": 2,
-     "train_loss": 3.4346313214883573,
-     "accuracy": 0.1516715830875123,
-     "top5": 0.5034414945919371,
-     "nll": 3.0771719215249123,
-     "decisions": 4068,
-     "seconds": 0.8867371082305908
+     "train_loss": 3.4168539756820318,
+     "accuracy": 0.16605588639486946,
+     "top5": 0.5400824553366926,
+     "nll": 3.0016222430979282,
+     "decisions": 4366,
+     "seconds": 1.1659700870513916
     },
     {
      "epoch": 3,
-     "train_loss": 2.8147315106740813,
-     "accuracy": 0.16125860373647985,
-     "top5": 0.5580137659783677,
-     "nll": 2.8436584581667694,
-     "decisions": 4068,
-     "seconds": 0.8890464305877686
+     "train_loss": 2.7971920654887246,
+     "accuracy": 0.1765918460833715,
+     "top5": 0.5790196976637655,
+     "nll": 2.7716450685489304,
+     "decisions": 4366,
+     "seconds": 1.3481354713439941
     },
     {
      "epoch": 4,
-     "train_loss": 2.63765500231487,
-     "accuracy": 0.1735496558505408,
-     "top5": 0.5909537856440511,
-     "nll": 2.7440313590487198,
-     "decisions": 4068,
-     "seconds": 0.9510700702667236
+     "train_loss": 2.627552038147336,
+     "accuracy": 0.1859825927622538,
+     "top5": 0.6126889601465872,
+     "nll": 2.657949285036481,
+     "decisions": 4366,
+     "seconds": 1.4228646755218506
     },
     {
      "epoch": 5,
-     "train_loss": 2.545257981230573,
-     "accuracy": 0.18436578171091444,
-     "top5": 0.6027531956735497,
-     "nll": 2.6681490922337554,
-     "decisions": 4068,
-     "seconds": 0.9107480049133301
+     "train_loss": 2.522932691233499,
+     "accuracy": 0.18941823179111314,
+     "top5": 0.6255153458543289,
+     "nll": 2.601773334898317,
+     "decisions": 4366,
+     "seconds": 1.348379373550415
     },
     {
      "epoch": 6,
-     "train_loss": 2.480874834991083,
-     "accuracy": 0.18264503441494592,
-     "top5": 0.6093903638151426,
-     "nll": 2.630534365524116,
-     "decisions": 4068,
-     "seconds": 0.9481873512268066
+     "train_loss": 2.469007608436403,
+     "accuracy": 0.1983508932661475,
+     "top5": 0.635822262940907,
+     "nll": 2.5692001209038415,
+     "decisions": 4366,
+     "seconds": 1.2939648628234863
     },
     {
      "epoch": 7,
-     "train_loss": 2.425990162826166,
-     "accuracy": 0.18657817109144542,
-     "top5": 0.6111111111111112,
-     "nll": 2.612689846824404,
-     "decisions": 4068,
-     "seconds": 0.9634394645690918
+     "train_loss": 2.4194894347872054,
+     "accuracy": 0.1962895098488319,
+     "top5": 0.6424644983967018,
+     "nll": 2.5468078080907746,
+     "decisions": 4366,
+     "seconds": 1.1325581073760986
     },
     {
      "epoch": 8,
-     "train_loss": 2.391846915570701,
-     "accuracy": 0.18706981317600788,
-     "top5": 0.6209439528023599,
-     "nll": 2.603188351690476,
-     "decisions": 4068,
-     "seconds": 0.8906424045562744
+     "train_loss": 2.3877361984479997,
+     "accuracy": 0.1994961062757673,
+     "top5": 0.6500229042601924,
+     "nll": 2.5288366349367064,
+     "decisions": 4366,
+     "seconds": 1.2926661968231201
     },
     {
      "epoch": 9,
-     "train_loss": 2.371894112447413,
-     "accuracy": 0.1851032448377581,
-     "top5": 0.6106194690265486,
-     "nll": 2.5939009093195056,
-     "decisions": 4068,
-     "seconds": 0.9059834480285645
+     "train_loss": 2.3578291705676486,
+     "accuracy": 0.19880897846999543,
+     "top5": 0.6438387540082455,
+     "nll": 2.5223398551829517,
+     "decisions": 4366,
+     "seconds": 1.2215936183929443
     },
     {
      "epoch": 10,
-     "train_loss": 2.3542082106194844,
-     "accuracy": 0.19075712881022616,
-     "top5": 0.6224188790560472,
-     "nll": 2.582123412964032,
-     "decisions": 4068,
-     "seconds": 0.9680049419403076
+     "train_loss": 2.356847521804628,
+     "accuracy": 0.1999541914796152,
+     "top5": 0.6479615208428767,
+     "nll": 2.517401611346255,
+     "decisions": 4366,
+     "seconds": 1.264622449874878
     },
     {
      "epoch": 11,
-     "train_loss": 2.3310466481418146,
-     "accuracy": 0.18952802359882007,
-     "top5": 0.6241396263520157,
-     "nll": 2.578350515550803,
-     "decisions": 4068,
-     "seconds": 0.8975849151611328
+     "train_loss": 2.3419294697897777,
+     "accuracy": 0.19766376546037562,
+     "top5": 0.6456710948236372,
+     "nll": 2.5138432675963194,
+     "decisions": 4366,
+     "seconds": 1.302234172821045
     },
     {
      "epoch": 12,
-     "train_loss": 2.3504347306926077,
-     "accuracy": 0.1914945919370698,
-     "top5": 0.6226647000983284,
-     "nll": 2.576727379388162,
-     "decisions": 4068,
-     "seconds": 0.9173128604888916
+     "train_loss": 2.3340200299308416,
+     "accuracy": 0.19606046724690793,
+     "top5": 0.6493357764544205,
+     "nll": 2.513131026139349,
+     "decisions": 4366,
+     "seconds": 1.3946242332458496
     }
    ],
    "best": {
-    "accuracy": 0.1914945919370698,
-    "top5": 0.6226647000983284,
-    "nll": 2.576727379388162,
-    "decisions": 4068
+    "accuracy": 0.19606046724690793,
+    "top5": 0.6493357764544205,
+    "nll": 2.513131026139349,
+    "decisions": 4366
    }
   },
   "flow": {
    "file": "training/models/final/model_flow.alm",
-   "bytes": 265490,
+   "bytes": 264339,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.3822245359420777,
-     "accuracy": 0.18992654774396642,
-     "top5": 0.6002098635886673,
-     "nll": 2.689568087286614,
-     "decisions": 953,
-     "seconds": 0.1342926025390625
+     "train_loss": 2.2469679355621337,
+     "accuracy": 0.23943661971830985,
+     "top5": 0.6549295774647887,
+     "nll": 2.4366123802225355,
+     "decisions": 284,
+     "seconds": 0.2607581615447998
     },
     {
      "epoch": 2,
-     "train_loss": 2.325096106529236,
-     "accuracy": 0.18153200419727178,
-     "top5": 0.5907660020986358,
-     "nll": 2.7010497476471684,
-     "decisions": 953,
-     "seconds": 0.12854647636413574
+     "train_loss": 2.237854170799255,
+     "accuracy": 0.22183098591549297,
+     "top5": 0.6654929577464789,
+     "nll": 2.448009744496413,
+     "decisions": 284,
+     "seconds": 0.13590717315673828
     },
     {
      "epoch": 3,
-     "train_loss": 2.306414318084717,
-     "accuracy": 0.1794333683105981,
-     "top5": 0.5855194123819517,
-     "nll": 2.7091864618899817,
-     "decisions": 953,
-     "seconds": 0.12801766395568848
+     "train_loss": 2.1671921253204345,
+     "accuracy": 0.2007042253521127,
+     "top5": 0.6514084507042254,
+     "nll": 2.4470973518532766,
+     "decisions": 284,
+     "seconds": 0.12278509140014648
     },
     {
      "epoch": 4,
-     "train_loss": 2.317544865608215,
-     "accuracy": 0.18048268625393493,
-     "top5": 0.5886673662119623,
-     "nll": 2.708664399754463,
-     "decisions": 953,
-     "seconds": 0.13049817085266113
+     "train_loss": 2.2039807558059694,
+     "accuracy": 0.20422535211267606,
+     "top5": 0.6514084507042254,
+     "nll": 2.4464846723516223,
+     "decisions": 284,
+     "seconds": 0.1156911849975586
     }
    ],
    "best": {
-    "accuracy": 0.18992654774396642,
-    "top5": 0.6002098635886673,
-    "nll": 2.689568087286614,
-    "decisions": 953
+    "accuracy": 0.23943661971830985,
+    "top5": 0.6549295774647887,
+    "nll": 2.4366123802225355,
+    "decisions": 284
    }
   },
   "tight": {
    "file": "training/models/final/model_tight.alm",
-   "bytes": 265492,
+   "bytes": 264341,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.3174333373705545,
-     "accuracy": 0.20155038759689922,
-     "top5": 0.6542635658914728,
-     "nll": 2.4904592669287395,
-     "decisions": 645,
-     "seconds": 0.13976716995239258
+     "train_loss": 2.2738967736562095,
+     "accuracy": 0.2301980198019802,
+     "top5": 0.6996699669966997,
+     "nll": 2.4176721846309825,
+     "decisions": 1212,
+     "seconds": 0.21162724494934082
     },
     {
      "epoch": 2,
-     "train_loss": 2.2981626788775125,
-     "accuracy": 0.19534883720930232,
-     "top5": 0.6387596899224807,
-     "nll": 2.490445660435876,
-     "decisions": 645,
-     "seconds": 0.1336979866027832
+     "train_loss": 2.262872060139974,
+     "accuracy": 0.23432343234323433,
+     "top5": 0.6889438943894389,
+     "nll": 2.4187873239957853,
+     "decisions": 1212,
+     "seconds": 0.23723125457763672
     },
     {
      "epoch": 3,
-     "train_loss": 2.269981066385905,
-     "accuracy": 0.16744186046511628,
-     "top5": 0.662015503875969,
-     "nll": 2.4953099154686744,
-     "decisions": 645,
-     "seconds": 0.13424396514892578
+     "train_loss": 2.2473674217859902,
+     "accuracy": 0.22937293729372937,
+     "top5": 0.6971947194719472,
+     "nll": 2.417724625308915,
+     "decisions": 1212,
+     "seconds": 0.2508399486541748
     },
     {
      "epoch": 4,
-     "train_loss": 2.263911724090576,
-     "accuracy": 0.16589147286821707,
-     "top5": 0.6589147286821705,
-     "nll": 2.49556974736295,
-     "decisions": 645,
-     "seconds": 0.14803338050842285
+     "train_loss": 2.236843725045522,
+     "accuracy": 0.22854785478547854,
+     "top5": 0.698019801980198,
+     "nll": 2.4173028006805444,
+     "decisions": 1212,
+     "seconds": 0.22944402694702148
     }
    ],
    "best": {
-    "accuracy": 0.19534883720930232,
-    "top5": 0.6387596899224807,
-    "nll": 2.490445660435876,
-    "decisions": 645
+    "accuracy": 0.22854785478547854,
+    "top5": 0.698019801980198,
+    "nll": 2.4173028006805444,
+    "decisions": 1212
    }
   },
   "chaotic": {
    "file": "training/models/final/model_chaotic.alm",
-   "bytes": 265481,
+   "bytes": 264344,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.4469122648239137,
-     "accuracy": 0.23046875,
-     "top5": 0.650390625,
-     "nll": 2.5195107327308506,
-     "decisions": 512,
-     "seconds": 0.12948036193847656
+     "train_loss": 2.4569752514362335,
+     "accuracy": 0.11940298507462686,
+     "top5": 0.582089552238806,
+     "nll": 2.7671504174891988,
+     "decisions": 201,
+     "seconds": 0.1991274356842041
     },
     {
      "epoch": 2,
-     "train_loss": 2.4441069841384886,
-     "accuracy": 0.232421875,
-     "top5": 0.642578125,
-     "nll": 2.5255650305189192,
-     "decisions": 512,
-     "seconds": 0.11909818649291992
+     "train_loss": 2.4047175645828247,
+     "accuracy": 0.12935323383084577,
+     "top5": 0.572139303482587,
+     "nll": 2.784029935129839,
+     "decisions": 201,
+     "seconds": 0.20412755012512207
     },
     {
      "epoch": 3,
-     "train_loss": 2.431698441505432,
-     "accuracy": 0.244140625,
-     "top5": 0.650390625,
-     "nll": 2.5302610176149756,
-     "decisions": 512,
-     "seconds": 0.1145026683807373
+     "train_loss": 2.4172636419534683,
+     "accuracy": 0.11940298507462686,
+     "top5": 0.5771144278606966,
+     "nll": 2.7734565758586522,
+     "decisions": 201,
+     "seconds": 0.17459774017333984
     },
     {
      "epoch": 4,
-     "train_loss": 2.4036388635635375,
-     "accuracy": 0.244140625,
-     "top5": 0.650390625,
-     "nll": 2.530519353924319,
-     "decisions": 512,
-     "seconds": 0.11252498626708984
+     "train_loss": 2.41091188788414,
+     "accuracy": 0.11940298507462686,
+     "top5": 0.5771144278606966,
+     "nll": 2.7726827770916382,
+     "decisions": 201,
+     "seconds": 0.19373345375061035
     }
    ],
    "best": {
-    "accuracy": 0.23046875,
-    "top5": 0.650390625,
-    "nll": 2.5195107327308506,
-    "decisions": 512
+    "accuracy": 0.11940298507462686,
+    "top5": 0.582089552238806,
+    "nll": 2.7671504174891988,
+    "decisions": 201
    }
   },
   "minimal": {
    "file": "training/models/final/model_minimal.alm",
-   "bytes": 265497,
+   "bytes": 264344,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.195901799201965,
-     "accuracy": 0.19854280510018216,
-     "top5": 0.6375227686703097,
-     "nll": 2.5622198034505375,
-     "decisions": 549,
-     "seconds": 0.11154484748840332
+     "train_loss": 2.3493373870849608,
+     "accuracy": 0.20233463035019456,
+     "top5": 0.6614785992217899,
+     "nll": 2.472291623108118,
+     "decisions": 257,
+     "seconds": 0.1877148151397705
     },
     {
      "epoch": 2,
-     "train_loss": 2.20503568649292,
-     "accuracy": 0.1785063752276867,
-     "top5": 0.6284153005464481,
-     "nll": 2.5647414195298714,
-     "decisions": 549,
-     "seconds": 0.11496615409851074
+     "train_loss": 2.2921352863311766,
+     "accuracy": 0.17898832684824903,
+     "top5": 0.6498054474708171,
+     "nll": 2.480294667329306,
+     "decisions": 257,
+     "seconds": 0.14732837677001953
     },
     {
      "epoch": 3,
-     "train_loss": 2.1611876249313355,
-     "accuracy": 0.18579234972677597,
-     "top5": 0.6320582877959927,
-     "nll": 2.571384899386074,
-     "decisions": 549,
-     "seconds": 0.11154484748840332
+     "train_loss": 2.283384394645691,
+     "accuracy": 0.17509727626459143,
+     "top5": 0.642023346303502,
+     "nll": 2.4837274950302066,
+     "decisions": 257,
+     "seconds": 0.11955761909484863
     },
     {
      "epoch": 4,
-     "train_loss": 2.131909728050232,
-     "accuracy": 0.1912568306010929,
-     "top5": 0.6338797814207651,
-     "nll": 2.5715363633654373,
-     "decisions": 549,
-     "seconds": 0.11255788803100586
+     "train_loss": 2.267196869850159,
+     "accuracy": 0.17898832684824903,
+     "top5": 0.642023346303502,
+     "nll": 2.4811872146472855,
+     "decisions": 257,
+     "seconds": 0.11595916748046875
     }
    ],
    "best": {
-    "accuracy": 0.19854280510018216,
-    "top5": 0.6375227686703097,
-    "nll": 2.5622198034505375,
-    "decisions": 549
+    "accuracy": 0.20233463035019456,
+    "top5": 0.6614785992217899,
+    "nll": 2.472291623108118,
+    "decisions": 257
    }
   },
   "retro": {
    "file": "training/models/final/model_retro.alm",
-   "bytes": 265492,
+   "bytes": 264341,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.3182459831237794,
-     "accuracy": 0.29080118694362017,
-     "top5": 0.7537091988130564,
-     "nll": 2.241584766512455,
-     "decisions": 337,
-     "seconds": 0.10619139671325684
+     "train_loss": 2.255596709251404,
+     "accuracy": 0.18900804289544235,
+     "top5": 0.6474530831099196,
+     "nll": 2.5143293337272254,
+     "decisions": 746,
+     "seconds": 0.14893150329589844
     },
     {
      "epoch": 2,
-     "train_loss": 2.3334089040756227,
-     "accuracy": 0.27299703264094954,
-     "top5": 0.7507418397626113,
-     "nll": 2.256403420728463,
-     "decisions": 337,
-     "seconds": 0.10486268997192383
+     "train_loss": 2.2646610498428346,
+     "accuracy": 0.19302949061662197,
+     "top5": 0.6487935656836461,
+     "nll": 2.5189176328060774,
+     "decisions": 746,
+     "seconds": 0.14545536041259766
     },
     {
      "epoch": 3,
-     "train_loss": 2.2842865705490114,
-     "accuracy": 0.29376854599406527,
-     "top5": 0.7596439169139466,
-     "nll": 2.2427220726579162,
-     "decisions": 337,
-     "seconds": 0.12200069427490234
+     "train_loss": 2.2260193824768066,
+     "accuracy": 0.19302949061662197,
+     "top5": 0.6541554959785523,
+     "nll": 2.5154105329002197,
+     "decisions": 746,
+     "seconds": 0.16020631790161133
     },
     {
      "epoch": 4,
-     "train_loss": 2.2867238521575928,
-     "accuracy": 0.29376854599406527,
-     "top5": 0.7596439169139466,
-     "nll": 2.2442239455723976,
-     "decisions": 337,
-     "seconds": 0.10261392593383789
+     "train_loss": 2.2221670150756836,
+     "accuracy": 0.1970509383378016,
+     "top5": 0.6581769436997319,
+     "nll": 2.5150055092716985,
+     "decisions": 746,
+     "seconds": 0.14955401420593262
     }
    ],
    "best": {
-    "accuracy": 0.29080118694362017,
-    "top5": 0.7537091988130564,
-    "nll": 2.241584766512455,
-    "decisions": 337
+    "accuracy": 0.18900804289544235,
+    "top5": 0.6474530831099196,
+    "nll": 2.5143293337272254,
+    "decisions": 746
    }
   },
   "modern": {
    "file": "training/models/final/model_modern.alm",
-   "bytes": 265495,
+   "bytes": 264343,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.4064066648483275,
-     "accuracy": 0.1431980906921241,
-     "top5": 0.5871121718377088,
-     "nll": 2.672948322887921,
-     "decisions": 419,
-     "seconds": 0.11833977699279785
+     "train_loss": 2.379742217063904,
+     "accuracy": 0.16941789748045177,
+     "top5": 0.5907906168549087,
+     "nll": 2.6603215094963226,
+     "decisions": 1151,
+     "seconds": 0.18193435668945312
     },
     {
      "epoch": 2,
-     "train_loss": 2.359560799598694,
-     "accuracy": 0.13126491646778043,
-     "top5": 0.60381861575179,
-     "nll": 2.676365968435647,
-     "decisions": 419,
-     "seconds": 0.11492180824279785
+     "train_loss": 2.368955874443054,
+     "accuracy": 0.17028670721112077,
+     "top5": 0.5986099044309297,
+     "nll": 2.656662844348016,
+     "decisions": 1151,
+     "seconds": 0.17743849754333496
     },
     {
      "epoch": 3,
-     "train_loss": 2.3426258087158205,
-     "accuracy": 0.1360381861575179,
-     "top5": 0.60381861575179,
-     "nll": 2.6735583466960025,
-     "decisions": 419,
-     "seconds": 0.10625195503234863
+     "train_loss": 2.3727803230285645,
+     "accuracy": 0.17289313640312773,
+     "top5": 0.5968722849695917,
+     "nll": 2.659321807447876,
+     "decisions": 1151,
+     "seconds": 0.1710045337677002
     },
     {
      "epoch": 4,
-     "train_loss": 2.2922614574432374,
-     "accuracy": 0.13842482100238662,
-     "top5": 0.6109785202863962,
-     "nll": 2.6717384880084127,
-     "decisions": 419,
-     "seconds": 0.10910439491271973
+     "train_loss": 2.301632618904114,
+     "accuracy": 0.17289313640312773,
+     "top5": 0.5968722849695917,
+     "nll": 2.6597162064627704,
+     "decisions": 1151,
+     "seconds": 0.1649150848388672
     }
    ],
    "best": {
-    "accuracy": 0.13842482100238662,
-    "top5": 0.6109785202863962,
-    "nll": 2.6717384880084127,
-    "decisions": 419
+    "accuracy": 0.17028670721112077,
+    "top5": 0.5986099044309297,
+    "nll": 2.656662844348016,
+    "decisions": 1151
    }
   },
   "memory": {
    "file": "training/models/final/model_memory.alm",
-   "bytes": 265495,
+   "bytes": 264342,
    "history": [
     {
      "epoch": 1,
-     "train_loss": 2.3087371826171874,
-     "accuracy": 0.18059299191374664,
-     "top5": 0.5902964959568733,
-     "nll": 2.6343215058113367,
-     "decisions": 371,
-     "seconds": 0.10980391502380371
+     "train_loss": 2.3475571359906877,
+     "accuracy": 0.1883495145631068,
+     "top5": 0.6699029126213593,
+     "nll": 2.4598246731804414,
+     "decisions": 515,
+     "seconds": 0.20548439025878906
     },
     {
      "epoch": 2,
-     "train_loss": 2.2554898023605348,
-     "accuracy": 0.16981132075471697,
-     "top5": 0.5929919137466307,
-     "nll": 2.644443835852281,
-     "decisions": 371,
-     "seconds": 0.10827279090881348
+     "train_loss": 2.3267658948898315,
+     "accuracy": 0.1766990291262136,
+     "top5": 0.6776699029126214,
+     "nll": 2.4542237041065995,
+     "decisions": 515,
+     "seconds": 0.24671649932861328
     },
     {
      "epoch": 3,
-     "train_loss": 2.2928895235061644,
-     "accuracy": 0.1752021563342318,
-     "top5": 0.5876010781671159,
-     "nll": 2.642511555448054,
-     "decisions": 371,
-     "seconds": 0.10428261756896973
+     "train_loss": 2.3055458750043596,
+     "accuracy": 0.1825242718446602,
+     "top5": 0.6718446601941748,
+     "nll": 2.45741946211139,
+     "decisions": 515,
+     "seconds": 0.24636554718017578
     },
     {
      "epoch": 4,
-     "train_loss": 2.2560389280319213,
-     "accuracy": 0.1778975741239892,
-     "top5": 0.5741239892183289,
-     "nll": 2.6428311802948903,
-     "decisions": 371,
-     "seconds": 0.10597705841064453
+     "train_loss": 2.297419956752232,
+     "accuracy": 0.1825242718446602,
+     "top5": 0.6699029126213593,
+     "nll": 2.4592448938240126,
+     "decisions": 515,
+     "seconds": 0.1728665828704834
     }
    ],
    "best": {
-    "accuracy": 0.18059299191374664,
-    "top5": 0.5902964959568733,
-    "nll": 2.6343215058113367,
-    "decisions": 371
-   }
-  },
-  "decor": {
-   "file": "training/models/final/model_decor.alm",
-   "bytes": 265492,
-   "history": [
-    {
-     "epoch": 1,
-     "train_loss": 2.371945333480835,
-     "accuracy": 0.13120567375886524,
-     "top5": 0.5283687943262412,
-     "nll": 2.737702078853093,
-     "decisions": 282,
-     "seconds": 0.0999913215637207
-    },
-    {
-     "epoch": 2,
-     "train_loss": 2.3362576007843017,
-     "accuracy": 0.1453900709219858,
-     "top5": 0.5106382978723404,
-     "nll": 2.7381674381012613,
-     "decisions": 282,
-     "seconds": 0.10317158699035645
-    },
-    {
-     "epoch": 3,
-     "train_loss": 2.3208898305892944,
-     "accuracy": 0.1524822695035461,
-     "top5": 0.5283687943262412,
-     "nll": 2.7301000331310514,
-     "decisions": 282,
-     "seconds": 0.10873246192932129
-    },
-    {
-     "epoch": 4,
-     "train_loss": 2.3346715211868285,
-     "accuracy": 0.14893617021276595,
-     "top5": 0.5212765957446809,
-     "nll": 2.7301424784017794,
-     "decisions": 282,
-     "seconds": 0.1322917938232422
-    }
-   ],
-   "best": {
-    "accuracy": 0.1524822695035461,
-    "top5": 0.5283687943262412,
-    "nll": 2.7301000331310514,
-    "decisions": 282
+    "accuracy": 0.1766990291262136,
+    "top5": 0.6776699029126214,
+    "nll": 2.4542237041065995,
+    "decisions": 515
    }
   }
  },
  "hardware": {
-  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "threads": 4,
   "torch": "2.14.1+cu130",
   "python": "3.13.17",
   "os": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
   "gpu": "none (CPU only)"
  },
- "seconds": 15.68900990486145,
+ "seconds": 21.927703857421875,
  "log": [
-  "data: 900 sequences, 46112 decisions, vocab 174; train 810 / val 90 sequences",
-  "baseline (most frequent pattern per gamemode): val accuracy 0.091",
-  "model: GRU hidden 96, embed 24, window 16, 66294 parameters (259 KB)",
-  "  epoch  1/12: loss 4.735  val acc 0.075 top5 0.316 nll 3.951  (0.9 s)",
-  "  epoch  2/12: loss 3.435  val acc 0.152 top5 0.503 nll 3.077  (0.9 s)",
-  "  epoch  3/12: loss 2.815  val acc 0.161 top5 0.558 nll 2.844  (0.9 s)",
-  "  epoch  4/12: loss 2.638  val acc 0.174 top5 0.591 nll 2.744  (1.0 s)",
-  "  epoch  5/12: loss 2.545  val acc 0.184 top5 0.603 nll 2.668  (0.9 s)",
-  "  epoch  6/12: loss 2.481  val acc 0.183 top5 0.609 nll 2.631  (0.9 s)",
-  "  epoch  7/12: loss 2.426  val acc 0.187 top5 0.611 nll 2.613  (1.0 s)",
-  "  epoch  8/12: loss 2.392  val acc 0.187 top5 0.621 nll 2.603  (0.9 s)",
-  "  epoch  9/12: loss 2.372  val acc 0.185 top5 0.611 nll 2.594  (0.9 s)",
-  "  epoch 10/12: loss 2.354  val acc 0.191 top5 0.622 nll 2.582  (1.0 s)",
-  "  epoch 11/12: loss 2.331  val acc 0.190 top5 0.624 nll 2.578  (0.9 s)",
-  "  epoch 12/12: loss 2.350  val acc 0.191 top5 0.623 nll 2.577  (0.9 s)",
-  "wrote training/models/final/model_all.alm (259 KB)",
-  "fine-tuning for style flow (96 sequences)",
-  "  epoch  1/4: loss 2.382  val acc 0.190 top5 0.600 nll 2.690  (0.1 s)",
-  "  epoch  2/4: loss 2.325  val acc 0.182 top5 0.591 nll 2.701  (0.1 s)",
-  "  epoch  3/4: loss 2.306  val acc 0.179 top5 0.586 nll 2.709  (0.1 s)",
-  "  epoch  4/4: loss 2.318  val acc 0.180 top5 0.589 nll 2.709  (0.1 s)",
+  "data: 900 sequences, 47698 decisions, vocab 174; train 810 / val 90 sequences",
+  "baseline (most frequent pattern per gamemode): val accuracy 0.097",
+  "model: GRU hidden 96, embed 24, window 16, 66006 parameters (258 KB)",
+  "  epoch  1/12: loss 4.765  val acc 0.087 top5 0.344 nll 3.880  (1.3 s)",
+  "  epoch  2/12: loss 3.417  val acc 0.166 top5 0.540 nll 3.002  (1.2 s)",
+  "  epoch  3/12: loss 2.797  val acc 0.177 top5 0.579 nll 2.772  (1.3 s)",
+  "  epoch  4/12: loss 2.628  val acc 0.186 top5 0.613 nll 2.658  (1.4 s)",
+  "  epoch  5/12: loss 2.523  val acc 0.189 top5 0.626 nll 2.602  (1.3 s)",
+  "  epoch  6/12: loss 2.469  val acc 0.198 top5 0.636 nll 2.569  (1.3 s)",
+  "  epoch  7/12: loss 2.419  val acc 0.196 top5 0.642 nll 2.547  (1.1 s)",
+  "  epoch  8/12: loss 2.388  val acc 0.199 top5 0.650 nll 2.529  (1.3 s)",
+  "  epoch  9/12: loss 2.358  val acc 0.199 top5 0.644 nll 2.522  (1.2 s)",
+  "  epoch 10/12: loss 2.357  val acc 0.200 top5 0.648 nll 2.517  (1.3 s)",
+  "  epoch 11/12: loss 2.342  val acc 0.198 top5 0.646 nll 2.514  (1.3 s)",
+  "  epoch 12/12: loss 2.334  val acc 0.196 top5 0.649 nll 2.513  (1.4 s)",
+  "wrote training/models/final/model_all.alm (258 KB)",
+  "fine-tuning for style flow (90 sequences)",
+  "  epoch  1/4: loss 2.247  val acc 0.239 top5 0.655 nll 2.437  (0.3 s)",
+  "  epoch  2/4: loss 2.238  val acc 0.222 top5 0.665 nll 2.448  (0.1 s)",
+  "  epoch  3/4: loss 2.167  val acc 0.201 top5 0.651 nll 2.447  (0.1 s)",
+  "  epoch  4/4: loss 2.204  val acc 0.204 top5 0.651 nll 2.446  (0.1 s)",
   "wrote training/models/final/model_flow.alm",
-  "fine-tuning for style tight (108 sequences)",
-  "  epoch  1/4: loss 2.317  val acc 0.202 top5 0.654 nll 2.490  (0.1 s)",
-  "  epoch  2/4: loss 2.298  val acc 0.195 top5 0.639 nll 2.490  (0.1 s)",
-  "  epoch  3/4: loss 2.270  val acc 0.167 top5 0.662 nll 2.495  (0.1 s)",
-  "  epoch  4/4: loss 2.264  val acc 0.166 top5 0.659 nll 2.496  (0.1 s)",
+  "fine-tuning for style tight (120 sequences)",
+  "  epoch  1/4: loss 2.274  val acc 0.230 top5 0.700 nll 2.418  (0.2 s)",
+  "  epoch  2/4: loss 2.263  val acc 0.234 top5 0.689 nll 2.419  (0.2 s)",
+  "  epoch  3/4: loss 2.247  val acc 0.229 top5 0.697 nll 2.418  (0.3 s)",
+  "  epoch  4/4: loss 2.237  val acc 0.229 top5 0.698 nll 2.417  (0.2 s)",
   "wrote training/models/final/model_tight.alm",
-  "fine-tuning for style chaotic (93 sequences)",
-  "  epoch  1/4: loss 2.447  val acc 0.230 top5 0.650 nll 2.520  (0.1 s)",
-  "  epoch  2/4: loss 2.444  val acc 0.232 top5 0.643 nll 2.526  (0.1 s)",
-  "  epoch  3/4: loss 2.432  val acc 0.244 top5 0.650 nll 2.530  (0.1 s)",
-  "  epoch  4/4: loss 2.404  val acc 0.244 top5 0.650 nll 2.531  (0.1 s)",
+  "fine-tuning for style chaotic (135 sequences)",
+  "  epoch  1/4: loss 2.457  val acc 0.119 top5 0.582 nll 2.767  (0.2 s)",
+  "  epoch  2/4: loss 2.405  val acc 0.129 top5 0.572 nll 2.784  (0.2 s)",
+  "  epoch  3/4: loss 2.417  val acc 0.119 top5 0.577 nll 2.773  (0.2 s)",
+  "  epoch  4/4: loss 2.411  val acc 0.119 top5 0.577 nll 2.773  (0.2 s)",
   "wrote training/models/final/model_chaotic.alm",
-  "fine-tuning for style minimal (117 sequences)",
-  "  epoch  1/4: loss 2.196  val acc 0.199 top5 0.638 nll 2.562  (0.1 s)",
-  "  epoch  2/4: loss 2.205  val acc 0.179 top5 0.628 nll 2.565  (0.1 s)",
-  "  epoch  3/4: loss 2.161  val acc 0.186 top5 0.632 nll 2.571  (0.1 s)",
-  "  epoch  4/4: loss 2.132  val acc 0.191 top5 0.634 nll 2.572  (0.1 s)",
+  "fine-tuning for style minimal (99 sequences)",
+  "  epoch  1/4: loss 2.349  val acc 0.202 top5 0.661 nll 2.472  (0.2 s)",
+  "  epoch  2/4: loss 2.292  val acc 0.179 top5 0.650 nll 2.480  (0.1 s)",
+  "  epoch  3/4: loss 2.283  val acc 0.175 top5 0.642 nll 2.484  (0.1 s)",
+  "  epoch  4/4: loss 2.267  val acc 0.179 top5 0.642 nll 2.481  (0.1 s)",
   "wrote training/models/final/model_minimal.alm",
-  "fine-tuning for style retro (96 sequences)",
-  "  epoch  1/4: loss 2.318  val acc 0.291 top5 0.754 nll 2.242  (0.1 s)",
-  "  epoch  2/4: loss 2.333  val acc 0.273 top5 0.751 nll 2.256  (0.1 s)",
-  "  epoch  3/4: loss 2.284  val acc 0.294 top5 0.760 nll 2.243  (0.1 s)",
-  "  epoch  4/4: loss 2.287  val acc 0.294 top5 0.760 nll 2.244  (0.1 s)",
+  "fine-tuning for style retro (117 sequences)",
+  "  epoch  1/4: loss 2.256  val acc 0.189 top5 0.647 nll 2.514  (0.1 s)",
+  "  epoch  2/4: loss 2.265  val acc 0.193 top5 0.649 nll 2.519  (0.1 s)",
+  "  epoch  3/4: loss 2.226  val acc 0.193 top5 0.654 nll 2.515  (0.2 s)",
+  "  epoch  4/4: loss 2.222  val acc 0.197 top5 0.658 nll 2.515  (0.1 s)",
   "wrote training/models/final/model_retro.alm",
-  "fine-tuning for style modern (111 sequences)",
-  "  epoch  1/4: loss 2.406  val acc 0.143 top5 0.587 nll 2.673  (0.1 s)",
-  "  epoch  2/4: loss 2.360  val acc 0.131 top5 0.604 nll 2.676  (0.1 s)",
-  "  epoch  3/4: loss 2.343  val acc 0.136 top5 0.604 nll 2.674  (0.1 s)",
-  "  epoch  4/4: loss 2.292  val acc 0.138 top5 0.611 nll 2.672  (0.1 s)",
+  "fine-tuning for style modern (114 sequences)",
+  "  epoch  1/4: loss 2.380  val acc 0.169 top5 0.591 nll 2.660  (0.2 s)",
+  "  epoch  2/4: loss 2.369  val acc 0.170 top5 0.599 nll 2.657  (0.2 s)",
+  "  epoch  3/4: loss 2.373  val acc 0.173 top5 0.597 nll 2.659  (0.2 s)",
+  "  epoch  4/4: loss 2.302  val acc 0.173 top5 0.597 nll 2.660  (0.2 s)",
   "wrote training/models/final/model_modern.alm",
-  "fine-tuning for style memory (81 sequences)",
-  "  epoch  1/4: loss 2.309  val acc 0.181 top5 0.590 nll 2.634  (0.1 s)",
-  "  epoch  2/4: loss 2.255  val acc 0.170 top5 0.593 nll 2.644  (0.1 s)",
-  "  epoch  3/4: loss 2.293  val acc 0.175 top5 0.588 nll 2.643  (0.1 s)",
-  "  epoch  4/4: loss 2.256  val acc 0.178 top5 0.574 nll 2.643  (0.1 s)",
-  "wrote training/models/final/model_memory.alm",
-  "fine-tuning for style decor (108 sequences)",
-  "  epoch  1/4: loss 2.372  val acc 0.131 top5 0.528 nll 2.738  (0.1 s)",
-  "  epoch  2/4: loss 2.336  val acc 0.145 top5 0.511 nll 2.738  (0.1 s)",
-  "  epoch  3/4: loss 2.321  val acc 0.152 top5 0.528 nll 2.730  (0.1 s)",
-  "  epoch  4/4: loss 2.335  val acc 0.149 top5 0.521 nll 2.730  (0.1 s)",
-  "wrote training/models/final/model_decor.alm"
+  "fine-tuning for style memory (135 sequences)",
+  "  epoch  1/4: loss 2.348  val acc 0.188 top5 0.670 nll 2.460  (0.2 s)",
+  "  epoch  2/4: loss 2.327  val acc 0.177 top5 0.678 nll 2.454  (0.2 s)",
+  "  epoch  3/4: loss 2.306  val acc 0.183 top5 0.672 nll 2.457  (0.2 s)",
+  "  epoch  4/4: loss 2.297  val acc 0.183 top5 0.670 nll 2.459  (0.2 s)",
+  "wrote training/models/final/model_memory.alm"
  ]
 }

@@ -30,7 +30,7 @@ including headless Linux CI. Training code is Python/PyTorch in `training/`.
 │ bot/     run · isBeatable · firstFailure · autoSolve (beam search) · timing windows          │
 │ gen/     plan (parts, gamemodes, speeds, clicks) · fusion (recordings × music) · pattern    │
 │          library + style models · Builder (verified placement) · ground/flying/surface      │
-│          builders · decorate · generator (variants, report, feel score, re-roll)            │
+│          builders · generator (variants, report, feel score, re-roll)                       │
 │ model/   GRU pattern model inference (.alm files), model sets per style                     │
 │ data/    training sequences: self-play (reward) and real levels (bot + labeller), JSONL     │
 │ level/   object database · level string / .gmd read & write                                 │
@@ -69,11 +69,11 @@ including headless Linux CI. Training code is Python/PyTorch in `training/`.
    Every part is verified from its start (and a little past its end); failing parts are retried with
    new random streams and finally rebuilt as a plain, safe stretch (its clicks are reported).
 5. **Transitions**: portals where the player will be, moved further if passing them would kill.
-6. **Decorate**: block themes, colours per section, pulses, camera, shake — never touching hitboxes.
-7. **Verify**: the bot plays the finished level with the designed inputs. If that ever fails, the
-   undecorated version is checked, then a bot search; an unbeatable result is reported with the
-   exact time, position and cause.
-8. **Report**: clicks (forced / left out), timing windows, risky spots, longest input gap,
+6. **Verify**: the bot plays the finished layout with the designed inputs. If that ever fails, the
+   part where the run dies is rebuilt as a plain, safe stretch (and the parts after it on top),
+   then a bot search; an unbeatable result is reported with the exact time, position and cause.
+   The output is a layout only: plain blocks and spikes, no decoration or visual triggers.
+7. **Report**: clicks (forced / left out), timing windows, risky spots, longest input gap,
    difficulty curve vs music intensity, music alignment; variants ranked by a feel score.
 
 ## Where ML sits (see DECISIONS D8-D10)
