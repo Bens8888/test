@@ -64,6 +64,14 @@ AutoLayoutPopup* AutoLayoutPopup::create(LevelEditorLayer* lel) {
 
 AutoLayoutPopup* AutoLayoutPopup::current() { return s_current; }
 
+// Rebuilding a page from inside one of its own buttons would destroy the button while cocos is
+// still dispatching its touch: such rebuilds run on the next frame instead (if still open).
+void AutoLayoutPopup::defer(std::function<void()> f) {
+    geode::queueInMainThread([self = this, f = std::move(f)]() {
+        if (s_current == self) f();
+    });
+}
+
 bool AutoLayoutPopup::init(LevelEditorLayer* lel) {
     if (!Popup::init(kWidth, kHeight)) return false;
     m_editor = lel;
@@ -315,7 +323,7 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     m_resultView->addChild(rmenu);
     m_variantCycle = ui::CycleControl::create({"-"}, 0, 150.f, [this](int i) {
         S().select(i);
-        refreshResults();
+        defer([this] { refreshResults(); });
     });
     m_variantCycle->setPosition({4.f, H - 136.f});
     m_resultView->addChild(m_variantCycle);
@@ -487,7 +495,7 @@ void AutoLayoutPopup::refreshResults() {
         cyc->setPosition(pos);
         parent->addChild(cyc);
     };
-    rebuildCycle(m_variantCycle, vl, S().selected(), 150.f, [this](int i) { S().select(i); refreshResults(); });
+    rebuildCycle(m_variantCycle, vl, S().selected(), 150.f, [this](int i) { S().select(i); defer([this] { refreshResults(); }); });
     std::vector<std::string> sl;
     for (auto& p : cur->plan.parts) sl.push_back(fmt::format("{}: {} {:.0f}-{:.0f}s", p.index + 1, level::modeName(p.mode), p.t0, p.t1));
     m_rerollPart = std::clamp(m_rerollPart, 0, std::max(0, int(sl.size()) - 1));
@@ -591,7 +599,7 @@ CCNode* AutoLayoutPopup::buildGamemodesTab() {
     auto reset = ui::button("All auto", [this] {
         O().modeWeights.fill(-1.f);
         save();
-        rebuildTab(Tab::Gamemodes);
+        defer([this] { rebuildTab(Tab::Gamemodes); });
     }, 0.4f, "GJ_button_04.png");
     reset->setPosition({half / 2.f, 12.f});
     resetMenu->addChild(reset);
@@ -742,7 +750,7 @@ CCNode* AutoLayoutPopup::buildTrainingTab() {
         if (S().busy()) return;
         int n = S().reloadModels();
         Notification::create(fmt::format("AutoLayout: {} model(s) loaded", n), NotificationIcon::Info)->show();
-        rebuildTab(Tab::Training);
+        defer([this] { rebuildTab(Tab::Training); });
     }, 0.4f, "GJ_button_04.png");
     reload->setPosition({45.f, 10.f});
     modelMenu->addChild(reload);
@@ -773,7 +781,7 @@ CCNode* AutoLayoutPopup::buildTrainingTab() {
         auto res = EditorBridge::get().addToDataset(m_editor, song.isOk() ? song.unwrap().path : std::filesystem::path(), s_diff, s_style);
         if (res.isErr()) Notification::create(res.unwrapErr(), NotificationIcon::Error)->show();
         else Notification::create("Added to the dataset: " + res.unwrap().filename().string(), NotificationIcon::Success)->show();
-        rebuildTab(Tab::Training);
+        defer([this] { rebuildTab(Tab::Training); });
     }, 0.4f, "GJ_button_01.png");
     add->setPosition({45.f, 10.f});
     dsMenu->addChild(add);
@@ -810,7 +818,7 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
         auto r = S().savePreset(std::string(name->getString()));
         if (r.isErr()) Notification::create(r.unwrapErr(), NotificationIcon::Error)->show();
         else Notification::create("Preset saved", NotificationIcon::Success)->show();
-        rebuildTab(Tab::Settings);
+        defer([this] { rebuildTab(Tab::Settings); });
     }, 0.4f, "GJ_button_01.png");
     savePreset->setPosition({130.f, 10.f});
     presetRow->addChild(savePreset);
@@ -831,7 +839,7 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
         if (r.isErr()) Notification::create(r.unwrapErr(), NotificationIcon::Error)->show();
         else {
             Notification::create("Preset loaded", NotificationIcon::Success)->show();
-            for (int t = 0; t < int(Tab::Count); ++t) rebuildTab(Tab(t));
+            defer([this] { for (int t = 0; t < int(Tab::Count); ++t) rebuildTab(Tab(t)); });
         }
     }, 0.4f, "GJ_button_01.png");
     loadBtn->setPosition({170.f, 10.f});
@@ -846,7 +854,7 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
         O() = gen::GenOptions();
         O().seed = seed;
         save();
-        for (int t = 0; t < int(Tab::Count); ++t) rebuildTab(Tab(t));
+        defer([this] { for (int t = 0; t < int(Tab::Count); ++t) rebuildTab(Tab(t)); });
     }, 0.4f, "GJ_button_06.png");
     reset->setPosition({50.f, 10.f});
     misc->addChild(reset);

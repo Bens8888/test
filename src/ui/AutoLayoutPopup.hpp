@@ -6,6 +6,7 @@
 
 #include <array>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -41,6 +42,7 @@ protected:
     cocos2d::CCNode* buildTrainingTab();
     cocos2d::CCNode* buildSettingsTab();
     void rebuildTab(Tab tab);
+    void defer(std::function<void()> f);
 
     // generate tab
     void startGenerate();
