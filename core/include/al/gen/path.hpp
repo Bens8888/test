@@ -110,7 +110,8 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
 PathPlan planPath(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng,
                   const PathParams& prm = {}, const Progress* progress = nullptr);
 
-// The path as a level: its objects plus the platforms (solid cells added to `cells`).
+// The path as a level: its objects plus the platforms as outline pieces, surface by surface in
+// planning order (or, with `cells`, the platform cells added to the grid instead).
 level::Level pathLevel(const PathPlan& path, CellGrid* cells = nullptr);
 
 } // namespace al::gen

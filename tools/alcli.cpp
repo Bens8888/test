@@ -5,6 +5,7 @@
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
 #include <al/gen/path.hpp>
+#include <al/gen/structures.hpp>
 #include <al/gen/test_pattern.hpp>
 #include <al/model/model.hpp>
 #include <al/rec/demo.hpp>
@@ -323,10 +324,110 @@ int main(int argc, char** argv) {
                 for (auto& o : path.objects) if (o.o.x > f.x - 300 && o.o.x < f.x + 100) std::printf("    object %d at (%.0f,%.0f) %s click %d\n", o.o.id, o.o.x, o.o.y, gen::actName(o.act), o.click);
             }
         }
-        if (!pngPath.empty()) {
+        auto t2 = std::chrono::steady_clock::now();
+        gen::StructureResult st = gen::buildStructures(path, plan, opt, rng);
+        double sec2 = std::chrono::duration<double>(std::chrono::steady_clock::now() - t2).count();
+        int forced = 0, minWin = 1000;
+        for (auto& c : st.checks) { forced += c.forced; minWin = std::min(minWin, c.early + c.late + 1); }
+        std::printf("structures: %zu cells, %d necessity hazards, %d pillars, %d saws, %d corridor cells, %d/%zu clicks forced, min window %.0f ms, %s, %.2f s\n",
+                    st.cells.size(), st.hazards, st.pillars, st.saws, st.corridorCells, forced, st.checks.size(), minWin * 1000.0 / 240.0,
+                    st.beatable ? "BEATABLE" : "NOT BEATABLE", sec2);
+        for (auto& n : st.notes) std::printf("note: %s\n", n.c_str());
+        {
+            std::vector<std::pair<int, size_t>> w;
+            for (size_t i = 0; i < st.checks.size(); ++i) w.push_back({st.checks[i].early + st.checks[i].late + 1, i});
+            std::sort(w.begin(), w.end());
+            int below = 0;
+            const float target = gen::profileAt(plan.baseDifficulty).minWindowMs;
+            for (auto& [win, i] : w) below += win * 1000.0 / 240.0 < target * 0.85;
+            std::printf("windows below %.0f ms: %d of %zu\n", target * 0.85, below, w.size());
+            for (size_t k = 0; k < w.size() && k < 10; ++k) {
+                auto& c = path.clicks[w[k].second];
+                auto& ck = st.checks[w[k].second];
+                std::printf("  click %d tick %d: early %d late %d ticks, %s %s obj %d ground %d at (%.0f,%.0f)\n", c.click, c.tick, ck.early, ck.late, level::modeName(c.mode), gen::actName(c.act), c.objId, c.grounded, c.x, c.y);
+                if (k < 3) {
+                    for (int sh : {-(ck.early + 1), ck.late + 1}) {
+                        bot::InputTrack t2 = path.inputs;
+                        for (size_t e = 0; e < t2.events.size(); ++e)
+                            if (t2.events[e].press && t2.events[e].tick == c.tick) { t2.events[e].tick += sh; if (e + 1 < t2.events.size()) t2.events[e + 1].tick += sh; break; }
+                        phys::World WF(st.level);
+                        auto f = bot::firstFailure(WF, t2);
+                        if (f.failed) {
+                            std::printf("     shift %+d: dies at tick %d (+%d) (%.0f,%.0f) %s", sh, f.tick, f.tick - c.tick, f.x, f.y, phys::deathCauseName(f.cause));
+                            if (f.levelObject >= 0) { auto& o = st.level.objects[size_t(f.levelObject)]; std::printf(" by id %d at (%.0f,%.0f) rot %.0f", o.id, o.x, o.y, o.rotation); }
+                            std::printf("\n");
+                        }
+                    }
+                }
+            }
+        }
+        {
+            std::vector<std::pair<int, size_t>> w;
+            for (size_t i = 0; i < st.checks.size(); ++i) w.push_back({st.checks[i].early + st.checks[i].late + 1, i});
+            std::sort(w.begin(), w.end());
+            int below = 0;
+            const float target = gen::profileAt(plan.baseDifficulty).minWindowMs;
+            for (auto& [win, i] : w) below += win * 1000.0 / 240.0 < target * 0.85;
+            std::printf("windows below %.0f ms: %d of %zu\n", target * 0.85, below, w.size());
+            for (size_t k = 0; k < w.size() && k < 10; ++k) {
+                auto& c = path.clicks[w[k].second];
+                auto& ck = st.checks[w[k].second];
+                std::printf("  click %d tick %d: early %d late %d ticks, %s %s obj %d ground %d at (%.0f,%.0f)\n", c.click, c.tick, ck.early, ck.late, level::modeName(c.mode), gen::actName(c.act), c.objId, c.grounded, c.x, c.y);
+                if (k < 3) {
+                    for (int sh : {-(ck.early + 1), ck.late + 1}) {
+                        bot::InputTrack t2 = path.inputs;
+                        for (size_t e = 0; e < t2.events.size(); ++e)
+                            if (t2.events[e].press && t2.events[e].tick == c.tick) { t2.events[e].tick += sh; if (e + 1 < t2.events.size()) t2.events[e + 1].tick += sh; break; }
+                        phys::World WF(st.level);
+                        auto f = bot::firstFailure(WF, t2);
+                        if (f.failed) {
+                            std::printf("     shift %+d: dies at tick %d (+%d) (%.0f,%.0f) %s", sh, f.tick, f.tick - c.tick, f.x, f.y, phys::deathCauseName(f.cause));
+                            if (f.levelObject >= 0) { auto& o = st.level.objects[size_t(f.levelObject)]; std::printf(" by id %d at (%.0f,%.0f) rot %.0f", o.id, o.x, o.y, o.rotation); }
+                            std::printf("\n");
+                        }
+                    }
+                }
+            }
+        }
+        {
+            // the path with its platforms as single cells (as in the game)
             gen::CellGrid cells;
-            level::Level T = gen::pathLevel(path, &cells);
-            gen::tileCells(cells, gen::TileLook::Outline, T.objects);
+            level::Level P = gen::pathLevel(path, &cells);
+            for (auto& [kk, kind] : cells.cells()) {
+                level::LevelObject b;
+                b.id = 1;
+                b.x = int(int32_t(uint32_t(kk >> 32))) * 30 + 15;
+                b.y = int(int32_t(uint32_t(kk))) * 30 + 15;
+                P.objects.push_back(b);
+            }
+            phys::World WP(P);
+            auto f = bot::firstFailure(WP, path.inputs);
+            if (f.failed) {
+                std::printf("cell platforms: dies at tick %d x=%.0f y=%.0f %s", f.tick, f.x, f.y, phys::deathCauseName(f.cause));
+                if (f.levelObject >= 0) std::printf(" object %d at (%.0f,%.0f)", P.objects[size_t(f.levelObject)].id, P.objects[size_t(f.levelObject)].x, P.objects[size_t(f.levelObject)].y);
+                std::printf("\n");
+                {
+                    bot::RunOptions ro2;
+                    ro2.recordTrace = true;
+                    level::Level B = gen::pathLevel(path);
+                    phys::World WB(B);
+                    auto r1 = bot::run(WP, path.inputs, ro2), r2 = bot::run(WB, path.inputs, ro2);
+                    for (size_t t = 0; t < std::min(r1.trace.size(), r2.trace.size()); ++t) {
+                        auto& a1 = r1.trace[t]; auto& a2 = r2.trace[t];
+                        if (std::fabs(a1.x - a2.x) > 0.01f || std::fabs(a1.y - a2.y) > 0.01f) {
+                            std::printf("  first difference at tick %zu: cells (%.2f, %.2f v %.3f ground %d) outline-blocks (%.2f, %.2f v %.3f ground %d) mode %s g %d\n", t + 1, a1.x, a1.y, a1.v, a1.onGround, a2.x, a2.y, a2.v, a2.onGround, level::modeName(a1.mode), a1.flip());
+                            auto& pr = r1.trace[t > 0 ? t - 1 : 0];
+                            std::printf("  before: (%.2f, %.2f v %.3f ground %d)\n", pr.x, pr.y, pr.v, pr.onGround);
+                            break;
+                        }
+                    }
+                }
+                for (auto& t : path.trace) if (std::fabs(t.x - f.x) < 3) { std::printf("  planned at x %.0f: y %.1f mode %s g %d ground %d\n", t.x, t.y, level::modeName(t.mode), t.g, t.onGround); break; }
+                for (auto& s2 : path.surfaces) if (s2.cx1 * 30 > f.x - 200 && s2.cx0 * 30 < f.x + 100) std::printf("  surface x %d-%d y %d-%d g %d\n", s2.cx0, s2.cx1, s2.cy0, s2.cy1, s2.g);
+            }
+        }
+        if (!pngPath.empty()) {
+            level::Level T = st.level;
             report::RenderOptions ro;
             ro.scale = 0.5f;
             ro.maxWidth = 2400;

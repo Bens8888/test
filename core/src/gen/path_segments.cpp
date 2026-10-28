@@ -29,7 +29,7 @@ float rhythmFit(Mode m, double med, double shortest, float holds) {
         case Mode::Robot: return 0.2f + 0.5f * band(med, 0.26, 0.8) + 0.5f * holds;
         case Mode::Ball: return 0.2f + 0.7f * band(med, 0.22, 0.6);
         case Mode::Spider: return 0.2f + 0.7f * band(med, 0.16, 0.5);
-        case Mode::Ufo: return 0.2f + 0.7f * band(med, 0.18, 0.5);
+        case Mode::Ufo: return 0.1f + 0.8f * band(med, 0.16, 0.42);
         case Mode::Ship: return 0.25f + 0.4f * band(med, 0.15, 0.6) + 0.6f * holds;
         case Mode::Wave: return 0.15f + 0.85f * band(med, 0.08, 0.28) + 0.3f * holds + (shortest < 0.14 ? 0.3f : 0.0f);
         case Mode::Swing: return 0.2f + 0.7f * band(med, 0.14, 0.4);

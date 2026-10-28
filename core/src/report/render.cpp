@@ -236,6 +236,17 @@ std::string renderPng(const level::Level& lvl, const bot::InputTrack* inputs, co
                 ++ei;
             }
             phys::step(W, g, held);
+            if (g.p[0].x >= x0 && g.p[0].bounded) {
+                // the floor and ceiling of a flying/ball/spider stretch (GD draws them as ground)
+                int rr;
+                float bx, by0, by1;
+                toPx(g.p[0].x, g.p[0].floorY, rr, bx, by0);
+                toPx(g.p[0].x, g.p[0].ceilY, rr, bx, by1);
+                img.fillRect(bx - 1, by0, bx + 1, by0 + 3 * s, 0x2a6ef0ff);
+                img.fillRect(bx - 1, by0 - 1, bx + 1, by0, 0xffffffff);
+                img.fillRect(bx - 1, by1 - 3 * s, bx + 1, by1, 0x2a6ef0ff);
+                img.fillRect(bx - 1, by1, bx + 1, by1 + 1, 0xffffffff);
+            }
             if (g.p[0].x >= x0) {
                 int r1, r2;
                 float ax, ay, bx, by;

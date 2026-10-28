@@ -38,6 +38,7 @@ constexpr float kMaxY = 450.0f;      // highest comfortable player position (unb
 int tickOf(double t) { return int(std::lround(t * phys::kTPS)); }
 
 bool groundMode(Mode m) { return m == Mode::Cube || m == Mode::Robot; }
+bool isFlying(Mode m) { return m == Mode::Ship || m == Mode::Ufo || m == Mode::Wave || m == Mode::Swing; }
 bool surfaceMode(Mode m) { return m == Mode::Ball || m == Mode::Spider; }
 
 int portalIdFor(Mode m) {
@@ -66,12 +67,18 @@ LevelObject make(int id, double x, double y, double rot = 0) {
     return o;
 }
 
-// A surface as one stretched block (physics during planning; tiled properly later).
-LevelObject surfaceBlock(const PathSurface& s) {
-    LevelObject o = make(oid::Block, (s.cx0 + s.cx1 + 1) * kCell * 0.5, (s.cy0 + s.cy1 + 1) * kCell * 0.5);
-    o.scaleX = s.cx1 - s.cx0 + 1;
-    o.scaleY = s.cy1 - s.cy0 + 1;
-    return o;
+// A surface as the outline pieces it will have in the finished level (the stair-snap rule of
+// the game depends on the exact pieces, so planning uses the same ones). Each piece gets its own
+// object id: kSurfaceIds + surface id * 512 + n.
+constexpr int kSurfaceIds = 1 << 24;
+template <class F>
+void forEachSurfaceBlock(const PathSurface& s, int gid, F&& f) {
+    CellGrid g;
+    g.fill(s.cx0, s.cy0, s.cx1, s.cy1);
+    std::vector<LevelObject> tiles;
+    tileCells(g, TileLook::Outline, tiles);
+    int n = 0;
+    for (auto& o : tiles) f(std::move(o), kSurfaceIds + (gid & 0x7fff) * 512 + std::min(n++, 511));
 }
 
 struct Obj {
@@ -156,7 +163,8 @@ void buildLocal(LocalWorld& lw, const Node* n, float x0, const level::LevelSetti
     int walked = 0;
     for (const Node* k = n; k; k = k->parent.get(), ++walked) {
         for (auto& ob : k->objs) if (ob.o.x + 60 >= x0 - 150) objs.push_back({ob.gid, ob.o});
-        for (auto& [gid, sf] : k->surfaces) if ((sf.cx1 + 1) * kCell >= x0 - 150) objs.push_back({gid, surfaceBlock(sf)});
+        for (auto& [gid, sf] : k->surfaces)
+            if ((sf.cx1 + 1) * kCell >= x0 - 150) forEachSurfaceBlock(sf, gid, [&](LevelObject o, int id) { objs.push_back({id, std::move(o)}); });
         if (walked >= 3 && k->endX < x0 - 900) break;
     }
     std::sort(objs.begin(), objs.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
@@ -261,7 +269,7 @@ bool Planner::evaluate(Cand& c, int untilTick) {
     }
     const size_t mark = m_lw.W.size();
     for (auto& ob : c.objs) m_lw.add(ob.o, ob.gid);
-    for (auto& [gid, sf] : c.surfaces) m_lw.add(surfaceBlock(sf), gid);
+    for (auto& [gid, sf] : c.surfaces) forEachSurfaceBlock(sf, gid, [&](const LevelObject& o, int id) { m_lw.add(o, id); });
     c.end = m_start;
     phys::refreshTouching(m_lw.W, c.end);
     c.trace.clear();
@@ -405,10 +413,23 @@ bool Planner::addLandings(const Cand& base, int fromTick, int Tn, std::vector<Ca
     const int t0 = m_start.tick + 1;
     std::vector<std::pair<int, int>> seen; // (cx0, row)
     int added = 0;
-    const int lastLand = Tn - 1 - m_minRun;
-    for (int j = 0; j < 4 && added < maxOptions; ++j) {
-        int L = lastLand - j * 14;
-        if (L <= fromTick + 6 || L - t0 < 0 || L - t0 >= int(base.trace.size())) continue;
+    // landing ticks spread over the descent: late ones (land just before the click) and early
+    // ones (land soon and run along the platform; needed for long gaps)
+    const int lastLand = std::min(Tn - 1 - m_minRun, t0 + int(base.trace.size()) - 2);
+    int firstDesc = -1;
+    for (int t = std::max(fromTick + 6, t0 + 2); t <= lastLand; ++t) {
+        const TraceSample& q = base.trace[size_t(t - t0)];
+        const TraceSample& q0 = base.trace[size_t(t - t0 - 2)];
+        if (!q.onGround && q.g * (q.y - q0.y) < 0) { firstDesc = t; break; }
+    }
+    std::vector<int> landTicks;
+    if (firstDesc >= 0) {
+        for (int j = 0; j < 3; ++j) landTicks.push_back(lastLand - j * 14);
+        for (int j = 1; j <= 3; ++j) landTicks.push_back(firstDesc + j * 10);
+    }
+    for (int L : landTicks) {
+        if (added >= maxOptions) break;
+        if (L <= fromTick + 6 || L - t0 < 0 || L - t0 >= int(base.trace.size()) || L > lastLand) continue;
         const TraceSample& q = base.trace[size_t(L - t0)];
         if (q.onGround || !(groundMode(q.mode) || surfaceMode(q.mode))) continue;
         // descending (towards the gravity floor) at L
@@ -500,7 +521,7 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
     out.push_back(base); // free: whatever happens without new objects
     if (groundMode(m) || surfaceMode(m)) {
         std::vector<Cand> landed;
-        addLandings(base, T + 6, Tn, landed, 3);
+        addLandings(base, T + 6, Tn, landed, 4);
         for (auto& l : landed) {
             if (!evaluate(l, until) || !l.end.p[0].onGround) continue;
             // a pad on the platform for long gaps: bounce once more without a click
@@ -595,7 +616,7 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {
         for (auto& q : c.trace) if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
-        s -= 1.2 * double(boundContact) / double(c.trace.size());
+        s -= (isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
         const float mid = (e.floorY + e.ceilY) * 0.5f;
         s -= 0.4 * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
     }
@@ -696,6 +717,11 @@ PathPlan Planner::run() {
         if (next.empty()) {
             // nothing survived: keep the beam and leave the click out
             out.notes.push_back("no way to continue at click " + std::to_string(k));
+            if (std::getenv("AL_DEBUG_PATH")) {
+                const auto& p = beam.front()->s.p[0];
+                std::fprintf(stderr, "stuck at click %d (t %.2f): tick %d x %.0f y %.1f v %.2f mode %s g %d ground %d bounded %d [%.0f,%.0f] speed %d\n", k,
+                             m_plan.clicks[size_t(k)].time, beam.front()->s.tick, p.x, p.y, p.v, level::modeName(p.mode), p.flip(), p.onGround, p.bounded, p.floorY, p.ceilY, int(p.speed));
+            }
             continue;
         }
         std::sort(next.begin(), next.end(), [](const NodePtr& a, const NodePtr& b) { return a->score > b->score; });
@@ -770,7 +796,7 @@ level::Level pathLevel(const PathPlan& path, CellGrid* cells) {
     for (auto& o : path.objects) L.objects.push_back(o.o);
     for (auto& s : path.surfaces) {
         if (cells) cells->fill(s.cx0, s.cy0, s.cx1, s.cy1);
-        else L.objects.push_back(surfaceBlock(s));
+        else forEachSurfaceBlock(s, 0, [&](LevelObject o, int) { L.objects.push_back(std::move(o)); });
     }
     return L;
 }
