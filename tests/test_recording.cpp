@@ -7,6 +7,7 @@
 #include <al/gen/test_pattern.hpp>
 #include <al/physics/sim.hpp>
 #include <al/rec/recording.hpp>
+#include <al/rec/validate.hpp>
 #include <al/util/codec.hpp>
 
 using namespace al;
@@ -225,4 +226,39 @@ TEST(recording_replays_in_the_simulator) {
     auto fl = importFrameList(frames);
     REQUIRE(fl.has_value());
     CHECK(bot::isBeatable(W, fl->toInputTrack()));
+}
+
+TEST(recording_validation_against_simulator) {
+    // a "game" recording made from the simulator itself (states at each input, node y = y + 90)
+    // validates with zero error; a level that differs from the recorded one is caught
+    level::Level L;
+    L.settings.fixGravityBug = true;
+    L.objects = gen::makeTestPattern(0);
+    phys::World W(L);
+    auto solved = bot::autoSolve(W, {});
+    REQUIRE(solved.solved);
+    bot::RunOptions ro;
+    ro.recordTrace = true;
+    auto run = bot::run(W, solved.inputs, ro);
+    Recording r;
+    for (auto& e : solved.inputs.events) {
+        RecEvent re;
+        re.tick = e.tick;
+        re.time = e.tick / 240.0;
+        re.press = e.press;
+        const auto& p = run.trace[size_t(e.tick - 1)];
+        re.p1.x = p.x;
+        re.p1.y = p.y + 90.f;
+        re.p1.mode = uint8_t(p.mode);
+        r.events.push_back(re);
+    }
+    auto v = validate(L, r);
+    CHECK(v.simFinishes);
+    CHECK(v.compared == int(r.events.size()));
+    CHECK(v.maxDx < 1e-3 && v.maxDy < 1e-3);
+    CHECK(v.modeMismatches == 0);
+    // move the level's first pad up by a block: the replay must deviate
+    for (auto& o : L.objects) if (o.info().kind == level::Kind::Pad) { o.y += 30; break; }
+    auto v2 = validate(L, r);
+    CHECK(!v2.simFinishes || v2.firstDeviationTick >= 0);
 }

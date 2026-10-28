@@ -7,6 +7,7 @@
 #include <al/model/model.hpp>
 #include <al/rec/demo.hpp>
 #include <al/rec/recording.hpp>
+#include <al/rec/validate.hpp>
 #include <al/report/render.hpp>
 #include <al/util/codec.hpp>
 #include <al/util/json.hpp>
@@ -28,6 +29,7 @@ static int usage() {
         "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n"
         "  alcli demo-recording <out.alrec|.json>    write the demo click recording\n"
         "  alcli bench [model.alm] [out.json]        performance benchmark (analysis, generation, physics, bot, model)\n"
+        "  alcli validate <level.gmd> <recording> [yOffset=90]  simulator vs a run recorded in GD (position error per input)\n"
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
@@ -112,6 +114,26 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[i], "--json") == 0) writeFile(argv[i + 1], analysisToJson(A).dump(1));
         }
         return 0;
+    }
+    if (cmd == "validate" && argc >= 4) {
+        // Simulator vs the real game: replay a recording made in GD (it stores the player's state
+        // at every input) in the simulator on the same level and compare.
+        std::string xml, bytes, err;
+        if (!readFile(argv[2], xml) || !readFile(argv[3], bytes)) { std::fprintf(stderr, "cannot read the files\n"); return 1; }
+        auto lvl = level::Level::fromGmd(xml, &err);
+        if (!lvl) lvl = level::Level::fromLevelString(xml, &err);
+        if (!lvl) { std::fprintf(stderr, "level: %s\n", err.c_str()); return 1; }
+        auto rec = rec::importAny(bytes, &err);
+        if (!rec) { std::fprintf(stderr, "recording: %s\n", err.c_str()); return 1; }
+        const float yOffset = argc >= 5 ? std::stof(argv[4]) : 90.f; // GD node y = level-string y + 90
+        auto v = rec::validate(*lvl, *rec, yOffset);
+        std::printf("simulator %s the level (%d ticks%s)\n", v.simFinishes ? "finishes" : "does NOT finish", v.simTicks,
+                    v.simDeath.empty() ? "" : (", dies: " + v.simDeath).c_str());
+        if (v.compared == 0) { std::printf("the recording has no player states to compare (record it with the mod)\n"); return v.simFinishes ? 0 : 1; }
+        std::printf("%d input events compared: x error mean %.3f max %.3f units, y error mean %.3f max %.3f units, gamemode mismatches %d\n",
+                    v.compared, v.meanDx, v.maxDx, v.meanDy, v.maxDy, v.modeMismatches);
+        if (v.firstDeviationTick >= 0) std::printf("first deviation above 2 units at tick %d (%.3f s)\n", v.firstDeviationTick, v.firstDeviationTick / 240.0);
+        return v.simFinishes ? 0 : 1;
     }
     if (cmd == "bench") {
         // Performance targets: analysis < ~20 s for a 3-minute song, < ~10 s per variant,

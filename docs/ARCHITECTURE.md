@@ -1,90 +1,82 @@
 # AutoLayout — Architecture
 
-AutoLayout is split into a portable core that has no dependency on Geometry Dash or Geode, and a
-thin Geode mod that drives it from inside the game. Everything that must be correct (physics, the
-bot, the generator's constraint checks) lives in the core, where it is compiled and unit-tested on
-every platform, including headless Linux CI.
+AutoLayout is a portable C++20 core with no dependency on Geometry Dash or Geode, plus a thin
+Geode mod that drives it inside the game. Everything that must be correct (physics, the bot, the
+generator's checks) lives in the core, where it is compiled and unit-tested on every push,
+including headless Linux CI. Training code is Python/PyTorch in `training/`.
 
 ```
-                ┌──────────────────────────── Geode mod (src/) ─────────────────────────────┐
-                │ EditorUI button → AutoLayoutPopup (7 tabs) · PauseLayer record button      │
-                │ Recorder hooks (GJBaseGameLayer::handleButton / update) · Ghost playback    │
-                │ EditorBridge: read level/song → core · write objects as one undo group      │
-                │ JobRunner: background std::thread, progress + cancel, results via           │
-                │            geode::queueInMainThread                                         │
-                └───────────────┬────────────────────────────────────────────────────────────┘
-                                │ plain C++ structs (no cocos types)
-┌───────────────────────────────▼──────────── core/ (libautolayout) ─────────────────────────┐
-│ audio/   decode (mp3/ogg/wav) → resample → own radix-2 FFT → STFT → features:             │
-│          spectral flux per band, HPSS (median filter), kick/snare/hat, tempo (autocorr +    │
-│          DP beat tracker, tempo-change segmentation), downbeats, YIN pitch on the harmonic  │
-│          part, RMS/loudness energy, novelty-based sections → MusicTimeline (typed events)   │
-│ record/  ClickRecording (v1 binary .alrec + JSON), practice stitching, GDR / frame import   │
-│ fusion/  click roles, pattern + motif detection, trajectory extraction, DesignPlan          │
-│ physics/ deterministic 240 Hz re-implementation of GD 2.2 player physics (8 gamemodes,      │
-│          speeds, mini, gravity, dual, orbs, pads, portals, slopes, hitboxes)               │
-│ bot/     isBeatable · firstFailure · autoSolve (state-snapshot DFS/beam search) ·          │
-│          timing-window analysis (fairness)                                                  │
-│ gen/     planner (sections → gamemode/speed/size/gravity plan) · click-track synthesis ·    │
-│          path-first builder per gamemode with a tagged pattern library · motif memory ·    │
-│          clean-block pass (edges/corners, theme) · triggers · verify → repair → regenerate │
-│ ml/      tiny inference engine (GRU + MLP, int8/fp32 weights), constrained sampler (masks) │
-│ level/   object database (IDs, hitboxes, kinds) · level string read/write · .gmd export    │
-│ report/  playability report (risky clicks, longest no-input gap, difficulty curve)         │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-          ▲                                   ▲
-          │ C API (libautolayout_c, ctypes)   │ alcli (CLI: analyze / generate / verify / bench / render)
-┌─────────┴───────────── training/ (Python, PyTorch) ────────────────────────────────────────┐
-│ dataset: .gmd → objects → bot auto-solve → click track + trajectory → time-slice tokens    │
-│          aligned with audio features (Python mirror of the C++ analysis, parity-tested)     │
-│ models:  per-style sequence model (GRU + attention head) predicting slice tokens            │
-│ selfplay: sample layouts with the C++ generator+model, score with the bot, keep the best    │
-│           (rejection-sampling fine-tune / expert iteration)                                 │
-│ export:  weights → .alm files shipped in resources/models, C++/PyTorch parity tests         │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────── Geode mod (src/) ───────────────────────────────────────────┐
+│ hooks/   EditorUI button + keybind → AutoLayoutPopup · recorder hooks (handleButton,         │
+│          ringJump, checkpoints, respawns, deaths, completion, editor playtests, pause menu) │
+│ ui/      AutoLayoutPopup (7 tabs) · Timeline (waveform/sections/clicks + level preview) ·    │
+│          Ghost (bot path + animated icon in the editor) · Widgets                            │
+│ session/ options (saved) + presets · song resolution · analysis cache · background jobs    │
+│          (std::thread, progress + cancel, polled by the popup) · models                     │
+│ bridge/  editor I/O: objects as one undo step on a new editor layer, backups, start         │
+│          settings (restored by undo), dataset export                                         │
+│ recorder/ LiveRecorder: practice stitching, .alrec + .json files                            │
+└───────────────┬──────────────────────────────────────────────────────────────────────────────┘
+                │ plain C++ structs (no cocos types cross into the core)
+┌───────────────▼────────────────── core/ (libautolayout_core) ────────────────────────────────┐
+│ audio/   decode (wav/mp3/ogg) → resample → own FFT → STFT → band flux, HPSS, kick/snare/hat, │
+│          tempo (ACF + DP beat tracker + metronomic grid fit), downbeats (Viterbi), pitch    │
+│          (harmonic summation + Viterbi), energy, sections (novelty + power) → typed events  │
+│          synth: deterministic test signals, the demo song, random songs for self-play       │
+│ rec/     recordings (.alrec binary v1 + JSON), GDR / frame-list import, practice stitcher, │
+│          demo recording                                                                      │
+│ physics/ deterministic 240 Hz GD 2.2 player physics (8 modes, speeds, mini, gravity, dual,  │
+│          orbs, pads, portals, slopes, hitboxes)                                              │
+│ bot/     run · isBeatable · firstFailure · autoSolve (beam search) · timing windows          │
+│ gen/     plan (parts, gamemodes, speeds, clicks) · fusion (recordings × music) · pattern    │
+│          library + style models · Builder (verified placement) · ground/flying/surface      │
+│          builders · decorate · generator (variants, report, feel score, re-roll)            │
+│ model/   GRU pattern model inference (.alm files), model sets per style                     │
+│ data/    training sequences: self-play (reward) and real levels (bot + labeller), JSONL     │
+│ level/   object database · level string / .gmd read & write                                 │
+│ report/  PNG renderer for previews and the gallery                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+   tools/alcli   analyze · generate · demo-song · demo-recording · rec-info · bench
+   tools/aldata  vocab · selfplay · extract · extract-dir
+┌───────────────────────────────── training/ (Python) ─────────────────────────────────────────┐
+│ autolayout/audio.py         numpy mirror of the C++ analysis (bit-exact parity test)        │
+│ autolayout/pattern_model.py the GRU model, .alm export/import, parity vectors              │
+│ train_patterns.py           training + per-style fine-tunes + report                         │
+│ selfplay_loop.py            self-play rounds with held-out evaluation                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Generation pipeline
 
-1. **Analyze** the song → `MusicTimeline`: beats/bars/downbeats with tempo segments, per-band
-   onsets (bass/mid/high, kick/snare/hat), sustained notes (holds), pitch contour of the melody,
-   energy curve, and labelled sections (intro, verse, build-up, drop, break, outro).
-2. **Clicks**: either synthesised from the timeline (auto mode) or taken from a recording.
-   Every click gets a musical role (kick, snare, melody note, syncopation, hold).
-3. **Plan**: the design brain splits the song into gameplay sections and chooses gamemode,
-   speed, size and gravity for each, with transitions on downbeats and breathing room
-   before/after; difficulty and density follow the energy curve and the user's per-section
-   overrides.
-4. **Build (path-first)**: for each section, the builder simulates the player through the click
-   track and places geometry *around that path*: floors/platforms where the player lands, hazards
-   that make each click necessary, corridors around flying paths, orbs/pads where the music calls
-   for them. Patterns are chosen by the style model (or by rule weights when no model is loaded)
-   from a tagged pattern library; motif memory repeats patterns on repeated music.
-5. **Verify**: the bot replays the intended inputs, then measures each click's timing window by
-   perturbation. Any section that dies or is tighter than the difficulty allows is repaired
-   (adjust obstacle) or regenerated with a new sub-seed. A section that still fails after the
-   retry budget is replaced by the simplest safe pattern and reported.
-6. **Decorate**: clean block pass (edge and corner pieces, consistent theme, grid alignment,
-   z-order), colours per section, beat-synced pulses, camera triggers, drop shake.
-7. **Apply**: the editor bridge backs up the level string, writes the objects on a fresh editor
-   layer as a single undo group, and can export a `.gmd`.
+1. **Analyse** the song (background thread, cached per file): beats, bars, downbeats, tempo
+   segments, onsets per band, kicks/snares/hi-hats, sustained notes, melody pitch, energy and
+   labelled sections (intro, verse, chorus, build-up, drop, break, outro).
+2. **Clicks**: from the music (salience of every musical event, density from difficulty, intensity,
+   intent and style; no dead stretches) or from a recording (fusion: roles, latency, figures,
+   motifs; the faithfulness slider decides how strictly they are kept).
+3. **Plan**: sections become gameplay parts with an intent (intro, groove, build, climax, breather,
+   outro), a gamemode (affinity per intent × user weights × how well the mode fits the clicks), speed,
+   size, gravity and dual, and a difficulty that follows the energy.
+4. **Build** part by part with an incremental physics world and an input track:
+   - ground modes (cube, robot): for every click a pattern is chosen (style model) and placed around
+     the simulated jump; it is kept only if the player survives, the timing window is at least the
+     difficulty's minimum, and skipping the click kills (necessity);
+   - flying modes (ship, ufo, wave, swing): the path is simulated from the clicks (plus band-keeping
+     toggles), then a tube is carved around the path **and every timing variant of it** (each input
+     shifted early/late by half the required window), so windows hold by construction; saws mark
+     the no-click path of clicks that would otherwise be skippable;
+   - ball and spider: a corridor sized for the click rhythm, hazards wherever no timing variant passes.
+   Every part is verified from its start (and a little past its end); failing parts are retried with
+   new random streams and finally rebuilt as a plain, safe stretch (its clicks are reported).
+5. **Transitions**: portals where the player will be, moved further if passing them would kill.
+6. **Decorate**: block themes, colours per section, pulses, camera, shake — never touching hitboxes.
+7. **Verify**: the bot plays the finished level with the designed inputs. If that ever fails, the
+   undecorated version is checked, then a bot search; an unbeatable result is reported with the
+   exact time, position and cause.
+8. **Report**: clicks (forced / left out), timing windows, risky spots, longest input gap,
+   difficulty curve vs music intensity, music alignment; variants ranked by a feel score.
 
-Determinism: every random decision draws from a PCG32 stream seeded from
-`hash(seed, section index, retry)`, so the same seed + inputs give the same layout, and
-re-rolling one section does not disturb the others.
-
-## Milestones
-
-| # | Milestone | Done when |
-|---|-----------|-----------|
-| 1 | Mod skeleton, menu, test objects | CI builds the .geode for Windows and macOS; editor button opens the popup; test pattern placed and undone |
-| 2 | Recorder | round-trip tests for .alrec/JSON/GDR; in-game hooks record presses with state |
-| 3 | Physics + bot | unit tests against reference numbers for every mode; benchmark ≥ thousands of rollouts/s |
-| 4 | Audio analysis | synthetic-audio tests within a few ms; < 20 s for a 3-minute song |
-| 5 | Fusion | click roles/patterns/motifs on demo recording; design plan output |
-| 6 | Rule-based generator | fuzz: zero unbeatable outputs over thousands of seeds |
-| 7 | Dataset extraction | .gmd → tokens with bot-solved clicks; augmentation; filters |
-| 8 | Training | measured time/hardware; reward curves |
-| 9 | Models in mod | C++/PyTorch parity; constrained sampling |
-| 10 | Full menu + polish | all options wired; preview timeline; ghost playback |
-| 11 | Tests + docs | integration test, fuzz, benchmark, gallery, guides |
+## Where ML sits (see DECISIONS D8-D10)
+The style model decides *which valid pattern* fits the moment; it never decides anything that must
+be correct. The shipped GRU models were trained by self-play rejection sampling with the bot as the
+judge and can be retrained with real levels.
