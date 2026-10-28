@@ -118,17 +118,30 @@ TEST(onsets_accuracy_within_few_ms) {
 }
 
 TEST(tempo_change_detected) {
-    auto score = clickTrackTempoChange(120, 150, 20, 45);
-    auto buf = render(score);
-    auto A = analyze(buf);
-    REQUIRE(A.tempo.size() >= 2);
-    CHECK_NEAR(A.tempo.front().bpm, 120, 1.5);
-    CHECK_NEAR(A.tempo.back().bpm, 150, 2.0);
-    CHECK_NEAR(A.tempo[1].start, 20, 6.0);
-    int matched = 0;
-    double med = medianAbsErrorMs(score.beats, A.beats, 0.05, &matched);
-    CHECK_MSG(matched >= int(score.beats.size() * 0.85), "matched %d of %zu", matched, score.beats.size());
-    CHECK_MSG(med < 6.0, "median error %.2f", med);
+    // 100 -> 140 is close to 3:2 and must not be folded into a single tempo.
+    for (auto [bpm1, bpm2] : {std::pair{120.0, 150.0}, std::pair{100.0, 140.0}}) {
+        auto score = clickTrackTempoChange(bpm1, bpm2, 20, 45);
+        auto buf = render(score);
+        auto A = analyze(buf);
+        REQUIRE(A.tempo.size() >= 2);
+        CHECK_MSG(std::fabs(A.tempo.front().bpm - bpm1) < 1.5, "%.0f->%.0f: first segment %.2f bpm", bpm1, bpm2, A.tempo.front().bpm);
+        CHECK_MSG(std::fabs(A.tempo.back().bpm - bpm2) < 2.0, "%.0f->%.0f: last segment %.2f bpm", bpm1, bpm2, A.tempo.back().bpm);
+        CHECK_NEAR(A.tempo[1].start, 20, 6.0);
+        int matched = 0;
+        double med = medianAbsErrorMs(score.beats, A.beats, 0.035, &matched);
+        CHECK_MSG(matched >= int(score.beats.size() * 0.9), "%.0f->%.0f: matched %d of %zu", bpm1, bpm2, matched, score.beats.size());
+        CHECK_MSG(med < 4.0, "median error %.2f", med);
+        // TempoChange events: strength is a 0..1 salience, the new tempo is in A.tempo[index]
+        int changes = 0;
+        for (auto& e : A.events) {
+            if (e.type != EventType::TempoChange) continue;
+            ++changes;
+            CHECK(e.strength >= 0 && e.strength <= 1);
+            REQUIRE(e.index > 0 && size_t(e.index) < A.tempo.size());
+            CHECK_NEAR(e.duration, 60.0 / A.tempo[size_t(e.index)].bpm, 1e-4);
+        }
+        CHECK(changes == int(A.tempo.size()) - 1);
+    }
 }
 
 TEST(drums_kick_snare_hat_classification) {
@@ -206,6 +219,21 @@ TEST(demo_song_sections_and_speed) {
         CHECK_MSG(ok, "truth %s at %.1f s labelled %s", truth.label.c_str(), mid, got.c_str());
     }
     CHECK_NEAR(A.mainBpm(), 128, 0.6);
+    // Beats on the true grid everywhere, including the drumless break (grid fit + robust BPM).
+    {
+        int matched = 0;
+        double med = medianAbsErrorMs(score.beats, A.beats, 0.035, &matched);
+        CHECK_MSG(matched >= int(score.beats.size() * 0.98), "demo beats matched %d of %zu", matched, score.beats.size());
+        CHECK_MSG(med < 3.0, "demo median beat error %.2f ms", med);
+        for (auto& truth : score.sections) {
+            if (truth.label != "break") continue;
+            std::vector<double> tb;
+            for (double b : score.beats) if (b >= truth.start && b < truth.end) tb.push_back(b);
+            int m = 0;
+            medianAbsErrorMs(tb, A.beats, 0.035, &m);
+            CHECK_MSG(m == int(tb.size()), "break beats matched %d of %zu", m, tb.size());
+        }
+    }
     // Performance target: 3-minute song in < 20 s. Scale the measured time to 180 s.
     CHECK_MSG(sec * 180.0 / A.duration < 20.0, "analysis would take %.1f s for 3 min", sec * 180.0 / A.duration);
     // Both drops should be found (energy peaks after build-ups)

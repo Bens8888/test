@@ -385,6 +385,8 @@ Choice choose(GroundCtx& c, const PatternContext& ctx, int k, int hold, int next
         if (d->a == ObSpike3 && !c.prof.tripleSpikes) continue;
         if (d->a <= ObMix2 && obstacleCount(d->a) > c.prof.maxSpikes) continue;
         if (c.run.g < 0 && (d->b == TrUp1 || d->b == TrUp2)) continue; // ceilings: no steps up
+        // ceilings: a "step down" moves the ceiling away from the floor; keep it within reach
+        if (c.run.g < 0 && (d->b == TrDown1 || d->b == TrDown2) && c.run.surf + (d->b == TrDown2 ? 60.f : 30.f) > 300.f) continue;
         if (c.run.floor && (d->b == TrDown1 || d->b == TrDown2)) continue;
         if (d->b == TrDown2 && c.run.surf < 60) continue;
         if (c.run.surf >= 120 && (d->b == TrUp1 || d->b == TrUp2)) continue; // keep terrain low
@@ -456,6 +458,13 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         const phys::GameState s0 = b.cursor();
         int firstClick = part.clicks.empty() ? k1 : Builder::tickOf(plan.clicks[size_t(part.clicks.front())].time);
         int settleLimit = std::max(s0.tick + 1, std::min(firstClick - c.maxShift - 4, k0 + 120));
+        {
+            // never stop before the transition portals took effect (gamemode and gravity of the part)
+            phys::GameState q = s0;
+            while (q.tick < k0 + 240 && (q.p[0].mode != part.mode || q.p[0].upsideDown != part.flipped))
+                if (!b.runTo(q, q.tick + 1)) break;
+            settleLimit = std::max(settleLimit, q.tick + 1);
+        }
         auto settle = [&](phys::GameState& s) {
             while (s.tick < settleLimit) {
                 if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while settling at tick %d x=%.0f (%s)", s.tick, s.p[0].x, phys::deathCauseName(s.p[0].deathCause)); return false; }

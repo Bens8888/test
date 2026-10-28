@@ -90,6 +90,13 @@ std::vector<Peak> pickPeaks(const std::vector<float>& env, int preMax, int postM
     std::vector<double> pre(n + 1, 0.0);
     for (size_t i = 0; i < n; ++i) pre[i + 1] = pre[i] + env[i];
     long last = -1000000;
+    // Parabolic interpolation of the peak position.
+    auto refinedPos = [&](size_t i) {
+        double y0 = env[i - 1], y1 = env[i], y2 = env[i + 1];
+        double den = y0 - 2 * y1 + y2;
+        double off = std::fabs(den) > 1e-12 ? 0.5 * (y0 - y2) / den : 0.0;
+        return double(i) + std::clamp(off, -0.5, 0.5);
+    };
     for (size_t i = 1; i + 1 < n; ++i) {
         float v = env[i];
         if (v < absMin) continue;
@@ -105,15 +112,10 @@ std::vector<Peak> pickPeaks(const std::vector<float>& env, int preMax, int postM
         double mean = (pre[bb] - pre[aa]) / double(bb - aa);
         if (v < mean + delta) continue;
         if (long(i) - last < minSpacing) {
-            if (!peaks.empty() && v > peaks.back().value) { peaks.back() = {i, v, double(i)}; last = long(i); }
+            if (!peaks.empty() && v > peaks.back().value) { peaks.back() = {i, v, refinedPos(i)}; last = long(i); }
             continue;
         }
-        // Parabolic interpolation of the peak position.
-        double y0 = env[i - 1], y1 = env[i], y2 = env[i + 1];
-        double den = y0 - 2 * y1 + y2;
-        double off = std::fabs(den) > 1e-12 ? 0.5 * (y0 - y2) / den : 0.0;
-        off = std::clamp(off, -0.5, 0.5);
-        peaks.push_back({i, v, double(i) + off});
+        peaks.push_back({i, v, refinedPos(i)});
         last = long(i);
     }
     return peaks;
@@ -122,9 +124,11 @@ std::vector<Peak> pickPeaks(const std::vector<float>& env, int preMax, int postM
 // Onset time refinement in the time domain: steepest rise of the log energy envelope of a
 // high-passed signal around t (window +-searchSec). Returns t unchanged if nothing clear.
 // Spectral flux with centred frames fires up to ~half a window early, so the search is
-// asymmetric: before = 10 ms, after = 30 ms.
-double refineOnset(const std::vector<float>& x, int sr, double t, double before = 0.010, double after = 0.030) {
+// asymmetric: before = 10 ms, after = 30 ms. If found is given it is set to whether an attack
+// was found (callers that search around a shifted time must then keep their own time).
+double refineOnset(const std::vector<float>& x, int sr, double t, double before = 0.010, double after = 0.030, bool* found = nullptr) {
     const int win = 64, step = 16;
+    if (found) *found = false;
     long c = long(t * sr);
     long a = c - long(before * sr) - win, b = c + long(after * sr) + win;
     if (a < 1 || b >= long(x.size())) return t;
@@ -147,6 +151,7 @@ double refineOnset(const std::vector<float>& x, int sr, double t, double before 
         if (d > best) { best = d; bi = i; }
     }
     if (best < 0.8) return t; // no clear attack (less than ~2.2x energy jump)
+    if (found) *found = true;
     // The window [pos-win, pos) first includes the attack when its end passes it; attack lies within the last step.
     double onsetSample = double(pos[bi]) - step * 0.5;
     return onsetSample / sr;
@@ -538,6 +543,7 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
     // Local tempo per window; windows without clear periodicity (beatless breaks) are marked
     // unreliable (NaN) and inherit the neighbouring tempo instead of creating segments.
     std::vector<double> localBpm;
+    std::vector<char> reliableW;
     for (auto& a : localAcf) {
         double lag;
         bestLag(a, lag);
@@ -548,6 +554,7 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         double peak = a[size_t(std::clamp(int(std::lround(lag)), lagMin, lagMax))];
         bool reliable = mean > 1e-9 && peak / mean > 1.6;
         localBpm.push_back(reliable ? 60.0 / (lag * hop) : std::numeric_limits<double>::quiet_NaN());
+        reliableW.push_back(reliable ? 1 : 0);
     }
     {
         // fill unreliable windows from the nearest reliable neighbour
@@ -564,7 +571,9 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         globalBpm = tmp[tmp.size() / 2];
         for (double& b : localBpm) {
             double best = b, bestErr = 1e9;
-            for (double m : {1.0, 2.0, 0.5, 1.5, 2.0 / 3.0}) {
+            // Only octave errors (x2, /2) are folded: 3:2 factors would turn real tempo changes
+            // (e.g. 100 -> 140 BPM) into the wrong tempo.
+            for (double m : {1.0, 2.0, 0.5}) {
                 double c = b * m;
                 double err = std::fabs(std::log2(c / globalBpm)) + (m == 1.0 ? 0.0 : 0.05);
                 if (err < bestErr) { bestErr = err; best = c; }
@@ -586,6 +595,9 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         int runDiff = 0;
         size_t runStart = 0;
         for (size_t i = 0; i < sm.size(); ++i) {
+            // Only windows with clear periodicity count: a lone half-reliable window inside a
+            // beatless break (whose tempo the unreliable neighbours inherit) must not open a segment.
+            if (!reliableW[i]) continue;
             bool differs = std::fabs(sm[i] - cur.bpm) / cur.bpm > 0.04;
             if (differs) { if (runDiff == 0) runStart = i; ++runDiff; }
             else runDiff = 0;
@@ -708,25 +720,37 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         }
     }
 
-    // Refine each tempo segment's BPM by linear regression of the tracked beat times.
+    // Refine each tempo segment's BPM by robust linear regression of the tracked beat times:
+    // fit, drop beats whose residual exceeds 3x the median residual (phase slips in beatless
+    // breaks, doubled beats), refit.
     for (auto& seg : A.tempo) {
         std::vector<double> bt;
         for (double b : A.beats) if (b >= seg.start + 0.5 && b < seg.end - 0.5) bt.push_back(b);
         if (bt.size() < 8) continue;
-        // Use inter-beat intervals near the expected period only (skip gaps / doubled beats).
         double expected = 60.0 / seg.bpm;
-        double sx = 0, sy = 0, sxx = 0, sxy = 0;
-        int n = 0;
-        double idx = 0;
-        for (size_t i = 0; i < bt.size(); ++i) {
-            if (i > 0) idx += std::round((bt[i] - bt[i - 1]) / expected);
-            sx += idx; sy += bt[i]; sxx += idx * idx; sxy += idx * bt[i]; ++n;
+        std::vector<double> idx(bt.size(), 0.0);
+        for (size_t i = 1; i < bt.size(); ++i) idx[i] = idx[i - 1] + std::round((bt[i] - bt[i - 1]) / expected);
+        std::vector<char> use(bt.size(), 1);
+        double slope = 0;
+        bool fitted = false;
+        for (int iter = 0; iter < 3; ++iter) {
+            double sx = 0, sy = 0, sxx = 0, sxy = 0;
+            int n = 0;
+            for (size_t i = 0; i < bt.size(); ++i)
+                if (use[i]) { sx += idx[i]; sy += bt[i]; sxx += idx[i] * idx[i]; sxy += idx[i] * bt[i]; ++n; }
+            double den = n * sxx - sx * sx;
+            if (n < 8 || den <= 1e-9) break;
+            slope = (n * sxy - sx * sy) / den;
+            double t0 = (sy - slope * sx) / n;
+            fitted = true;
+            std::vector<double> res(bt.size());
+            for (size_t i = 0; i < bt.size(); ++i) res[i] = std::fabs(bt[i] - (t0 + slope * idx[i]));
+            std::vector<double> tmp = res;
+            std::nth_element(tmp.begin(), tmp.begin() + long(tmp.size() / 2), tmp.end());
+            double thr = std::max(3.0 * tmp[tmp.size() / 2], 0.002);
+            for (size_t i = 0; i < bt.size(); ++i) use[i] = res[i] <= thr;
         }
-        double den = n * sxx - sx * sx;
-        if (den > 1e-9) {
-            double slope = (n * sxy - sx * sy) / den;
-            if (slope > 0 && std::fabs(slope - expected) / expected < 0.03) seg.bpm = 60.0 / slope;
-        }
+        if (fitted && slope > 0 && std::fabs(slope - expected) / expected < 0.03) seg.bpm = 60.0 / slope;
     }
 
     // ---------------------------------------------------------------- onsets, drums
@@ -856,7 +880,11 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
                 if (shift[i]) {
                     double period = i + 1 < nb ? A.beats[i + 1] - A.beats[i] : (i > 0 ? A.beats[i] - A.beats[i - 1] : 0.5);
                     t += 0.5 * period;
-                    if (opt.fineOnsets) t = refineOnset(x, sr, t - 0.008);
+                    if (opt.fineOnsets) {
+                        bool found = false;
+                        double r = refineOnset(x, sr, t - 0.008, 0.010, 0.030, &found);
+                        if (found) t = r; // no attack: keep the half-beat position, not the search centre
+                    }
                 }
                 if (!nbeats.empty()) {
                     double p = (i > 0 ? A.beats[i] - A.beats[i - 1] : 0.5);
@@ -904,7 +932,11 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
             int inl = 0;
             for (size_t i = 0; i < bt.size(); ++i) { double r = std::fabs(bt[i] - (t0 + slope * k[i])); res.push_back(r); if (r < 0.03) ++inl; }
             std::nth_element(res.begin(), res.begin() + long(res.size() / 2), res.end());
-            bool metronomic = res[res.size() / 2] < 0.012 && inl >= int(bt.size() * 0.8) && std::fabs(slope - P) / P < 0.02;
+            // A very tight fit (median residual < 3 ms) is accepted with fewer inliers: beatless
+            // breaks and fills let the tracker drift there, which is exactly what the grid repairs.
+            double medRes = res[res.size() / 2];
+            bool metronomic = std::fabs(slope - P) / P < 0.02 &&
+                              ((medRes < 0.012 && inl >= int(bt.size() * 0.8)) || (medRes < 0.003 && inl >= int(bt.size() * 0.6)));
             if (!metronomic) { for (double b : bt) out.push_back(b); continue; }
             seg.bpm = 60.0 / slope;
             // grid over the whole segment
@@ -915,8 +947,9 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
                 if (t < 0) continue;
                 double r = t;
                 if (opt.fineOnsets) {
-                    double cand = refineOnset(x, sr, t - 0.004, 0.008, 0.012);
-                    if (std::fabs(cand - t) < 0.012) r = cand;
+                    bool found = false;
+                    double cand = refineOnset(x, sr, t - 0.004, 0.008, 0.012, &found);
+                    if (found && std::fabs(cand - t) < 0.012) r = cand;
                 }
                 out.push_back(r);
             }
@@ -1094,7 +1127,9 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         // bar boundaries (fallback: 8-second chunks)
         std::vector<double> bars = A.downbeats;
         if (bars.size() < 4) { bars.clear(); for (double t = 0; t < A.duration; t += 8.0) bars.push_back(t); }
-        if (bars.front() > 0.5) bars.insert(bars.begin(), 0.0);
+        // A pickup "bar" from 0 s before the first downbeat does not count for the 4-bar phase.
+        const size_t pickup = bars.front() > 0.5 ? 1 : 0;
+        if (pickup) bars.insert(bars.begin(), 0.0);
         bars.push_back(A.duration);
         const size_t nbar = bars.size() - 1;
         const int D = 17;
@@ -1190,7 +1225,8 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
             float v = nov[b];
             if (v < nmax * 0.3f) continue;
             if (v < nov[b - 1] || (b + 1 < nbar && v < nov[b + 1])) continue;
-            float bonus = (b % 4 == 0) ? 1.15f : (b % 2 == 0 ? 1.05f : 1.0f);
+            size_t rb = b - pickup; // b >= 2 > pickup
+            float bonus = (rb % 4 == 0) ? 1.15f : (rb % 2 == 0 ? 1.05f : 1.0f);
             cand.push_back({v * bonus, b});
         }
         std::sort(cand.begin(), cand.end(), [](auto& a, auto& b) { return a.first > b.first; });
@@ -1201,12 +1237,16 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
             if (ok) chosen.push_back(b);
         }
         std::sort(chosen.begin(), chosen.end());
-        // snap to a multiple of 4 bars when one within 1 bar is nearly as novel
-        for (size_t& b : chosen) {
-            if (b % 4 == 0) continue;
+        // snap to a multiple of 4 bars when one within 2 bars is nearly as novel, keeping >= 4 bars
+        // to the neighbouring boundaries (and the song start / end)
+        for (size_t ci = 0; ci < chosen.size(); ++ci) {
+            size_t& b = chosen[ci];
+            if ((b - pickup) % 4 == 0) continue;
+            long prevB = ci > 0 ? long(chosen[ci - 1]) : 0, nextB = ci + 1 < chosen.size() ? long(chosen[ci + 1]) : long(nbar);
             for (long d : {-1L, 1L, -2L, 2L}) {
                 long nb2 = long(b) + d;
-                if (nb2 > 0 && nb2 < long(nbar) && nb2 % 4 == 0 && nov[size_t(nb2)] >= 0.75f * nov[b]) { b = size_t(nb2); break; }
+                if (nb2 - prevB < 4 || nextB - nb2 < 4) continue;
+                if ((nb2 - long(pickup)) % 4 == 0 && nov[size_t(nb2)] >= 0.75f * nov[b]) { b = size_t(nb2); break; }
             }
         }
         for (size_t b : chosen) if (b != bounds.back()) bounds.push_back(b);
@@ -1361,7 +1401,9 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
         MusicEvent e;
         e.time = A.tempo[i].start;
         e.type = EventType::TempoChange;
-        e.strength = float(A.tempo[i].bpm);
+        e.index = int(i); // tempo segment: A.tempo[index].bpm is the new tempo
+        e.strength = float(std::min(1.0, std::fabs(std::log2(A.tempo[i].bpm / A.tempo[i - 1].bpm)))); // 1 = factor 2
+        e.duration = float(60.0 / A.tempo[i].bpm); // new beat period (s)
         ev.push_back(e);
     }
     {

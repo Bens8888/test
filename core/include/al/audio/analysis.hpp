@@ -26,7 +26,7 @@ enum class EventType : uint8_t {
     SectionStart,
     BuildUp,   // start of a build-up (duration = length until the drop)
     Drop,      // the moment a drop hits
-    TempoChange,
+    TempoChange, // strength = size of the change (|log2(new/old bpm)|, 1 = factor 2), index = tempo segment, duration = new beat period
     Silence,   // start of a quiet gap (duration set)
 };
 const char* eventTypeName(EventType t);
@@ -40,8 +40,8 @@ struct MusicEvent {
     float strength = 0;   // 0..1 normalized salience
     Band band = Band::Mid;
     float pitch = 0;      // MIDI note number (Note/Sustain), 0 otherwise
-    float duration = 0;   // seconds (Note/Sustain/BuildUp/Silence)
-    int index = -1;       // beat index for Beat/Downbeat, section index for SectionStart
+    float duration = 0;   // seconds (Note/Sustain/BuildUp/Silence; new beat period for TempoChange)
+    int index = -1;       // beat index for Beat/Downbeat, section index for SectionStart, tempo segment for TempoChange
 };
 
 struct TempoSegment {
