@@ -6,6 +6,7 @@
 #include <al/gen/options.hpp>
 #include <al/util/rng.hpp>
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,8 @@ struct Click {
     float pitch = 0;        // MIDI pitch of the melody at the click (0 = none)
     bool hold = false;      // a deliberate hold (robot high jump, ship climb)
     bool recorded = false;  // came from a user recording
+    int motif = -1;         // repeating rhythm motif id (recordings), -1 = none
+    int motifPos = -1;      // position of the click inside its motif
     int part = -1;
 };
 
@@ -69,8 +72,13 @@ struct DesignPlan {
 float resolveDifficulty(const audio::MusicAnalysis& A, const GenOptions& opt);
 Style resolveStyle(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng);
 
+// Extra gamemode preference for a part (e.g. how well a mode fits recorded clicks), multiplied
+// into the music-based weights.
+using ModeFit = std::function<float(const Part& part, Mode mode)>;
+
 // Parts (structure, gamemodes, speeds) from the music sections.
-std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt, float baseDifficulty, Style style, Rng& rng, int* baseSpeedOut = nullptr);
+std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt, float baseDifficulty, Style style, Rng& rng,
+                            int* baseSpeedOut = nullptr, const ModeFit* fit = nullptr);
 
 // Automatic click track for one part from the music timeline.
 std::vector<Click> selectClicks(const audio::MusicAnalysis& A, const Part& part, const GenOptions& opt, Style style, Rng& rng);
@@ -80,6 +88,18 @@ DesignPlan planFromMusic(const audio::MusicAnalysis& A, const GenOptions& opt, R
 
 // Re-plan a single part (re-roll one section) keeping the others.
 void replanPart(DesignPlan& plan, int partIndex, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng);
+
+// Musical click candidates in [t0, t1): every analysed event with a salience, merged within 35 ms.
+struct Candidate {
+    double t;
+    float sal;
+    Role role;
+    float pitch;
+    double sustain; // > 0 if a sustained note starts here
+};
+std::vector<Candidate> gatherCandidates(const audio::MusicAnalysis& A, double t0, double t1, float holdBias);
+// Shortest gap between two clicks a gamemode can express fairly at a difficulty.
+double minGapFor(Mode mode, int speed, bool mini, const DifficultyProfile& prof);
 
 // Typical airtime (s) of a cube jump at a speed (used to decide when orbs are needed).
 double cubeAirtime(int speed, bool mini);

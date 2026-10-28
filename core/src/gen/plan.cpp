@@ -100,7 +100,7 @@ static int sectionOverrideDelta(const GenOptions& opt, int sectionType, int* for
     return delta;
 }
 
-std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt, float Dbase, Style style, Rng& rng, int* baseSpeedOut) {
+std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt, float Dbase, Style style, Rng& rng, int* baseSpeedOut, const ModeFit* fit) {
     std::vector<Part> parts;
     const double dur = A.duration;
     // ---- 1. sections -> raw parts (merge tiny sections, split long ones on bar lines)
@@ -186,6 +186,7 @@ std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt
             bool sameSection = r.section == prevSection;
             if (i > 0 && mm == prevMode) a *= sameSection ? (style == Style::Minimal ? 1.8f : 0.55f) : (style == Style::Minimal ? 1.2f : 0.3f);
             if (style == Style::Chaotic && i > 0 && mm != prevMode) a *= 1.3f;
+            if (fit && *fit) a *= (*fit)(p, mm);
             w[m] = std::max(0.0f, a);
         }
         int mode;
@@ -238,16 +239,6 @@ std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt
     return parts;
 }
 
-namespace {
-
-struct Candidate {
-    double t;
-    float sal;
-    Role role;
-    float pitch;
-    double sustain; // > 0 if a sustained note starts here
-};
-
 std::vector<Candidate> gatherCandidates(const audio::MusicAnalysis& A, double t0, double t1, float holdBias) {
     std::vector<Candidate> c;
     for (auto& e : A.events) {
@@ -295,6 +286,7 @@ std::vector<Candidate> gatherCandidates(const audio::MusicAnalysis& A, double t0
 }
 
 double minGapFor(Mode mode, int speed, bool mini, const DifficultyProfile& prof) {
+    // shortest musical gap between two clicks the gamemode can express fairly
     switch (mode) {
         case Mode::Cube: return prof.orbs ? std::max<double>(prof.minClickGap, 0.16) : cubeAirtime(speed, mini) + 0.02;
         case Mode::Robot: return prof.orbs ? std::max<double>(prof.minClickGap, 0.2) : 0.32;
@@ -307,8 +299,6 @@ double minGapFor(Mode mode, int speed, bool mini, const DifficultyProfile& prof)
         default: return 0.3;
     }
 }
-
-} // namespace
 
 std::vector<Click> selectClicks(const audio::MusicAnalysis& A, const Part& part, const GenOptions& opt, Style style, Rng& rng) {
     const auto prof = profileAt(part.difficulty);

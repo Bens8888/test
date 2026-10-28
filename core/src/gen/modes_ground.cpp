@@ -361,6 +361,8 @@ PatternContext makeContext(GroundCtx& c, const Click& ck, int nextClickTick) {
     ctx.pitchDelta = (ck.pitch > 0 && c.lastPitch > 0) ? ck.pitch - c.lastPitch : 0;
     ctx.hold = ck.hold;
     ctx.motifKey = motifKey(ctx.gapPrev, ctx.gapNext, ck.role, ctx.pitchDelta, ck.role == Role::Downbeat);
+    // a recorded repeating motif: the same position in the motif reuses the same pattern
+    if (ck.motif >= 0) ctx.motifKey = 0x80000000u | (uint32_t(ck.motif & 0x7fff) << 8) | uint32_t(ck.motifPos & 0xff);
     ctx.prevPattern = c.prev1;
     ctx.prevPattern2 = c.prev2;
     return ctx;
@@ -623,7 +625,7 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         r.forced = ev.forced;
         r.x = arc.takeoffX;
         b.addClickResult(r);
-        b.memory().uses.push_back({pid, part.index, motifKey(c.lastClickTime >= 0 ? ck.time - c.lastClickTime : 2.0, nextK > 0 ? Builder::timeOf(nextK) - ck.time : 2.0, ck.role, (ck.pitch > 0 && c.lastPitch > 0) ? ck.pitch - c.lastPitch : 0, ck.role == Role::Downbeat), ck.time});
+        b.memory().uses.push_back({pid, part.index, ctx.motifKey, ck.time});
         c.prev2 = c.prev1;
         c.prev1 = pid;
         c.lastClickTime = ck.time;

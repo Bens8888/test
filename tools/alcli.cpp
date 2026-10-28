@@ -2,7 +2,10 @@
 // benchmarks). Grows with each milestone.
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
+#include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
+#include <al/rec/demo.hpp>
+#include <al/rec/recording.hpp>
 #include <al/report/render.hpp>
 #include <al/util/codec.hpp>
 #include <al/util/json.hpp>
@@ -11,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <string>
 
 using namespace al;
@@ -20,8 +24,10 @@ static int usage() {
         "usage:\n"
         "  alcli analyze <audio> [--json out.json]   analyse a song and print the timeline summary\n"
         "  alcli demo-song <out.wav>                 render the bundled procedural demo song\n"
+        "  alcli demo-recording <out.alrec|.json>    write the demo click recording\n"
+        "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
-        "               [--variant-seed N] [--modes 0,4,...]\n"
+        "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
         "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
     return 2;
 }
@@ -75,6 +81,24 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    if (cmd == "demo-recording" && argc >= 3) {
+        auto r = rec::demoRecording(audio::demoSong());
+        std::string path = argv[2];
+        bool json = path.size() > 5 && path.substr(path.size() - 5) == ".json";
+        if (!writeFile(path, json ? r.toJson().dump(1) : r.serialize())) { std::fprintf(stderr, "cannot write %s\n", argv[2]); return 1; }
+        std::printf("wrote %s (%zu events)\n", argv[2], r.events.size());
+        return 0;
+    }
+    if (cmd == "rec-info" && argc >= 3) {
+        std::string bytes, err;
+        if (!readFile(argv[2], bytes)) { std::fprintf(stderr, "cannot read %s\n", argv[2]); return 1; }
+        auto r = rec::importAny(bytes, &err);
+        if (!r) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+        std::printf("%s: source %s, level '%s' (%d), %zu events, %zu presses, %.2f s, %s\n", argv[2], r->source.c_str(), r->levelName.c_str(), r->levelId,
+                    r->events.size(), r->pressTimes().size(), r->duration, r->completed ? "completed" : "incomplete");
+        if (argc >= 4) { writeFile(argv[3], r->toJson().dump(1)); std::printf("wrote %s\n", argv[3]); }
+        return 0;
+    }
     if (cmd == "demo-song" && argc >= 3) {
         auto buf = audio::render(audio::demoSong());
         if (!writeFile(argv[2], audio::encodeWav16(buf))) { std::fprintf(stderr, "cannot write %s\n", argv[2]); return 1; }
@@ -96,9 +120,12 @@ int main(int argc, char** argv) {
         opt.variants = 1;
         std::string out, reportPath, inputsPath, pngPath;
         bool exactSeed = false;
+        std::string recordingPath;
         for (int i = 3; i + 1 < argc; i += 2) {
             std::string k = argv[i], v = argv[i + 1];
             if (k == "--seed") opt.seed = std::stoull(v);
+            else if (k == "--recording") recordingPath = v;
+            else if (k == "--faith") opt.faithfulness = std::stof(v);
             else if (k == "--variant-seed") { opt.seed = std::stoull(v); exactSeed = true; } // seed of one variant itself
             else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));
             else if (k == "--variants") opt.variants = std::stoi(v);
@@ -122,8 +149,23 @@ int main(int argc, char** argv) {
         }
         auto t1 = std::chrono::steady_clock::now();
         std::vector<gen::GenResult> results;
-        if (exactSeed) results.push_back(gen::generateVariant(A, opt, opt.seed, nullptr));
-        else results = gen::generateVariants(A, opt, nullptr);
+        std::optional<gen::DesignPlan> recPlan;
+        if (!recordingPath.empty()) {
+            std::string bytes, err;
+            std::optional<rec::Recording> r;
+            if (recordingPath == "demo") r = rec::demoRecording(audio::demoSong());
+            else if (readFile(recordingPath, bytes)) r = rec::importAny(bytes, &err);
+            else err = "cannot read " + recordingPath;
+            if (!r) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+            auto F = gen::fuseClicks(*r, A);
+            std::printf("recording: %s\n", F.summary().c_str());
+            opt.input = gen::InputSource::Recording;
+            Rng prng(opt.seed);
+            recPlan = gen::planFromRecording(F, A, opt, prng);
+        }
+        const gen::DesignPlan* planPtr = recPlan ? &*recPlan : nullptr;
+        if (exactSeed) results.push_back(gen::generateVariant(A, opt, opt.seed, nullptr, nullptr, planPtr));
+        else results = gen::generateVariants(A, opt, nullptr, nullptr, 0, planPtr);
         double tGen = std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
         if (results.empty()) { std::fprintf(stderr, "generation failed\n"); return 1; }
         std::printf("analysis %.2f s, %d variant(s) in %.2f s\n", tAnalyze, int(results.size()), tGen);
