@@ -3,6 +3,7 @@
 // hits) and gaps long enough for a portal. How often the mode changes comes from the style and
 // the music's intensity (drops switch more often).
 #include <al/gen/path.hpp>
+#include <al/gen/profile.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -51,7 +52,8 @@ float styleSwitchRate(Style s) {
 
 } // namespace
 
-std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, float switchRate, Rng& rng) {
+std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, float switchRate, Rng& rng,
+                                      const std::vector<uint64_t>* salts) {
     std::vector<PathSegment> segs;
     const auto& C = plan.clicks;
     const int n = int(C.size());
@@ -90,6 +92,10 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
     const int baseSpeed = D < 2.5f ? 1 : 2;
     Mode prev = Mode::Count, prev2 = Mode::Count;
     for (auto [a, b] : ranges) {
+        // the segment's own choices come from its own stream (re-rolled with its salt)
+        const size_t si = segs.size();
+        const uint64_t salt = salts && si < salts->size() ? (*salts)[si] : 0;
+        Rng own = rng.fork(combineSeed(0x5E6E0000ull + si, salt));
         PathSegment sg;
         sg.first = a;
         sg.last = b;
@@ -112,6 +118,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         for (int m = 0; m < kModeCount; ++m) {
             float user = opt.modeWeights[size_t(m)] < 0 ? 1.0f : opt.modeWeights[size_t(m)];
             float x = rhythmFit(Mode(m), med, shortest, holdFrac) * user;
+            if (opt.profile) x *= opt.profile->modeFactor(m);
             if (Mode(m) == prev) x *= 0.12f;
             if (Mode(m) == prev2) x *= 0.6f;
             if (D < 2 && (Mode(m) == Mode::Wave || Mode(m) == Mode::Swing || Mode(m) == Mode::Spider)) x *= 0.3f;
@@ -119,7 +126,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
             total += w[m];
         }
         if (total <= 0) { for (int m = 0; m < kModeCount; ++m) w[m] = opt.modeWeights[size_t(m)] != 0 ? 1.0f : 0.0f; total = 1; }
-        double r = rng.uniform() * double(total);
+        double r = own.uniform() * double(total);
         int pick = 0;
         for (int m = 0; m < kModeCount; ++m) {
             if (w[m] <= 0) continue;
@@ -145,10 +152,10 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         sg.speed = std::clamp(sp, 1, cap);
         // size: mini for fast streams in flying modes
         const double miniChance = opt.sizeChanges == Tri::Off ? 0.0 : opt.sizeChanges == Tri::On ? 0.4 : (D >= 3 && med < 0.25 ? 0.3 : 0.08);
-        sg.mini = (sg.mode == Mode::Wave || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && rng.chance(miniChance);
+        sg.mini = (sg.mode == Mode::Wave || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && own.chance(miniChance);
         // gravity: some ground segments run upside down
         const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 3 ? 0.18 : 0.0);
-        sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && rng.chance(flipChance);
+        sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && own.chance(flipChance);
         sg.why = std::string(modeName(sg.mode)) + ": median gap " + std::to_string(int(std::lround(med * 1000))) + " ms" +
                  (holdFrac > 0.3f ? ", holds" : "") + (P ? std::string(", ") + intentName(P->intent) : "");
         prev2 = prev;

@@ -8,6 +8,7 @@
 #include <al/audio/synth.hpp>
 #include <al/data/dataset.hpp>
 #include <al/gen/generator.hpp>
+#include <al/gen/profile.hpp>
 #include <al/model/model.hpp>
 #include <al/util/codec.hpp>
 #include <al/util/json.hpp>
@@ -36,7 +37,8 @@ int usage() {
                  "  aldata vocab <out.json>\n"
                  "  aldata selfplay --out f.jsonl [--songs N] [--variants K] [--keep F] [--seed S] [--threads T] [--model m.alm]\n"
                  "  aldata extract <level.gmd> <song> --out f.jsonl [--style N] [--difficulty D]\n"
-                 "  aldata extract-dir <dir> --out f.jsonl\n");
+                 "  aldata extract-dir <dir> --out f.jsonl\n"
+                 "  aldata profile <dir|level.gmd> --out profile.json   style profile for generator v2 (no song needed)\n");
     return 2;
 }
 
@@ -122,6 +124,7 @@ int cmdSelfplay(const std::map<std::string, std::string>& f) {
             auto score = audio::randomSong(combineSeed(seed * 7919, uint64_t(i)));
             auto A = audio::analyze(audio::render(score));
             gen::GenOptions opt;
+            opt.engine = 1; // training data for the v1 pattern model
             opt.difficulty = gen::Difficulty(rng.below(10));
             opt.style = gen::Style(1 + rng.below(uint32_t(gen::Style::Count) - 1));
             opt.density = rng.chance(0.5) ? -1.0f : float(rng.uniform(0.2, 0.9));
@@ -229,6 +232,37 @@ int cmdExtractDir(const std::string& dir, const std::string& out) {
     return 0;
 }
 
+// Style profile (generator v2) of every .gmd under `path` (or of one level).
+int cmdProfile(const std::string& path, const std::string& out) {
+    gen::StyleProfile total;
+    int ok = 0, n = 0;
+    std::vector<fs::path> files;
+    if (fs::is_directory(path)) {
+        for (auto& e : fs::recursive_directory_iterator(path)) if (e.is_regular_file() && e.path().extension() == ".gmd") files.push_back(e.path());
+        std::sort(files.begin(), files.end());
+    } else {
+        files.push_back(path);
+    }
+    for (auto& f : files) {
+        ++n;
+        std::string text, err;
+        if (!readFile(f.string(), text)) { std::printf("  %s: cannot read\n", f.filename().string().c_str()); continue; }
+        auto lvl = level::Level::fromGmd(text, &err);
+        if (!lvl) { std::printf("  %s: not a level (%s)\n", f.filename().string().c_str(), err.c_str()); continue; }
+        gen::StyleProfile p;
+        std::string why;
+        auto t0 = std::chrono::steady_clock::now();
+        if (!gen::profileFromLevel(*lvl, p, why)) { std::printf("  %s: skipped, %s\n", f.filename().string().c_str(), why.c_str()); continue; }
+        total.add(p);
+        ++ok;
+        std::printf("  %s: %s (%.1f s)\n", f.filename().string().c_str(), p.summary().c_str(),
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    }
+    if (!writeFile(out, total.toJson().dump(1))) { std::fprintf(stderr, "cannot write %s\n", out.c_str()); return 1; }
+    std::printf("profile of %d of %d levels: %s -> %s\n", ok, n, total.summary().c_str(), out.c_str());
+    return ok > 0 ? 0 : 1;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -245,6 +279,11 @@ int main(int argc, char** argv) {
         auto f = flags(argc, argv, 3);
         if (!f.count("--out")) return usage();
         return cmdExtractDir(argv[2], f["--out"]);
+    }
+    if (cmd == "profile" && argc >= 3) {
+        auto f = flags(argc, argv, 3);
+        if (!f.count("--out")) return usage();
+        return cmdProfile(argv[2], f["--out"]);
     }
     return usage();
 }

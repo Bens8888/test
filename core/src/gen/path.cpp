@@ -1,6 +1,7 @@
 // Generator v2: the gameplay path (see path.hpp). Beam search over what each click does and
 // what happens between clicks, with the physics simulator as the judge.
 #include <al/gen/path.hpp>
+#include <al/gen/profile.hpp>
 
 #include <algorithm>
 #include <cstdio>
@@ -233,6 +234,7 @@ private:
     std::vector<int> m_segOf;
     level::LevelSettings m_settings;
     int m_nextGid = 1;
+    uint64_t m_noiseSeed = 0;
     float m_D = 4;
     int m_minRun = 8;
 
@@ -251,6 +253,9 @@ private:
     bool objectsNear(const Cand& c, float x, float y, float r) const;
     double scoreCand(const Cand& c, int k, int T, int Tn) const;
     NodePtr finish(const NodePtr& n, int k, Cand& c);
+    NodePtr search(NodePtr start, int fromClick, PathPlan& out);
+    void rescue(Cand base, int k, int T, int Tn, std::vector<Cand>& out);
+    void makeSegments(const std::vector<uint64_t>& salts);
     const Part* partAt(double t) const {
         for (const auto& p : m_plan.parts) if (t >= p.t0 && t < p.t1) return &p;
         return m_plan.parts.empty() ? nullptr : &m_plan.parts.back();
@@ -569,6 +574,34 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
     }
 }
 
+// When nothing else survives the stretch: portals right after the click back to a plain cube
+// (normal gravity, normal size), which then runs on the floor.
+void Planner::rescue(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
+    const int until = Tn - 1;
+    evaluate(base, until);
+    if (base.trace.empty()) return;
+    const int t0 = m_start.tick + 1;
+    for (int delay : {8, 16, 30}) {
+        const int P = T + delay;
+        if (P - t0 < 0 || P - t0 >= int(base.trace.size())) continue;
+        const TraceSample& q = base.trace[size_t(P - t0)];
+        Cand c = base;
+        float px = std::round(q.x / 15.0f) * 15.0f + 15.0f;
+        auto y = [&](float x) {
+            for (auto& r : base.trace) if (r.x >= x) return std::round(r.y);
+            return std::round(q.y);
+        };
+        if (q.mode != Mode::Cube) { addObj(c, make(oid::PortalCube, px, y(px)), Act::ModePortal, k); px += 30; }
+        if (q.g < 0) { addObj(c, make(oid::PortalGravNormal, px, y(px)), Act::ModePortal, k); px += 30; }
+        if (q.half < 14.0f) { addObj(c, make(oid::PortalSizeNormal, px, y(px)), Act::ModePortal, k); px += 30; }
+        if (c.objs.size() == base.objs.size()) continue;
+        if (!evaluate(c, until)) continue;
+        c.score -= 2.0;
+        out.push_back(std::move(c));
+        return;
+    }
+}
+
 double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const Click& ck = m_plan.clicks[size_t(k)];
     double s = c.used ? 1.0 : -3.0;
@@ -592,6 +625,16 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
         }
     };
     s += std::log(prior(c.act, c.sub));
+    // the style learned from real levels: more or less often than the built-in preferences
+    if (m_opt.profile && c.used) {
+        const int mode = int(c.info.mode);
+        std::string key = c.act == Act::Orb ? actionForObject(c.sub) : c.act == Act::Jump ? "jump" : c.act == Act::Hold ? "hold" : "tap";
+        s += 0.7 * std::log(m_opt.profile->actionFactor(mode, key));
+        for (auto& ob : c.objs) {
+            if (ob.act == Act::Pad) s += 0.5 * std::log(m_opt.profile->actionFactor(mode, actionForObject(ob.o.id)));
+            if (ob.act == Act::GravityPortal) s += 0.5 * std::log(m_opt.profile->actionFactor(mode, "gravity"));
+        }
+    }
     // variety
     const Node* n = m_node;
     if (n && n->used && n->act == c.act && n->sub == c.sub && c.act == Act::Orb) s -= 0.6;
@@ -663,53 +706,38 @@ void Planner::expand(const NodePtr& n, int k, std::vector<NodePtr>& out) {
     skip.used = false;
     skip.info.click = k;
     opts.push_back(skip);
+    const size_t before = out.size();
     for (auto& base : opts) {
         std::vector<Cand> full;
         bridges(base, k, T, Tn, full);
         for (auto& c : full) {
             if (!c.alive) continue;
-            c.score += scoreCand(c, k, T, Tn) + m_rng.uniform(0.0, 0.05);
+            // tie-break noise from the click's own stream (a re-rolled segment changes only its own)
+            const int seg = m_segOf[size_t(k)];
+            const uint64_t salt = size_t(seg) < m_prm.salts.size() ? m_prm.salts[size_t(seg)] : 0;
+            Rng noise(combineSeed(m_noiseSeed ^ salt, uint64_t(k) * 4096 + uint64_t(out.size())));
+            c.score += scoreCand(c, k, T, Tn) + noise.uniform(0.0, 0.05);
             out.push_back(finish(n, k, c));
+        }
+    }
+    if (out.size() == before) {
+        // nothing survives this stretch from this node: the rescue portals
+        for (auto& base : opts) {
+            std::vector<Cand> full;
+            rescue(base, k, T, Tn, full);
+            for (auto& c : full) {
+                c.score += scoreCand(c, k, T, Tn);
+                out.push_back(finish(n, k, c));
+            }
         }
     }
 }
 
-PathPlan Planner::run() {
-    PathPlan out;
+NodePtr Planner::search(NodePtr start, int fromClick, PathPlan& out) {
     const int n = int(m_plan.clicks.size());
-    m_D = m_plan.baseDifficulty;
-    m_minRun = std::clamp(int(std::lround(16 - 1.2 * m_D)), 5, 16);
-    Rng segRng = m_rng.fork(hashStr("segments"));
-    m_segs = planSegments(m_plan, m_A, m_opt, m_prm.switchRate, segRng);
-    m_segOf.assign(size_t(n), 0);
-    for (size_t s = 0; s < m_segs.size(); ++s)
-        for (int i = m_segs[s].first; i <= m_segs[s].last && i < n; ++i) m_segOf[size_t(i)] = int(s);
-    // start settings = the first segment
-    m_settings.startMode = m_segs.front().mode;
-    m_settings.startSpeed = m_segs.front().speed;
-    m_settings.startMini = m_segs.front().mini;
-    m_settings.startFlipped = false;
-    m_settings.fixGravityBug = true;
-    out.start = m_settings;
-    out.segments = m_segs;
-    // root: the run from the level start to the first click
-    phys::World empty;
-    empty.setSettings(m_settings);
-    empty.setEndX(1e9f);
-    auto root = std::make_shared<Node>();
-    root->s = phys::initialState(empty);
-    {
-        // lead-in: nothing to do but move (ground modes run on the floor)
-        LocalWorld lw;
-        lw.W = empty;
-        const int T0 = n > 0 ? tickOf(m_plan.clicks[0].time) - 1 : tickOf(m_plan.duration);
-        runLocal(lw.W, root->s, {}, T0, nullptr);
-        toGid(root->s, lw.W);
-        root->endX = root->s.p[0].x;
-    }
-    std::vector<NodePtr> beam{root};
+    std::vector<NodePtr> beam{std::move(start)};
     const int B = std::max(1, m_prm.beamWidth);
-    for (int k = 0; k < n; ++k) {
+    for (int k = fromClick; k < n; ++k) {
         checkCancel(m_progress);
         if (m_progress && k % 16 == 0) m_progress->report("path", float(k) / float(std::max(1, n)));
         std::vector<NodePtr> next;
@@ -740,8 +768,66 @@ PathPlan Planner::run() {
         }
         beam = std::move(kept);
     }
+    return beam.front();
+}
+
+void Planner::makeSegments(const std::vector<uint64_t>& salts) {
+    const int n = int(m_plan.clicks.size());
+    Rng segRng = m_rng.fork(hashStr("segments"));
+    m_segs = planSegments(m_plan, m_A, m_opt, m_prm.switchRate, segRng, &salts);
+    m_segOf.assign(size_t(n), 0);
+    for (size_t s = 0; s < m_segs.size(); ++s)
+        for (int i = m_segs[s].first; i <= m_segs[s].last && i < n; ++i) m_segOf[size_t(i)] = int(s);
+}
+
+PathPlan Planner::run() {
+    PathPlan out;
+    const int n = int(m_plan.clicks.size());
+    m_D = m_plan.baseDifficulty;
+    m_minRun = std::clamp(int(std::lround(16 - 1.2 * m_D)), 5, 16);
+    m_noiseSeed = m_rng.fork(hashStr("noise")).next();
+    const bool locked = m_prm.lockSegment > 0 && !m_prm.baseSalts.empty();
+    const std::vector<uint64_t> wanted = m_prm.salts;
+    if (locked) m_prm.salts = m_prm.baseSalts;
+    makeSegments(m_prm.salts);
+    // start settings = the first segment
+    m_settings.startMode = m_segs.front().mode;
+    m_settings.startSpeed = m_segs.front().speed;
+    m_settings.startMini = m_segs.front().mini;
+    m_settings.startFlipped = false;
+    m_settings.fixGravityBug = true;
+    out.start = m_settings;
+    // root: the run from the level start to the first click
+    phys::World empty;
+    empty.setSettings(m_settings);
+    empty.setEndX(1e9f);
+    auto root = std::make_shared<Node>();
+    root->s = phys::initialState(empty);
+    {
+        // lead-in: nothing to do but move (ground modes run on the floor)
+        LocalWorld lw;
+        lw.W = empty;
+        const int T0 = n > 0 ? tickOf(m_plan.clicks[0].time) - 1 : tickOf(m_plan.duration);
+        runLocal(lw.W, root->s, {}, T0, nullptr);
+        toGid(root->s, lw.W);
+        root->endX = root->s.p[0].x;
+    }
+    NodePtr best;
+    if (locked && size_t(m_prm.lockSegment) < m_segs.size()) {
+        // re-roll: the path up to the re-rolled segment is the one the old salts give, exactly
+        const int firstClick = m_segs[size_t(m_prm.lockSegment)].first;
+        PathPlan scratch;
+        NodePtr old = search(root, 0, scratch);
+        NodePtr from = root;
+        for (NodePtr k = old; k; k = k->parent) if (k->click == firstClick - 1) { from = k; break; }
+        m_prm.salts = wanted;
+        makeSegments(m_prm.salts);
+        best = search(from, firstClick, out);
+    } else {
+        best = search(root, 0, out);
+    }
+    out.segments = m_segs;
     // ---- the best chain
-    const NodePtr best = beam.front();
     std::vector<const Node*> chain;
     for (const Node* k = best.get(); k; k = k->parent.get()) chain.push_back(k);
     std::reverse(chain.begin(), chain.end());

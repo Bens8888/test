@@ -64,6 +64,13 @@ float feelScore(const GenResult& r, const audio::MusicAnalysis& A);
 GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, uint64_t seed, const StyleModel* model,
                           const Progress* progress = nullptr, const DesignPlan* plan = nullptr);
 
+// Generator v2 (path first, structures around it); generateVariant calls it when opt.engine == 2.
+// `salts` (optional): one per gamemode segment, re-rolls a segment without changing the path before it.
+// `lockSegment` + `baseSalts` (re-roll): the path before that segment stays exactly as baseSalts made it.
+GenResult generateVariantV2(const audio::MusicAnalysis& A, const GenOptions& opt, uint64_t seed, const Progress* progress = nullptr,
+                            const DesignPlan* plan = nullptr, const std::vector<uint64_t>* salts = nullptr, int lockSegment = -1,
+                            const std::vector<uint64_t>* baseSalts = nullptr);
+
 // N variants (opt.variants) in parallel, best first.
 std::vector<GenResult> generateVariants(const audio::MusicAnalysis& A, const GenOptions& opt, const StyleModel* model,
                                         const Progress* progress = nullptr, int threads = 0, const DesignPlan* plan = nullptr);

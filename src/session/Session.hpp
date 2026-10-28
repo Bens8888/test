@@ -8,6 +8,7 @@
 #include <al/audio/analysis.hpp>
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
+#include <al/gen/profile.hpp>
 #include <al/model/model.hpp>
 #include <al/rec/recording.hpp>
 
@@ -22,7 +23,7 @@
 namespace al::mod {
 
 struct Job {
-    enum class Kind { Analyze, Generate, Reroll, Playtest };
+    enum class Kind { Analyze, Generate, Reroll, Playtest, Learn };
     Kind kind = Kind::Generate;
     std::atomic<bool> cancel{false};
     std::atomic<bool> done{false};
@@ -38,6 +39,11 @@ struct Job {
     bool beatable = false;
     bot::Failure failure;
     bot::InputTrack solution;
+    // learning (style profile from real levels)
+    std::shared_ptr<gen::StyleProfile> profile;
+    bool mergeProfile = false;
+    int learned = 0, skipped = 0;
+    std::string learnLog;            // guarded by mutex
     double seconds = 0;
     std::string stageText() const { std::lock_guard<std::mutex> lk(mutex); return stage; }
     std::string errorText() const { std::lock_guard<std::mutex> lk(mutex); return error; }
@@ -104,6 +110,17 @@ public:
     bool useModel() const { return m_useModel && !m_models.empty(); }
     void setUseModel(bool on) { m_useModel = on; }
 
+    // ---- style profile (generator v2, learned from real levels)
+    std::shared_ptr<const gen::StyleProfile> profile() const { return m_profile; }
+    std::string profileSummary() const;
+    bool useProfile() const { return m_useProfile && m_profile && !m_profile->empty(); }
+    void setUseProfile(bool on) { m_useProfile = on; }
+    std::filesystem::path profilePath() const;
+    void loadProfile();
+    void forgetProfile();
+    // Learn from these levels (.gmd files) on a worker thread; merge = add to the current profile.
+    std::shared_ptr<Job> startLearn(std::vector<std::filesystem::path> files, bool merge);
+
     // Called when a new editor session starts (no state leaks between levels).
     void resetForLevel();
 
@@ -122,6 +139,8 @@ private:
     std::vector<CacheEntry> m_cache;
     model::ModelSet m_models;
     bool m_useModel = true;
+    std::shared_ptr<const gen::StyleProfile> m_profile;
+    bool m_useProfile = true;
 
 public:
     // used by workers

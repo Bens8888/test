@@ -102,6 +102,9 @@ Json GenOptions::toJson() const {
     j["variants"] = variants;
     j["input"] = int(input);
     j["faithfulness"] = faithfulness;
+    j["engine"] = engine;
+    j["switchRate"] = switchRate;
+    j["look"] = look;
     return j;
 }
 
@@ -131,6 +134,9 @@ GenOptions GenOptions::fromJson(const Json& j) {
     o.variants = std::clamp(j.get("variants", 5), 1, 16);
     o.input = InputSource(std::clamp(j.get("input", 0), 0, 1));
     o.faithfulness = float(std::clamp(j.get("faithfulness", 0.8), 0.0, 1.0));
+    o.engine = std::clamp(j.get("engine", 2), 1, 2);
+    o.switchRate = float(std::clamp(j.get("switchRate", -1.0), -1.0, 1.0));
+    o.look = std::clamp(j.get("look", 0), 0, 1);
     return o;
 }
 

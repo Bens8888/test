@@ -368,6 +368,16 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     }, 0.55f, "GJ_button_02.png");
     ghost->setPosition({W / 2.f + 55.f, 14.f});
     rmenu->addChild(ghost);
+    auto watch = ui::button("Watch it build", [this] {
+        auto cur = S().current();
+        if (!cur || !m_editor) return;
+        if (ui::watchBuild(m_editor, cur->level, cur->inputs)) {
+            setStatus("Watching it build: close the menu to see it. Ghost hides it, Apply adds the layout.");
+            this->onClose(nullptr);
+        }
+    }, 0.45f, "GJ_button_02.png");
+    watch->setPosition({W / 2.f + 55.f, 40.f});
+    rmenu->addChild(watch);
     auto back = ui::button("Setup", [this] { showResults(false); }, 0.55f, "GJ_button_05.png");
     back->setPosition({W / 2.f + 130.f, 14.f});
     rmenu->addChild(back);
@@ -437,6 +447,7 @@ void AutoLayoutPopup::onTick(float) {
         if (m_progressLabel) m_progressLabel->setString(job->stageText().c_str());
         if (job->kind == Job::Kind::Reroll) setStatus(job->stageText());
         if (job->kind == Job::Kind::Playtest && m_playtestLabel) m_playtestLabel->setString(job->stageText().c_str());
+        if (job->kind == Job::Kind::Learn) setStatus(job->stageText());
     }
     if (job && job->done) {
         m_watching.reset();
@@ -459,6 +470,18 @@ void AutoLayoutPopup::onJobFinished(std::shared_ptr<Job> const& job) {
             auto lvl = level::Level::fromLevelString(EditorBridge::get().levelString(m_editor));
             if (lvl) ui::showGhost(m_editor, *lvl, job->solution);
         }
+        return;
+    }
+    if (job->kind == Job::Kind::Learn) {
+        S().collect(job);
+        const auto text = fmt::format("Learned from {} level(s), {} skipped ({:.0f} s). {}", job->learned, job->skipped, job->seconds, S().profileSummary());
+        Notification::create("AutoLayout: " + text, job->learned > 0 ? NotificationIcon::Success : NotificationIcon::Warning)->show();
+        setStatus(text);
+        {
+            std::lock_guard<std::mutex> lk(job->mutex);
+            log::info("AutoLayout learning:\n{}", job->learnLog);
+        }
+        defer([this] { rebuildTab(Tab::Training); });
         return;
     }
     if (!err.empty()) {
@@ -524,6 +547,7 @@ void AutoLayoutPopup::applySelected() {
     auto doApply = [this]() {
         auto cur = S().current();
         if (!cur) return;
+        ui::hideGhost(m_editor); // the preview overlay is replaced by the real objects
         auto res = EditorBridge::get().applyLevel(m_editor, cur->level, fmt::format("AutoLayout (seed {})", cur->seed));
         if (res.isErr()) {
             Notification::create(res.unwrapErr(), NotificationIcon::Error)->show();
@@ -562,7 +586,20 @@ CCNode* AutoLayoutPopup::buildStyleTab() {
         [](float v) { return O().density < 0 ? std::string("auto") : pct(v); },
         [](float v) { O().density = v; save(); }), "drag = set");
     form->row("Density: let the AI decide", ui::ToggleControl::create(O().density < 0, [](bool on) { O().density = on ? -1.f : 0.5f; save(); }));
-    form->row("Use the trained model", ui::ToggleControl::create(S().useModel(), [](bool on) { S().setUseModel(on); save(); }),
+    form->row("Builder", ui::CycleControl::create({"Path first (v2)", "Classic (v1)"}, O().engine == 1 ? 1 : 0, 150.f,
+                                                  [](int i) { O().engine = i == 1 ? 1 : 2; save(); }),
+              "v2: gameplay path, structures around it");
+    {
+        // gamemode switches (v2): AI decides / few / normal / many
+        const int idx = O().switchRate < 0 ? 0 : O().switchRate < 0.35f ? 1 : O().switchRate < 0.7f ? 2 : 3;
+        form->row("Gamemode switches", ui::CycleControl::create({"AI decides", "Few", "Normal", "Many"}, idx, 150.f, [](int i) {
+            static const float v[4] = {-1.f, 0.2f, 0.5f, 0.9f};
+            O().switchRate = v[i];
+            save();
+        }));
+    }
+    form->row("Look", ui::CycleControl::create({"Outline (layout)", "Default blocks"}, O().look, 150.f, [](int i) { O().look = i; save(); }));
+    form->row("Use the trained model (v1)", ui::ToggleControl::create(S().useModel(), [](bool on) { S().setUseModel(on); save(); }),
               S().models().empty() ? "no model found: rules" : "off = rule-based");
     return form;
 }
@@ -777,10 +814,49 @@ CCNode* AutoLayoutPopup::buildTrainingTab() {
     openDs->setPosition({140.f, 10.f});
     dsMenu->addChild(openDs);
     form->row("Dataset", dsMenu);
-    form->text("Retrain on a computer with Python 3 + PyTorch (see training/RETRAINING.md):\n"
-               "  aldata extract-dir <dataset folder> --out real.jsonl\n"
-               "  python3 training/train_patterns.py --data real.jsonl selfplay.jsonl --per-style\n"
-               "then copy the .alm files into the model folder and press Reload models.", 0.45f);
+    form->heading("Learn my style (builder v2, right here)");
+    form->text(S().profileSummary());
+    auto learnMenu = CCMenu::create();
+    learnMenu->setContentSize({280.f, 20.f});
+    learnMenu->ignoreAnchorPointForPosition(false);
+    auto learnAll = ui::button("Learn from all levels", [this] {
+        if (S().busy()) return;
+        std::vector<std::filesystem::path> files;
+        std::error_code ec;
+        for (auto& e : std::filesystem::recursive_directory_iterator(EditorBridge::datasetDir(), ec))
+            if (e.path().extension() == ".gmd") files.push_back(e.path());
+        if (files.empty()) { setStatus("The dataset folder is empty: add levels first."); return; }
+        m_watching = S().startLearn(files, false);
+        setStatus(fmt::format("Learning from {} level(s)...", files.size()));
+    }, 0.4f, "GJ_button_01.png");
+    learnAll->setPosition({60.f, 10.f});
+    learnMenu->addChild(learnAll);
+    auto learnThis = ui::button("Learn this level", [this] {
+        if (S().busy() || !m_editor) return;
+        // the open level, saved to the dataset first (so "learn from all" includes it later)
+        auto song = S().levelSong(m_editor->m_level);
+        auto res = EditorBridge::get().addToDataset(m_editor, song.isOk() ? song.unwrap().path : std::filesystem::path(), s_diff, s_style);
+        if (res.isErr()) { Notification::create(res.unwrapErr(), NotificationIcon::Error)->show(); return; }
+        m_watching = S().startLearn({res.unwrap()}, true);
+        setStatus("Learning from this level (the bot plays it)...");
+    }, 0.4f, "GJ_button_01.png");
+    learnThis->setPosition({170.f, 10.f});
+    learnMenu->addChild(learnThis);
+    form->row("Learn", learnMenu);
+    form->row("Use what was learned", ui::ToggleControl::create(S().useProfile(), [](bool on) { S().setUseProfile(on); save(); }),
+              "off = built-in style");
+    auto forgetMenu = CCMenu::create();
+    forgetMenu->setContentSize({280.f, 20.f});
+    forgetMenu->ignoreAnchorPointForPosition(false);
+    auto forget = ui::button("Forget what was learned", [this] {
+        S().forgetProfile();
+        defer([this] { rebuildTab(Tab::Training); });
+    }, 0.4f, "GJ_button_06.png");
+    forget->setPosition({80.f, 10.f});
+    forgetMenu->addChild(forget);
+    form->row("Reset", forgetMenu);
+    form->text("Only the layout is read: decoration, colours and triggers are ignored. The classic (v1) pattern model "
+               "is retrained on a computer instead (training/RETRAINING.md).", 0.45f);
     return form;
 }
 

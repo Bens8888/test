@@ -64,6 +64,9 @@ struct DesignPlan {
     float baseDifficulty = 4;
     Style style = Style::Modern;
     int baseSpeed = 1;
+    // generator v2: `parts` are the gamemode segments; the music's own parts (intent, intensity,
+    // difficulty per section) are kept here
+    std::vector<Part> music;
 
     std::vector<Moment> moments() const;
 };

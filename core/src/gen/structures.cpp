@@ -110,6 +110,9 @@ private:
     float m_margin = 4;               // extra distance kept from the reserved space
     int m_halfWin = 12;               // ticks each press may move either way
     float m_density = 0.5f;
+    uint64_t m_seed = 0;
+    // random choices tied to a place in the level (re-rolling one stretch leaves the others)
+    Rng at(int cx, uint64_t what) const { return Rng(combineSeed(m_seed ^ what, uint64_t(int64_t(cx)))); }
 
     float intensityAt(double t) const {
         for (auto& p : m_plan.parts) if (t >= p.t0 && t < p.t1) return p.intensity;
@@ -355,10 +358,11 @@ void Structurer::frame() {
         const bool trough = float(q.g) * q.y < float(q.g) * a.y && float(q.g) * q.y <= float(q.g) * b.y && !q.onGround;
         if (!apex && !trough) continue;
         const float dens = m_density * (0.6f + 0.8f * intensityAt(double(i + 1) / phys::kTPS));
-        if (!m_rng.chance(std::min(0.95, double(dens)))) continue;
+        Rng r = at(cx, 0xF7A3);
+        if (!r.chance(std::min(0.95, double(dens)))) continue;
         const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
         const int ceilRow = q.bounded ? int(std::lround(q.ceilY / kCell)) - 1 : kTopRow;
-        const int width = 1 + int(m_rng.below(m_density > 0.6f ? 3 : 2));
+        const int width = 1 + int(r.below(m_density > 0.6f ? 3 : 2));
         bool placed = false;
         // over an apex (the side away from gravity): a pillar from the top/bottom towards the path
         if (apex == (q.g > 0)) {
@@ -392,7 +396,7 @@ void Structurer::corridors() {
         if (!(q.mode == Mode::Wave || q.mode == Mode::Ship || q.mode == Mode::Swing) || !q.bounded) { ++i; continue; }
         int j = i;
         while (j < n && m_nominal[size_t(j)].mode == q.mode && m_nominal[size_t(j)].bounded) ++j;
-        if (q.mode != Mode::Wave && !m_rng.chance(0.6)) { i = j; continue; }
+        if (q.mode != Mode::Wave && !at(int(std::floor(q.x / kCell)), 0xC0DD).chance(0.6)) { i = j; continue; }
         const int c0 = int(std::floor(m_nominal[size_t(i)].x / kCell)) + 2;
         const int c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell)) - 2;
         const int floorRow = int(std::lround(q.floorY / kCell)), ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
@@ -452,6 +456,7 @@ StructureResult Structurer::run() {
     const DifficultyProfile prof = profileAt(m_plan.baseDifficulty);
     m_halfWin = std::clamp(int(std::lround(prof.minWindowMs * 0.5 / 1000.0 * phys::kTPS)), 4, 30);
     m_margin = std::clamp(prof.clearance * 0.3f + 2.0f, 2.0f, 16.0f);
+    m_seed = m_rng.next();
     m_density = m_prm.density >= 0 ? m_prm.density : (m_plan.style == Style::Minimal ? 0.3f : m_plan.style == Style::Chaotic ? 0.8f : 0.55f);
     // the path as planned: its objects and platform pieces (same objects, same order)
     m_base = pathLevel(m_path);
@@ -482,7 +487,8 @@ StructureResult Structurer::run() {
     };
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
     buildEnvelope();
-    necessity();
+    if (m_prm.necessity) necessity();
+    else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     corridors();
     frame();
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards

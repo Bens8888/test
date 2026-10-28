@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -14,6 +15,8 @@ namespace al::gen {
 
 using level::Mode;
 constexpr int kModeCount = int(Mode::Count);
+
+struct StyleProfile; // profile.hpp
 
 enum class Difficulty : uint8_t {
     Easy = 0, Normal, Hard, Harder, Insane, EasyDemon, MediumDemon, HardDemon, InsaneDemon, ExtremeDemon, Auto = 255
@@ -52,6 +55,10 @@ struct GenOptions {
     InputSource input = InputSource::Music;
     float faithfulness = 0.8f;                  // recording mode: 1 = strict to the clicks, 0 = creative
     int maxRetriesPerSection = 24;
+    int engine = 2;                             // 2 = path first, structures around it; 1 = classic (pattern per click)
+    float switchRate = -1;                      // v2: how often the gamemode changes, 0..1 (<0 = AI decides)
+    int look = 0;                               // v2: 0 = outline silhouettes, 1 = default blocks
+    std::shared_ptr<const StyleProfile> profile; // v2: learned from real levels (not saved with the options)
 
     GenOptions() { modeWeights.fill(-1.0f); }
 

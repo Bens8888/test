@@ -198,6 +198,7 @@ float feelScore(const GenResult& r, const audio::MusicAnalysis& A) {
 
 GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, uint64_t seed, const StyleModel* model,
                           const Progress* progress, const DesignPlan* fixedPlan) {
+    if (opt.engine == 2) return generateVariantV2(A, opt, seed, progress, fixedPlan);
     auto t0 = std::chrono::steady_clock::now();
     GenResult res;
     res.seed = seed;
@@ -316,6 +317,16 @@ std::vector<GenResult> generateVariants(const audio::MusicAnalysis& A, const Gen
 
 GenResult rerollPart(const GenResult& base, int partIndex, const audio::MusicAnalysis& A, const GenOptions& opt, uint64_t seed,
                      const StyleModel* model) {
+    if (!base.plan.music.empty()) {
+        // generator v2: a new salt for that segment; the path before it is rebuilt identically
+        std::vector<uint64_t> baseSalts;
+        for (auto& p : base.plan.parts) baseSalts.push_back(p.salt);
+        std::vector<uint64_t> salts = baseSalts;
+        if (partIndex >= 0 && size_t(partIndex) < salts.size()) salts[size_t(partIndex)] = combineSeed(seed, uint64_t(partIndex) + 1);
+        GenOptions o = opt;
+        o.engine = 2;
+        return generateVariantV2(A, o, base.seed, nullptr, &base.plan, &salts, partIndex, &baseSalts);
+    }
     DesignPlan plan = base.plan;
     Rng rng(combineSeed(seed, uint64_t(partIndex) * 0x9E37ull));
     replanPart(plan, partIndex, A, opt, rng);

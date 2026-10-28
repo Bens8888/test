@@ -36,6 +36,7 @@ struct StructureResult {
 struct StructureParams {
     TileLook look = TileLook::Outline;
     float density = -1;         // 0..1 framing density (<0 = from the style and intensity)
+    bool necessity = true;      // hazards that make every click necessary
 };
 
 StructureResult buildStructures(const PathPlan& path, const DesignPlan& plan, const GenOptions& opt, Rng& rng, const StructureParams& prm = {});

@@ -83,6 +83,12 @@ struct TraceSample {
 struct PathParams {
     int beamWidth = 12;
     float switchRate = -1;      // 0..1 how often the gamemode changes (<0 = from the style and music)
+    // per segment: a salt for its choices (re-rolling one segment changes only its salt; the path
+    // before it stays identical)
+    std::vector<uint64_t> salts;
+    // re-roll: plan with baseSalts first and keep that path exactly up to segment lockSegment
+    std::vector<uint64_t> baseSalts;
+    int lockSegment = -1;
 };
 
 struct PathPlan {
@@ -104,7 +110,8 @@ struct PathPlan {
 DesignPlan planFromMusicV2(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng);
 
 // Gamemode segments for the clicks of the plan.
-std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, float switchRate, Rng& rng);
+std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, float switchRate, Rng& rng,
+                                      const std::vector<uint64_t>* salts = nullptr);
 
 // The gameplay path for the plan's clicks.
 PathPlan planPath(const DesignPlan& plan, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng,

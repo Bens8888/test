@@ -62,6 +62,7 @@ TEST(fusion_strict_and_creative_levels_are_beatable) {
         opt.faithfulness = faith;
         opt.difficulty = Difficulty::Harder;
         opt.seed = 21;
+        opt.engine = 1; // the strict-faithfulness numbers below are v1's
         Rng rng(opt.seed);
         DesignPlan plan = planFromRecording(F, d.A, opt, rng);
         int recorded = 0, added = 0;

@@ -40,6 +40,7 @@ Session& Session::get() {
 Session::Session() {
     loadOptions();
     reloadModels();
+    loadProfile();
 }
 
 // ---------------------------------------------------------------- options
@@ -47,6 +48,7 @@ Session::Session() {
 void Session::saveOptions() {
     Mod::get()->setSavedValue<std::string>("options", m_opt.toJson().dump());
     Mod::get()->setSavedValue<bool>("use-model", m_useModel);
+    Mod::get()->setSavedValue<bool>("use-profile", m_useProfile);
 }
 
 void Session::loadOptions() {
@@ -55,6 +57,7 @@ void Session::loadOptions() {
         if (auto j = Json::parse(text)) m_opt = gen::GenOptions::fromJson(*j);
     }
     m_useModel = Mod::get()->getSavedValue<bool>("use-model", true);
+    m_useProfile = Mod::get()->getSavedValue<bool>("use-profile", true);
 }
 
 std::filesystem::path Session::presetDir() const {
@@ -182,6 +185,7 @@ std::shared_ptr<Job> Session::startGenerate(GJGameLevel* level) {
     SongChoice sc = songRes.unwrap();
     // inputs captured by value: the worker never touches GD objects or the session's mutable state
     gen::GenOptions opt = m_opt;
+    if (useProfile()) opt.profile = m_profile;
     if (opt.variants < 1) opt.variants = 1;
     std::optional<rec::Recording> recording;
     if (opt.input == gen::InputSource::Recording) {
@@ -259,6 +263,7 @@ std::shared_ptr<Job> Session::startReroll(int partIndex) {
     gen::GenResult base = *cur;
     auto A = m_analysis;
     gen::GenOptions opt = m_opt;
+    if (useProfile()) opt.profile = m_profile;
     const model::ModelSet* models = useModel() ? &m_models : nullptr;
     uint64_t seed = uint64_t(std::chrono::steady_clock::now().time_since_epoch().count());
     std::thread([job, base, A, opt, models, partIndex, seed]() {
@@ -328,6 +333,15 @@ std::shared_ptr<Job> Session::startPlaytest(std::string levelString) {
 
 void Session::collect(std::shared_ptr<Job> const& job) {
     if (!job || !job->done) return;
+    if (job->kind == Job::Kind::Learn && job->profile && !job->profile->empty()) {
+        auto p = std::make_shared<gen::StyleProfile>();
+        if (job->mergeProfile && m_profile) *p = *m_profile;
+        p->add(*job->profile);
+        auto r = file::writeString(profilePath(), p->toJson().dump(1));
+        if (r.isErr()) log::warn("AutoLayout: cannot save the style profile: {}", r.unwrapErr());
+        m_profile = p;
+        job->profile.reset();
+    }
     if (job->analysis) m_analysis = job->analysis;
     if (job->kind == Job::Kind::Generate && !job->results.empty()) {
         m_variants = std::move(job->results);
@@ -338,6 +352,70 @@ void Session::collect(std::shared_ptr<Job> const& job) {
         else { m_variants = std::move(job->results); m_selected = 0; }
     }
     job->results.clear();
+}
+
+// ---------------------------------------------------------------- style profile
+
+std::filesystem::path Session::profilePath() const { return Mod::get()->getSaveDir() / "style_profile.json"; }
+
+void Session::loadProfile() {
+    m_profile.reset();
+    auto text = file::readString(profilePath());
+    if (text.isErr()) return;
+    if (auto j = Json::parse(text.unwrap()))
+        if (auto p = gen::StyleProfile::fromJson(*j)) m_profile = std::make_shared<gen::StyleProfile>(*p);
+}
+
+void Session::forgetProfile() {
+    m_profile.reset();
+    std::error_code ec;
+    std::filesystem::remove(profilePath(), ec);
+}
+
+std::string Session::profileSummary() const {
+    if (!m_profile || m_profile->empty()) return "Nothing learned yet: the built-in style is used.";
+    return "Learned: " + m_profile->summary();
+}
+
+std::shared_ptr<Job> Session::startLearn(std::vector<std::filesystem::path> files, bool merge) {
+    if (busy()) return m_job;
+    auto job = std::make_shared<Job>();
+    job->kind = Job::Kind::Learn;
+    job->mergeProfile = merge;
+    m_job = job;
+    std::thread([job, files = std::move(files)]() {
+        auto t0 = std::chrono::steady_clock::now();
+        auto total = std::make_shared<gen::StyleProfile>();
+        for (size_t i = 0; i < files.size() && !job->cancel; ++i) {
+            const auto name = geode::utils::string::pathToString(files[i].filename());
+            setStage(*job, fmt::format("Learning from {} ({} of {}): the bot plays it", name, i + 1, files.size()), float(i) / float(std::max<size_t>(1, files.size())));
+            auto text = file::readString(files[i]);
+            std::string line;
+            if (text.isErr()) line = name + ": cannot read";
+            else if (auto lvl = level::Level::fromGmd(text.unwrap())) {
+                gen::StyleProfile p;
+                std::string why;
+                if (gen::profileFromLevel(*lvl, p, why)) {
+                    total->add(p);
+                    ++job->learned;
+                    line = name + ": " + p.summary();
+                } else {
+                    ++job->skipped;
+                    line = name + ": skipped, " + why;
+                }
+            } else {
+                ++job->skipped;
+                line = name + ": not a level file";
+            }
+            std::lock_guard<std::mutex> lk(job->mutex);
+            job->learnLog += line + "\n";
+        }
+        job->profile = total;
+        job->seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        setStage(*job, fmt::format("Learned from {} level(s), {} skipped", job->learned, job->skipped), 1.f);
+        job->done = true;
+    }).detach();
+    return job;
 }
 
 // ---------------------------------------------------------------- models

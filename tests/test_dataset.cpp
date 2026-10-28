@@ -26,6 +26,7 @@ TEST(dataset_selfplay_sequence) {
     gen::GenOptions opt;
     opt.difficulty = gen::Difficulty::Harder;
     opt.seed = 4;
+    opt.engine = 1; // pattern decisions are a v1 concept
     auto r = gen::generateVariant(A, opt, 4, nullptr);
     auto seq = data::fromGenerated(r, opt);
     int decisions = 0;
@@ -65,6 +66,7 @@ TEST(dataset_labeller_recovers_generated_patterns) {
         gen::GenOptions opt;
         opt.difficulty = gen::Difficulty(2 + seed);
         opt.seed = uint64_t(seed);
+        opt.engine = 1;
         opt.modeWeights.fill(0.0f);
         opt.modeWeights[0] = 1.0f; // cube
         opt.modeWeights[5] = 1.0f; // robot

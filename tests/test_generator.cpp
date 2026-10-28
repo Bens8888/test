@@ -24,8 +24,9 @@ const audio::MusicAnalysis& demoAnalysis() {
     return A;
 }
 
-GenOptions optionsFor(uint64_t seed, Difficulty d, int onlyMode = -1, Style style = Style::Auto) {
+GenOptions optionsFor(uint64_t seed, Difficulty d, int onlyMode = -1, Style style = Style::Auto, int engine = 1) {
     GenOptions opt;
+    opt.engine = engine;
     opt.seed = seed;
     opt.difficulty = d;
     opt.style = style;
@@ -142,5 +143,75 @@ TEST(generator_repair_rebuilds_a_part_with_the_safe_fallback) {
     int droppedInPart = 0;
     for (auto& c : b.clickResults()) if (c.dropped && c.pattern == "fallback") ++droppedInPart;
     CHECK(droppedInPart == int(plan.parts[size_t(part)].clicks.size()));
+}
+
+// ---------------------------------------------------------------- generator v2
+
+TEST(generator_v2_fuzz_beatable_with_designed_clicks) {
+    const auto& A = demoAnalysis();
+    Rng rng(77);
+    const char* env = std::getenv("AL_FUZZ_N");
+    const int count = env ? std::max(1, std::atoi(env)) : 10;
+    int bad = 0, clicks = 0, used = 0;
+    double worst = 0;
+    for (int i = 0; i < count; ++i) {
+        auto d = Difficulty(rng.below(10));
+        auto st = Style(rng.below(uint32_t(Style::Count)));
+        auto opt = optionsFor(rng.next(), d, -1, st, 2);
+        auto t0 = std::chrono::steady_clock::now();
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        const double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        worst = std::max(worst, sec);
+        phys::World W(res.level);
+        const bool ok = bot::isBeatable(W, res.inputs) && res.report.beatable && res.report.intendedInputs;
+        if (!ok) {
+            ++bad;
+            std::printf("    FAILED: seed %llu difficulty %d style %d\n", (unsigned long long)opt.seed, int(d), int(st));
+        }
+        clicks += res.report.clicks;
+        used += res.report.clicks - res.report.dropped;
+    }
+    std::printf("    %d levels, %d failed, %d of %d clicks used, slowest %.2f s\n", count, bad, used, clicks, worst);
+    CHECK(bad == 0);
+    CHECK(used * 100 >= clicks * 95);
+    CHECK(worst < 10.0);
+}
+
+TEST(generator_v2_every_gamemode) {
+    const auto& A = demoAnalysis();
+    for (int m = 0; m < kModeCount; ++m) {
+        auto opt = optionsFor(uint64_t(31 + m), Difficulty::Insane, m, Style::Auto, 2);
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        double inMode = 0, total = 0;
+        for (auto& p : res.plan.parts) { total += p.t1 - p.t0; if (int(p.mode) == m) inMode += p.t1 - p.t0; }
+        std::printf("    %-6s %3d clicks, %2d left out, %3d forced, window min %5.1f ms, %.0f%% of the time in the mode\n", level::modeName(level::Mode(m)),
+                    res.report.clicks, res.report.dropped, res.report.forced, res.report.minWindowMs, 100.0 * inMode / std::max(1e-9, total));
+        CHECK_MSG(res.report.beatable && res.report.intendedInputs, "mode %d", m);
+        CHECK_MSG(inMode >= 0.95 * total, "mode %d: only %.0f%%", m, 100.0 * inMode / total);
+        CHECK_MSG(res.report.dropped * 20 <= res.report.clicks, "mode %d: %d of %d left out", m, res.report.dropped, res.report.clicks);
+    }
+}
+
+TEST(generator_v2_same_seed_same_layout_and_reroll) {
+    const auto& A = demoAnalysis();
+    auto opt = optionsFor(123, Difficulty::Harder, -1, Style::Auto, 2);
+    auto a = generateVariant(A, opt, 123, nullptr);
+    auto b = generateVariant(A, opt, 123, nullptr);
+    CHECK(a.level.toLevelString() == b.level.toLevelString());
+    REQUIRE(a.plan.parts.size() > 4);
+    // re-roll one segment: everything well before it stays the same
+    const int k = int(a.plan.parts.size()) / 2;
+    auto r = rerollPart(a, k, A, opt, 999, nullptr);
+    CHECK(r.report.beatable && r.report.intendedInputs);
+    const double t = a.plan.parts[size_t(k)].t0;
+    const double cutX = t * phys::unitsPerSecond(1) * 0.8; // safely before the segment at any speed
+    auto before = [&](const level::Level& L) {
+        std::vector<std::string> v;
+        for (auto& o : L.objects) if (o.x < cutX && o.id != level::id::TrigEnd) v.push_back(std::to_string(o.id) + "@" + std::to_string(int(o.x)) + "," + std::to_string(int(o.y)));
+        std::sort(v.begin(), v.end());
+        return v;
+    };
+    CHECK(before(a.level) == before(r.level));
+    CHECK(a.level.toLevelString() != r.level.toLevelString());
 }
 

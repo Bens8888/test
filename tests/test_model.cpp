@@ -84,6 +84,7 @@ TEST(model_drives_generation) {
     gen::GenOptions opt;
     opt.difficulty = gen::Difficulty::Hard;
     opt.seed = 3;
+    opt.engine = 1; // the pattern model drives the v1 generator
     auto t0 = std::chrono::steady_clock::now();
     auto r = gen::generateVariant(A, opt, 3, m.get());
     double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
