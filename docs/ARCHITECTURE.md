@@ -24,7 +24,7 @@ including headless Linux CI. Training code is Python/PyTorch in `training/`.
 │          (harmonic summation + Viterbi), energy, sections (novelty + power) → typed events  │
 │          synth: deterministic test signals, the demo song, random songs for self-play       │
 │ rec/     recordings (.alrec binary v1 + JSON), GDR / frame-list import, practice stitcher, │
-│          demo recording                                                                      │
+│          demo recording, tap-along tracks (takes, GD guidelines, song clock)                 │
 │ physics/ deterministic 240 Hz GD 2.2 player physics (8 modes, speeds, mini, gravity, dual,  │
 │          orbs, pads, portals, slopes, hitboxes)                                              │
 │ bot/     run · isBeatable · firstFailure · autoSolve (beam search) · timing windows          │

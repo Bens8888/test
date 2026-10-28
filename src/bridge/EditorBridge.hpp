@@ -15,6 +15,7 @@ namespace al::mod {
 struct StartSettings {
     int mode = 0, speed = 0; // speed: GD's Speed enum value
     bool mini = false, dual = false, flipped = false;
+    float songOffset = 0;
 };
 
 struct AppliedBatch {

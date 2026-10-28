@@ -31,6 +31,30 @@ decides, and your settings only steer it.
    layer** as **one undo step**, and the level is backed up first. **Undo** removes the last
    AutoLayout layout again and restores the start settings.
 
+## Tap along (the easiest way to give your own clicks)
+
+Works like GD's Guideline Creator:
+
+1. In **Generate**, press **Tap along…**. Set the **Start Offset** (seconds into the level) if you
+   only want to tap from somewhere in the middle.
+2. Press **Record**. The song plays. Tap along with a click, a touch, **Space** or **Up**. Hold
+   for a hold.
+3. Press **Stop**, or let the song end. Each tap shows up as a line in the editor (GD
+   guidelines: orange for a tap, yellow for the end of a hold).
+4. Record more takes to add parts or fix them. Takes are merged into one track, and re-tapping a
+   spot replaces the old tap there. **Undo take** removes the last take, and **Clear** removes
+   everything.
+5. Set **Clicks come from** to *My taps* and press **Generate**. The level ends shortly after your
+   last tap.
+
+The taps are timed from the song itself, with no gameplay in between, so they don't drift. If the
+level already has guidelines (for example from GD's own Guideline Creator), they become your
+first take. The track is saved per level in `<save folder>/taps`.
+
+Applying a layout sets the level's song offset to the one the layout was built for (the song's
+start). Any other offset would put every click off by that much. **Undo** restores the old
+offset.
+
 ## Click-recording mode (play along)
 
 1. Arm the recorder in either of two ways:
@@ -44,13 +68,18 @@ decides, and your settings only steer it.
    mode works too: deaths and respawns are stitched out, and only the successful path is kept.
 3. When the run ends (level complete, playtest stopped, or the level left), the recording is
    saved to `<save folder>/recordings` as `.alrec` plus `.json`.
-4. In **Generate**, set **Clicks come from** to *My recording* and press **Generate**. You can
+4. In **Generate**, set **Clicks come from** to *A recording / macro* and press **Generate**. You can
    also load an older recording, a GDR macro (`.gdr`, JSON or MessagePack) or a plain frame list
    with **Load…**.
-5. **Faithful to my clicks** controls how strictly your clicks are followed:
-   - **strict** keeps every click exactly where you made it;
-   - lower values snap clicks to the music, thin out clicks that are too close for the gamemode,
-     and fill long silent stretches with clicks from the music.
+5. **Faithful to my clicks** (taps and recordings) controls how strictly your clicks are
+   followed:
+   - **strict** (the default) keeps every click where you made it;
+   - lower values snap clicks to the music and fill long silent stretches with clicks from the
+     music. The classic builder also thins out clicks that are too close for its gamemode.
+
+The level ends about two seconds after your last click. A recording of part of the song makes a
+level of that part. If a playtest started from a start position or the middle of the level, the
+song's real position is measured, so the clicks still match the song.
 
 AutoLayout also measures your latency (how late you click on average) and removes it. It finds
 your taps, holds, doubles, streams and repeating motifs, and gives the same motif the same
@@ -60,7 +89,7 @@ pattern each time it comes back.
 
 | Tab | What it does |
 |---|---|
-| **Generate** | Song (the level's song or any file), click source, faithfulness, difficulty (Easy to Extreme Demon, or Auto), seed (same seed = same layout), number of variants, Generate / Cancel. Results view: variants, timeline and preview, **Re-roll section** (only that gamemode stretch and what follows changes) / **Re-roll all**, Apply, Undo, Ghost, Watch it build. |
+| **Generate** | Song (the level's song or any file), click source (the music, your taps with **Tap along…**, or a recording), faithfulness, difficulty (Easy to Extreme Demon, or Auto), seed (same seed = same layout), number of variants, Generate / Cancel. Results view: variants, timeline and preview, **Re-roll section** (only that gamemode stretch and what follows changes) / **Re-roll all**, Apply, Undo, Ghost, Watch it build. |
 | **Style** | Style preset (Auto, Flow, Tight, Chaotic, Minimal, Retro, Modern, Memory), density (how many structures frame the path), **Builder** (path first = v2, the default; classic = v1), **Gamemode switches** (AI decides / few / normal / many), **Look** (outline silhouettes like most layouts, or default blocks), trained model on/off (classic builder only). |
 | **Modes** | Weight per gamemode (*never* … 100%, *All auto*), speed changes (off / subtle / aggressive), start speed, portal frequency, gravity flips, mini/big, dual, hold vs tap. |
 | **Sections** | Per song section (intro, verse, chorus, build-up, drop, break, outro): difficulty −3…+3, and an optional forced gamemode. |
@@ -138,6 +167,7 @@ Everything below lives in the save folder (**Settings → Save folder**):
 
 - `backups/`: the level string before each Apply;
 - `recordings/`: your recordings;
+- `taps/`: your tap-along tracks (one per level);
 - `presets/`: saved option presets;
 - `dataset/levels/`: levels collected for training;
 - `style_profile.json`: what was learned from your levels (Forget deletes it);

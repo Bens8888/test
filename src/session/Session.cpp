@@ -1,6 +1,7 @@
 #include "Session.hpp"
 
 #include "../recorder/LiveRecorder.hpp"
+#include "../recorder/TapAlong.hpp"
 
 #include <Geode/binding/LevelTools.hpp>
 #include <Geode/binding/MusicDownloadManager.hpp>
@@ -188,7 +189,14 @@ std::shared_ptr<Job> Session::startGenerate(GJGameLevel* level) {
     if (useProfile()) opt.profile = m_profile;
     if (opt.variants < 1) opt.variants = 1;
     std::optional<rec::Recording> recording;
-    if (opt.input == gen::InputSource::Recording) {
+    if (opt.input == gen::InputSource::Taps) {
+        if (auto r = TapAlong::get().recordingFor(LevelEditorLayer::get())) recording = std::move(*r);
+        else {
+            fail(*job, "tap-along mode: no taps yet. Press Tap along..., then Record and tap to the song");
+            job->done = true;
+            return job;
+        }
+    } else if (opt.input == gen::InputSource::Recording) {
         if (auto& last = LiveRecorder::get().last()) recording = *last;
         else {
             fail(*job, "click-recording mode: record a run first (pause menu > Rec, or the hotkey), or load a recording");

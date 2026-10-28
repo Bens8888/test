@@ -28,7 +28,7 @@ const char* styleName(Style s);
 
 enum class SpeedChanges : uint8_t { Auto = 0, Off, Subtle, Aggressive };
 enum class Tri : uint8_t { Auto = 0, Off, On };
-enum class InputSource : uint8_t { Music = 0, Recording };
+enum class InputSource : uint8_t { Music = 0, Recording, Taps }; // Taps: a tap-along track (handled like a recording)
 
 // Per-music-section steering ("chorus hard, verse easy").
 struct SectionOverride {
@@ -53,7 +53,7 @@ struct GenOptions {
     uint64_t seed = 1;
     int variants = 5;
     InputSource input = InputSource::Music;
-    float faithfulness = 0.8f;                  // recording mode: 1 = strict to the clicks, 0 = creative
+    float faithfulness = 1.0f;                  // recording mode: 1 = strict to the clicks, 0 = creative
     int maxRetriesPerSection = 24;
     int engine = 2;                             // 2 = path first, structures around it; 1 = classic (pattern per click)
     float switchRate = -1;                      // v2: how often the gamemode changes, 0..1 (<0 = AI decides)

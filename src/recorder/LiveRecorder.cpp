@@ -3,6 +3,7 @@
 #include <al/level/objects.hpp>
 #include <al/util/rng.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -65,6 +66,7 @@ void LiveRecorder::beginSession(GJBaseGameLayer* layer, GJGameLevel* level, bool
     std::string levelString = level->m_levelString;
     float offset = layer->m_levelSettings ? layer->m_levelSettings->m_songOffset : 0.f;
     m_stitcher.begin(std::string(level->m_levelName), int32_t(level->m_levelID.value()), levelString.empty() ? 0 : hashStr(levelString), offset);
+    m_songMinusLevel.clear();
     // Native click-between-steps splits steps: off while recording so every input lands on a
     // whole physics step (deterministic replay in the simulator).
     layer->m_clickBetweenSteps = false;
@@ -83,6 +85,16 @@ void LiveRecorder::onButton(GJBaseGameLayer* layer, bool down, int button, bool 
     e.dual = layer->m_gameState.m_isDualMode;
     if (e.dual) e.p2 = snap(layer->m_player2);
     m_stitcher.onButton(e);
+    sampleSongOffset(layer);
+}
+
+void LiveRecorder::sampleSongOffset(GJBaseGameLayer* layer) {
+    if (!layer || layer->m_isPracticeMode) return; // practice mode plays the practice song
+    auto fm = FMODAudioEngine::sharedEngine();
+    if (!fm || !fm->isMusicPlaying(0)) return;
+    const double song = fm->getMusicTimeMS(0) / 1000.0;
+    if (song <= 0) return;
+    m_songMinusLevel.push_back(song - layer->m_gameState.m_levelTime);
 }
 
 void LiveRecorder::onOrb(GJBaseGameLayer* layer, int objectId) {
@@ -112,6 +124,18 @@ void LiveRecorder::endSession(GJBaseGameLayer* layer, bool completed) {
     if (!m_stitcher.active()) return;
     if (!completed && layer) m_stitcher.onComplete(tickOf(layer), layer->m_gameState.m_levelTime);
     rec::Recording r = m_stitcher.result();
+    if (m_songMinusLevel.size() >= 3) {
+        auto v = m_songMinusLevel;
+        std::nth_element(v.begin(), v.begin() + long(v.size() / 2), v.end());
+        const double measured = v[v.size() / 2];
+        // the level's song offset is exact when the song started at the level's start; a clearly
+        // different measurement means it started elsewhere (start position, playtest from the middle)
+        if (std::fabs(measured - r.songOffset) > 0.12) {
+            log::info("AutoLayout recorder: the song was at {:.2f} s when the level time was 0 (level offset {:.2f} s): using that", measured, r.songOffset);
+            r.songOffset = measured;
+        }
+    }
+    m_songMinusLevel.clear();
     // An editor playtest is a click track: whatever was played counts.
     r.completed = completed || m_editor;
     m_stitcher.stop();

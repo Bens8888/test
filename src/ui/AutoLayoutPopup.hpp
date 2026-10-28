@@ -65,6 +65,7 @@ protected:
     cocos2d::CCNode* m_setupView = nullptr;
     cocos2d::CCLabelBMFont* m_songLabel = nullptr;
     cocos2d::CCLabelBMFont* m_recordingLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_tapsLabel = nullptr;
     geode::TextInput* m_seedInput = nullptr;
     // generate: progress
     cocos2d::CCNode* m_progressNode = nullptr;

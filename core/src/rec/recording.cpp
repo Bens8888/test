@@ -1,4 +1,5 @@
 #include <al/rec/recording.hpp>
+#include <al/rec/taps.hpp>
 
 #include <al/util/codec.hpp>
 
@@ -451,6 +452,11 @@ std::optional<Recording> importAny(const std::string& bytes, std::string* error)
         auto j = Json::parse(bytes, error);
         if (!j) return std::nullopt;
         if (j->get("format", "") == std::string("autolayout-recording")) return Recording::fromJson(*j, error);
+        if (j->get("format", "") == std::string("autolayout-taps")) {
+            auto t = TapTrack::fromJson(*j);
+            if (!t || t->empty()) { setError(error, "the tap track has no taps"); return std::nullopt; }
+            return t->toRecording();
+        }
         return fromGdrJson(*j, error);
     }
     uint8_t c0 = uint8_t(bytes[first]);

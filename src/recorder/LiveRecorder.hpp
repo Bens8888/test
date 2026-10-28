@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace al::mod {
 
@@ -49,6 +50,10 @@ public:
 
 private:
     std::filesystem::path save(rec::Recording const& r);
+    // where the song really is at each input (song position - level time): playtests started
+    // from a start position or the middle of the level do not start the song at its offset
+    void sampleSongOffset(GJBaseGameLayer* layer);
+    std::vector<double> m_songMinusLevel;
     rec::Stitcher m_stitcher;
     bool m_armed = false;
     bool m_editor = false;

@@ -2,8 +2,10 @@
 
 #include "../bridge/EditorBridge.hpp"
 #include "../recorder/LiveRecorder.hpp"
+#include "../recorder/TapAlong.hpp"
 #include "../session/Session.hpp"
 #include "Ghost.hpp"
+#include "TapAlongPopup.hpp"
 #include "Timeline.hpp"
 #include "Widgets.hpp"
 
@@ -192,12 +194,40 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     songRow->addChild(songMenu);
     form->row("Song", songRow);
 
-    // input source
-    form->row("Clicks come from", ui::CycleControl::create({"The music (automatic)", "My recording"}, int(O().input), 170.f, [this](int i) {
-        O().input = gen::InputSource(i);
+    // input source (shown order: music, taps, recording file)
+    static const gen::InputSource kSources[] = {gen::InputSource::Music, gen::InputSource::Taps, gen::InputSource::Recording};
+    int sourceIndex = 0;
+    for (int i = 0; i < 3; ++i) if (kSources[i] == O().input) sourceIndex = i;
+    form->row("Clicks come from", ui::CycleControl::create({"The music (automatic)", "My taps (tap along)", "A recording / macro"}, sourceIndex, 170.f, [this](int i) {
+        O().input = kSources[std::clamp(i, 0, 2)];
         save();
         refreshRecordingLabel();
     }));
+    auto tapRow = CCNode::create();
+    tapRow->setContentSize({W - 160.f, 20.f});
+    m_tapsLabel = ui::label("", 0.28f, "bigFont.fnt");
+    m_tapsLabel->setAnchorPoint({0.f, 0.5f});
+    m_tapsLabel->setPosition({0.f, 10.f});
+    tapRow->addChild(m_tapsLabel);
+    auto tapMenu = CCMenu::create();
+    tapMenu->setContentSize({80.f, 20.f});
+    tapMenu->ignoreAnchorPointForPosition(false);
+    tapMenu->setAnchorPoint({1.f, 0.5f});
+    tapMenu->setPosition({W - 160.f, 10.f});
+    auto tapBtn = ui::button("Tap along...", [this] {
+        if (auto p = TapAlongPopup::create(m_editor, [] {
+                if (auto ui = AutoLayoutPopup::current()) {
+                    O().input = gen::InputSource::Taps;
+                    save();
+                    ui->defer([ui] { ui->rebuildTab(Tab::Generate); });
+                }
+            }))
+            p->show();
+    }, 0.45f, "GJ_button_01.png");
+    tapBtn->setPosition({40.f, 10.f});
+    tapMenu->addChild(tapBtn);
+    tapRow->addChild(tapMenu);
+    form->row("Taps", tapRow);
     auto recRow = CCNode::create();
     recRow->setContentSize({W - 160.f, 20.f});
     m_recordingLabel = ui::label("", 0.28f, "bigFont.fnt");
@@ -400,6 +430,14 @@ void AutoLayoutPopup::refreshSongLabel() {
 }
 
 void AutoLayoutPopup::refreshRecordingLabel() {
+    if (m_tapsLabel) {
+        auto& tr = TapAlong::get().track(m_editor);
+        std::string t = tr.empty() ? std::string("None yet: Tap along... plays the song, tap to the beat")
+                                   : fmt::format("{} taps, {} take(s), shown as guidelines", tr.taps().size(), tr.takes());
+        m_tapsLabel->setString(t.c_str());
+        m_tapsLabel->setScale(std::min(0.3f, (m_contentSize.width - 260.f) / std::max(1.f, m_tapsLabel->getContentWidth())));
+        m_tapsLabel->setOpacity(O().input == gen::InputSource::Taps ? 255 : 130);
+    }
     if (!m_recordingLabel) return;
     auto& last = LiveRecorder::get().last();
     std::string text;

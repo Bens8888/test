@@ -79,11 +79,11 @@ TEST(fusion_strict_and_creative_levels_are_beatable) {
         if (faith >= 1.0f) {
             CHECK(added == 0);
             CHECK(recorded == int(F.clicks.size()));
-            // strict: the built clicks are exactly the recorded ones
+            // strict: the built clicks are exactly the recorded ones (latency removed)
             CHECK_MSG(keptRecorded * 100 >= recorded * 85, "kept %d of %d", keptRecorded, recorded);
             for (auto& c : plan.clicks) {
                 bool found = false;
-                for (auto& fc : F.clicks) if (std::fabs(fc.rawTime - c.time) < 1e-9) found = true;
+                for (auto& fc : F.clicks) if (std::fabs(fc.time - c.time) < 1e-9) found = true; // as tapped, minus the measured latency
                 CHECK(found);
                 if (!found) break;
             }

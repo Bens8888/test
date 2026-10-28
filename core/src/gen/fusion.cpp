@@ -167,7 +167,14 @@ ClickFusion fuseClicks(const rec::Recording& rec, const audio::MusicAnalysis& A)
 DesignPlan planFromRecording(const ClickFusion& F, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng) {
     const double f = std::clamp(double(opt.faithfulness), 0.0, 1.0);
     DesignPlan plan;
+    // the level ends shortly after the last recorded click (a recording of part of the song
+    // makes a level of that part, not a long empty run to the end of the song)
     plan.duration = A.duration;
+    if (!F.clicks.empty()) {
+        double last = 0;
+        for (const auto& c : F.clicks) last = std::max(last, c.release);
+        plan.duration = std::min(A.duration, last + 2.0);
+    }
     plan.baseDifficulty = resolveDifficulty(A, opt);
     plan.style = resolveStyle(A, opt, rng);
 
@@ -206,6 +213,8 @@ DesignPlan planFromRecording(const ClickFusion& F, const audio::MusicAnalysis& A
     };
     Rng partRng = rng.fork(hashStr("parts"));
     plan.parts = planParts(A, opt, plan.baseDifficulty, plan.style, partRng, &plan.baseSpeed, &fit);
+    while (plan.parts.size() > 1 && plan.parts.back().t0 >= plan.duration - 0.5) plan.parts.pop_back();
+    if (!plan.parts.empty()) plan.parts.back().t1 = plan.duration;
 
     // ---- clicks from the recording
     auto partAt = [&](double t) {
@@ -215,13 +224,15 @@ DesignPlan planFromRecording(const ClickFusion& F, const audio::MusicAnalysis& A
     const double snapTol = (1.0 - f) * 0.08;
     std::vector<Click> clicks;
     for (const auto& c : F.clicks) {
-        double t = f >= 0.95 ? c.rawTime : c.time;
+        // the player's measured timing bias is always removed (tapping to what you hear is late
+        // by the audio latency plus your reaction); snapping to the music only below strict
+        double t = c.time;
         if (c.musicTime >= 0 && std::fabs(t - c.musicTime) <= snapTol) t = c.musicTime;
         bool keepAlways = c.figure == Figure::Stream || c.motif >= 0 || c.hold;
         if (f < 0.5 && c.strength == 0 && !keepAlways && rng.chance((0.5 - f) * 1.6)) continue;
         Click k;
         k.time = t;
-        k.release = t + std::max(0.02, c.release - (f >= 0.95 ? c.rawTime : c.time));
+        k.release = t + std::max(0.02, c.release - c.time);
         k.hold = c.hold;
         k.role = c.strength > 0 ? c.role : Role::Recorded;
         k.strength = c.strength > 0 ? c.strength : 0.5f;
@@ -233,9 +244,10 @@ DesignPlan planFromRecording(const ClickFusion& F, const audio::MusicAnalysis& A
         clicks.push_back(k);
     }
     std::stable_sort(clicks.begin(), clicks.end(), [](const Click& a, const Click& b) { return a.time < b.time; });
-    // ---- spacing: below full faithfulness, clicks closer than the part's gamemode can express
-    // are thinned (the weaker one goes)
-    if (f < 0.95) {
+    // ---- spacing (classic builder): below full faithfulness, clicks closer than the part's
+    // gamemode can express are thinned (the weaker one goes). The path-first builder picks its
+    // gamemodes for the clicks themselves and keeps them all.
+    if (f < 0.95 && opt.engine != 2) {
         const double scale = 0.6 + 0.4 * (1.0 - f);
         std::vector<Click> kept;
         for (auto& k : clicks) {

@@ -1,5 +1,7 @@
 #include "EditorBridge.hpp"
 
+#include "../recorder/TapAlong.hpp"
+
 #include <Geode/binding/EditorUI.hpp>
 #include <Geode/binding/GameObject.hpp>
 #include <Geode/binding/LevelEditorLayer.hpp>
@@ -113,6 +115,8 @@ geode::Result<size_t> EditorBridge::applyLevel(LevelEditorLayer* lel, level::Lev
     prev.mini = st->m_startMini;
     prev.dual = st->m_startDual;
     prev.flipped = st->m_isFlipped;
+    prev.songOffset = st->m_songOffset;
+    TapAlong::get().track(lel); // read the guidelines with the offset they were made for
     auto res = apply(lel, lvl.objects, label);
     if (res.isErr()) return res;
     m_history.back().previousStart = prev;
@@ -121,7 +125,11 @@ geode::Result<size_t> EditorBridge::applyLevel(LevelEditorLayer* lel, level::Lev
     st->m_startMini = lvl.settings.startMini;
     st->m_startDual = lvl.settings.startDual;
     st->m_isFlipped = lvl.settings.startFlipped;
+    // the layout is timed to the song from the level's song offset (0 = the song's start): with
+    // any other offset every click would be off by that much
+    st->m_songOffset = float(lvl.settings.songOffset);
     lel->levelSettingsUpdated();
+    TapAlong::get().showGuidelines(lel); // the tap lines follow the offset
     return res;
 }
 
@@ -186,7 +194,9 @@ bool EditorBridge::undoLast(LevelEditorLayer* lel) {
         st->m_startMini = batch.previousStart->mini;
         st->m_startDual = batch.previousStart->dual;
         st->m_isFlipped = batch.previousStart->flipped;
+        st->m_songOffset = batch.previousStart->songOffset;
         lel->levelSettingsUpdated();
+        TapAlong::get().showGuidelines(lel);
     }
     log::info("AutoLayout: undo removed {} objects ({})", removed, batch.label);
     return removed > 0;

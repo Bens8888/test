@@ -79,7 +79,7 @@ public:
     std::shared_ptr<const audio::MusicAnalysis> cachedAnalysis(std::filesystem::path const& p) const;
 
     // ---- recording mode
-    bool useRecording() const { return m_opt.input == gen::InputSource::Recording; }
+    bool useRecording() const { return m_opt.input != gen::InputSource::Music; }
 
     // ---- jobs
     std::shared_ptr<Job> job() const { return m_job; }
