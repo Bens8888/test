@@ -39,6 +39,10 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     ctx.intent = part.intent;
     ctx.style = plan.style;
     ctx.speed = part.speed;
+    ctx.density = b.options().density;
+    ctx.history = &b.history();
+    float famFeatures[kContextFeatures];
+    contextFeatures(ctx, famFeatures);
     std::vector<float> w;
     RuleStyleModel rules;
     (b.styleModel() ? b.styleModel() : &rules)->score(ctx, cands, w);
@@ -46,6 +50,8 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     const PatternDef* fam = pick >= 0 ? cands[size_t(pick)] : nullptr;
     const int family = fam ? fam->a : SuSpikes;
     const bool dense = fam ? fam->b == 1 : false;
+    b.addDecision(famFeatures, patternToken(fam));
+    bool firstDecision = true;
 
     // corridor height: the switch must finish before the next click
     double minGap = 10;
@@ -137,6 +143,7 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
         int ev = i < clickEv.size() ? clickEv[i] : -1;
         if (ev < 0) { r.dropped = true; b.addClickResult(r); continue; }
         r.pressEvent = ev;
+        if (firstDecision) { r.decision = true; std::copy(famFeatures, famFeatures + kContextFeatures, r.features.begin()); firstDecision = false; }
         int tick = b.inputs().events[size_t(ev)].tick;
         phys::GameState saved = b.cursor();
         phys::GameState pre = saved;

@@ -35,5 +35,8 @@ SynthScore clickTrackTempoChange(double bpm1, double bpm2, double switchTime, do
 SynthScore drumLoop(double bpm, int bars, double offset = 0.25);
 // ~100 s electronic demo track: intro, verse, build-up, drop, break, build-up, drop, outro.
 SynthScore demoSong(uint64_t seed = 7);
+// A random song for self-play training: tempo, key, scale, progression, motifs, drum feel and
+// structure (intro, verse/build/drop cycles, breaks, outro) all drawn from the seed.
+SynthScore randomSong(uint64_t seed);
 
 } // namespace al::audio

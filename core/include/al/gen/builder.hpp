@@ -10,6 +10,7 @@
 #include <al/physics/sim.hpp>
 #include <al/util/rng.hpp>
 
+#include <array>
 #include <cmath>
 #include <functional>
 #include <string>
@@ -32,6 +33,9 @@ struct ClickResult {
     bool forced = true;      // skipping the click kills
     bool dropped = false;    // could not be built fairly; the click was removed
     float x = 0;
+    bool decision = false;   // a pattern decision was made here (features + pattern are a training step)
+    std::string label;       // training label (canonical pattern id for the geometry), empty = pattern
+    std::array<float, kContextFeatures> features{};
     double windowMs() const { return (windowEarly + windowLate + 1) * 1000.0 / phys::kTPS; }
 };
 
@@ -74,7 +78,7 @@ public:
     double endTime() const { return m_endTime; }
 
     // ---- primitives used by the gamemode builders
-    struct Mark { size_t levelObjects, worldObjects, inputEvents, clickResults; };
+    struct Mark { size_t levelObjects, worldObjects, inputEvents, clickResults, history; };
     Mark mark() const;
     void rollback(const Mark& m);
 
@@ -123,6 +127,9 @@ public:
 
     // Bookkeeping used by the gamemode builders
     void addClickResult(const ClickResult& r) { m_clicks.push_back(r); }
+    // Decision history (for sequence models): appended when a pattern is committed.
+    const std::vector<HistoryStep>& history() const { return m_history; }
+    void addDecision(const float* f, int token) { HistoryStep h; std::copy(f, f + kContextFeatures, h.f); h.token = token; m_history.push_back(h); }
     int nextGroup() { return m_nextGroup++; }
 
 private:
@@ -144,6 +151,7 @@ private:
     std::vector<phys::GameState> m_partStart;   // state at the start of each part
     std::vector<Mark> m_partMark;
     std::vector<ClickResult> m_clicks;
+    std::vector<HistoryStep> m_history;
     std::vector<PartResult> m_parts;
     PatternMemory m_memory;
     double m_endTime = 0;

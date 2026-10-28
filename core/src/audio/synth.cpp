@@ -224,4 +224,121 @@ SynthScore demoSong(uint64_t seed) {
     return s;
 }
 
+
+SynthScore randomSong(uint64_t seed) {
+    SynthScore s;
+    Rng rng(combineSeed(seed, hashStr("random-song")));
+    s.bpm = std::round(rng.uniform(92.0, 176.0));
+    const double p = 60.0 / s.bpm, bar = 4 * p;
+    const double t0 = rng.uniform(0.1, 0.6);
+    const int key = 45 + int(rng.below(12));
+    static const int minor[7] = {0, 2, 3, 5, 7, 8, 10};
+    static const int major[7] = {0, 2, 4, 5, 7, 9, 11};
+    const int* scale = rng.chance(0.6) ? minor : major;
+    static const int progs[4][4] = {{0, 5, 2, 6}, {0, 3, 4, 0}, {0, 6, 5, 4}, {0, 4, 5, 3}};
+    const int* prog = progs[rng.below(4)];
+    // two random 2-bar lead motifs on the 8th grid
+    struct M { int pos; int deg; int len; };
+    auto makeMotif = [&]() {
+        std::vector<M> m;
+        int pos = 0;
+        while (pos < 16) {
+            int len = 1 + int(rng.below(rng.chance(0.3) ? 4 : 2));
+            if (rng.chance(0.8)) m.push_back({pos, int(rng.below(9)), len});
+            pos += len;
+        }
+        return m;
+    };
+    const auto motifA = makeMotif(), motifB = makeMotif();
+    // drum feel
+    const int kickStyle = int(rng.below(3));   // 0 four on the floor, 1 on 1 and 3, 2 broken
+    const bool hats16 = rng.chance(0.35);
+    // structure: kind 0 intro, 1 verse, 2 build, 3 drop, 4 break, 5 outro
+    struct Part { const char* label; int bars; int kind; };
+    std::vector<Part> parts;
+    auto bars = [&](int a, int b) { return a + 4 * int(rng.below(uint32_t((b - a) / 4 + 1))); };
+    parts.push_back({"intro", bars(4, 8), 0});
+    int cycles = 1 + int(rng.below(3));
+    for (int c = 0; c < cycles; ++c) {
+        if (rng.chance(0.75)) parts.push_back({"verse", bars(4, 12), 1});
+        if (rng.chance(0.85)) parts.push_back({"buildup", bars(4, 8), 2});
+        parts.push_back({"drop", bars(8, 16), 3});
+        if (c + 1 < cycles && rng.chance(0.7)) parts.push_back({"break", bars(4, 8), 4});
+    }
+    parts.push_back({"outro", bars(4, 8), 5});
+    double t = t0;
+    int barIndex = 0;
+    for (auto& part : parts) {
+        double start = t;
+        for (int b = 0; b < part.bars; ++b, ++barIndex) {
+            double bt = t + b * bar;
+            int root = key + scale[prog[barIndex % 4] % 7];
+            for (int q = 0; q < 4; ++q) s.beats.push_back(bt + q * p);
+            auto lead = [&](const std::vector<M>& mot, int half, float vel) {
+                for (auto& m : mot) {
+                    if ((m.pos >= 8) != bool(half)) continue;
+                    double nt = bt + (m.pos - half * 8) * p / 2;
+                    s.notes.push_back({nt, m.len * p / 2 * 0.9, float(key + 24 + scale[m.deg % 7] + (m.deg >= 7 ? 12 : 0)), vel, 0});
+                }
+            };
+            auto hats = [&](float v) {
+                int n = hats16 ? 16 : 8;
+                for (int e = 0; e < n; ++e) s.drums.push_back({bt + e * bar / n, Drum::HiHat, e % 2 ? v * 0.6f : v});
+            };
+            switch (part.kind) {
+                case 0:
+                    s.notes.push_back({bt, bar * 0.95, float(root + 12), 0.8f, 2});
+                    hats(0.4f);
+                    if (b >= part.bars / 2) s.drums.push_back({bt, Drum::Kick, 0.6f});
+                    break;
+                case 1:
+                    for (int q = 0; q < 4; ++q) {
+                        bool kick = kickStyle == 0 ? true : (kickStyle == 1 ? q % 2 == 0 : (q == 0 || q == 2 || (q == 3 && b % 2)));
+                        if (kick) s.drums.push_back({bt + q * p, Drum::Kick, 0.85f});
+                        if (q % 2) s.drums.push_back({bt + q * p, Drum::Snare, 0.75f});
+                    }
+                    if (kickStyle == 2) s.drums.push_back({bt + 2.5 * p, Drum::Kick, 0.7f});
+                    hats(0.4f);
+                    s.notes.push_back({bt, p * 1.9, float(root - 12), 0.8f, 1});
+                    s.notes.push_back({bt + 2 * p, p * 1.9, float(root - 12), 0.8f, 1});
+                    s.notes.push_back({bt, bar * 0.95, float(root + 12), 0.6f, 2});
+                    lead(motifB, b % 2, 0.7f);
+                    break;
+                case 2: {
+                    int sub = b < part.bars / 2 ? 2 : 4;
+                    if (b == part.bars - 1) sub = 8;
+                    for (int k = 0; k < 4 * sub; ++k) s.drums.push_back({bt + k * p / sub, Drum::Snare, 0.4f + 0.5f * float(b) / part.bars});
+                    s.drums.push_back({bt, Drum::Kick, 0.7f});
+                    s.notes.push_back({bt, bar * 0.95, float(root + 12 + b), 0.7f, 2});
+                    break;
+                }
+                case 3: {
+                    for (int q = 0; q < 4; ++q) {
+                        bool kick = kickStyle == 2 ? (q != 1 || b % 2) : true;
+                        if (kick) s.drums.push_back({bt + q * p, Drum::Kick, 1.0f});
+                        if (q % 2) s.drums.push_back({bt + q * p, Drum::Clap, 0.9f});
+                        s.notes.push_back({bt + q * p + p / 2, p * 0.45, float(root - 12), 1.0f, 1});
+                    }
+                    hats(0.6f);
+                    lead((b / 2) % 2 == 0 ? motifA : motifB, b % 2, 1.0f);
+                    break;
+                }
+                case 4:
+                    s.notes.push_back({bt, bar * 0.98, float(root + 12), 0.8f, 2});
+                    s.notes.push_back({bt, bar * 0.9, float(key + 24 + scale[(barIndex * 3) % 7]), 0.6f, 0});
+                    break;
+                case 5:
+                    s.notes.push_back({bt, bar * 0.95, float(root + 12), 0.7f * (1.0f - float(b) / part.bars), 2});
+                    if (b < part.bars / 2) s.drums.push_back({bt, Drum::Kick, 0.6f});
+                    hats(0.25f);
+                    break;
+            }
+        }
+        t += part.bars * bar;
+        s.sections.push_back({start, t, part.label});
+    }
+    s.duration = t + 1.0;
+    return s;
+}
+
 } // namespace al::audio

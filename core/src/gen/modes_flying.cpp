@@ -16,7 +16,7 @@ using namespace pp;
 
 namespace {
 
-const PatternDef* pickFamily(Builder& b, const Part& part, const std::vector<int>& clicks) {
+const PatternDef* pickFamily(Builder& b, const Part& part, const std::vector<int>& clicks, float* features) {
     auto cands = patternsFor(part.mode, part.difficulty);
     if (cands.empty()) return nullptr;
     PatternContext ctx;
@@ -30,6 +30,9 @@ const PatternDef* pickFamily(Builder& b, const Part& part, const std::vector<int
     float strength = 0;
     for (int ci : clicks) strength += b.plan().clicks[size_t(ci)].strength;
     ctx.strength = clicks.empty() ? 0.5f : strength / float(clicks.size());
+    ctx.density = b.options().density;
+    ctx.history = &b.history();
+    contextFeatures(ctx, features);
     std::vector<float> w;
     RuleStyleModel rules;
     (b.styleModel() ? b.styleModel() : &rules)->score(ctx, cands, w);
@@ -55,7 +58,10 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     const phys::PlayerState p0 = b.cursor().p[0];
     const float F = p0.bounded ? p0.floorY : 0.0f;
     const float C = p0.bounded ? p0.ceilY : 300.0f;
-    const PatternDef* fam = pickFamily(b, part, part.clicks);
+    float famFeatures[kContextFeatures];
+    const PatternDef* fam = pickFamily(b, part, part.clicks, famFeatures);
+    b.addDecision(famFeatures, patternToken(fam));
+    bool firstDecision = true;
     const int family = fam ? fam->a : FlOpen;
     const bool dense = fam ? fam->b == 1 : false;
     const float h = p0.height();
@@ -354,6 +360,7 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
             continue;
         }
         r.pressEvent = ev;
+        if (firstDecision) { r.decision = true; std::copy(famFeatures, famFeatures + kContextFeatures, r.features.begin()); firstDecision = false; }
         int tick = b.inputs().events[size_t(ev)].tick;
         // windows need a cursor before the event: use a state ~40 ticks before it
         phys::GameState saved = b.cursor();

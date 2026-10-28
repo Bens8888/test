@@ -24,7 +24,7 @@ void addGround(std::vector<PatternDef>& L, Mode m, const char* prefix) {
         for (int tr = 0; tr < TrCount; ++tr) {
             if (ob == ObNone && (tr == TrFlat || tr == TrDown1 || tr == TrDown2)) continue; // nothing forces the click
             if (ob == ObSpike3 && (tr == TrUp2 || tr == TrGap4 || tr == TrGap3)) continue;       // not humanly fair
-            if ((ob == ObBlock1 || ob == ObSlab1 || ob == ObSaw) && tr >= TrGap2) continue;      // obstacle needs ground
+            if (ob != ObNone && tr >= TrGap2) continue;                                        // a pit is the obstacle (the builder places none on top)
             if (ob == ObMix2 && tr == TrUp2) continue;
             PatternDef d;
             d.id = std::string(prefix) + ":" + kObName[ob] + "+" + kTrName[tr];
@@ -159,6 +159,17 @@ const PatternDef* findPattern(const std::string& id) {
     auto it = index.find(id);
     return it == index.end() ? nullptr : &patternLibrary()[it->second];
 }
+
+int patternToken(const PatternDef* d) {
+    if (!d) return -1;
+    const auto& L = patternLibrary();
+    if (d < L.data() || d >= L.data() + L.size()) return patternToken(d->id);
+    return int(d - L.data());
+}
+
+int patternToken(const std::string& id) { return patternToken(findPattern(id)); }
+
+int vocabSize() { return int(patternLibrary().size()); }
 
 std::vector<const PatternDef*> patternsFor(Mode m, float difficulty) {
     std::vector<const PatternDef*> out;

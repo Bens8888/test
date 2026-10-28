@@ -68,6 +68,9 @@ struct DesignPlan {
     std::vector<Moment> moments() const;
 };
 
+// The design intent of a music section type.
+Intent intentFor(audio::SectionType t);
+
 // Resolve "Auto" style/difficulty against the music.
 float resolveDifficulty(const audio::MusicAnalysis& A, const GenOptions& opt);
 Style resolveStyle(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng);

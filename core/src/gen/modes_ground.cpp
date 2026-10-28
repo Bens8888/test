@@ -365,6 +365,8 @@ PatternContext makeContext(GroundCtx& c, const Click& ck, int nextClickTick) {
     if (ck.motif >= 0) ctx.motifKey = 0x80000000u | (uint32_t(ck.motif & 0x7fff) << 8) | uint32_t(ck.motifPos & 0xff);
     ctx.prevPattern = c.prev1;
     ctx.prevPattern2 = c.prev2;
+    ctx.density = c.b.options().density;
+    ctx.history = &c.b.history();
     return ctx;
 }
 
@@ -573,6 +575,21 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
             c.run = sv;
         }
         bool airborne = !s.p[0].onGround && !s.p[0].canJump;
+        if (airborne) {
+            // orb chains climb: only orbs within ~5 blocks above the run (no stairway to the sky),
+            // and none in the last second of the part (the next part starts from solid ground)
+            float feet = (s.p[0].y - c.run.surf) * float(c.run.g) - s.p[0].height() * 0.5f;
+            if (feet > (part.mode == Mode::Robot ? 260.0f : 160.0f) || k > k1 - int(0.8 * phys::kTPS)) {
+                debugLog("  ground: airborne click at tick %d skipped (%.0f above the run)", k, feet);
+                ClickResult r;
+                r.click = clickIndex;
+                r.dropped = true;
+                r.pattern = "dropped";
+                b.addClickResult(r);
+                ++dropped;
+                continue;
+            }
+        }
         ClickResult r;
         r.click = clickIndex;
         r.x = s.p[0].x;
@@ -624,6 +641,15 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         r.windowLate = ev.late;
         r.forced = ev.forced;
         r.x = arc.takeoffX;
+        r.decision = true;
+        contextFeatures(ctx, r.features.data());
+        // training label: on the level floor a pit is a row of spikes on the ground
+        r.label = pid;
+        if (saved.floor && !airborne && choice.def->a == ObNone && choice.def->b >= TrGap2) {
+            int w = choice.def->b == TrGap2 ? 2 : 3;
+            r.label = pid.substr(0, pid.find(':')) + ":spike" + std::to_string(w) + "+flat";
+        }
+        b.addDecision(r.features.data(), patternToken(r.label));
         b.addClickResult(r);
         b.memory().uses.push_back({pid, part.index, ctx.motifKey, ck.time});
         c.prev2 = c.prev1;

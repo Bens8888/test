@@ -45,6 +45,7 @@ static Json analysisToJson(const audio::MusicAnalysis& A) {
         Json o;
         o["type"] = audio::sectionTypeName(s.type);
         o["start"] = s.start; o["end"] = s.end; o["energy"] = s.energy; o["density"] = s.density; o["trend"] = s.trend;
+        o["power"] = s.power; o["firstBar"] = s.firstBar; o["barCount"] = s.barCount;
         secs.push(o);
     }
     j["sections"] = secs;
@@ -56,9 +57,37 @@ static Json analysisToJson(const audio::MusicAnalysis& A) {
         o["s"] = std::round(e.strength * 1000) / 1000;
         if (e.pitch > 0) o["pitch"] = e.pitch;
         if (e.duration > 0) o["dur"] = std::round(e.duration * 1000) / 1000;
+        // full-precision copies (used by the Python parity tests in training/)
+        o["time"] = e.time; o["strength"] = e.strength; o["band"] = int(e.band); o["index"] = e.index;
+        if (e.duration > 0) o["duration"] = e.duration;
         ev.push(o);
     }
     j["events"] = ev;
+    // Per-frame curves and beat grid (full precision) for parity checks against training/autolayout/audio.py.
+    auto arr = [](const auto& v) { Json a = Json::array(); for (auto x : v) a.push(x); return a; };
+    j["hop"] = A.hop;
+    j["hopCoarse"] = A.hopCoarse;
+    Json curves = Json::object();
+    curves["rmsDb"] = arr(A.rmsDb);
+    curves["onsetEnv"] = arr(A.onsetEnv);
+    Json bands = Json::array();
+    for (auto& b : A.bandOnset) bands.push(arr(b));
+    curves["bandOnset"] = bands;
+    curves["intensity"] = arr(A.intensity);
+    curves["percRatio"] = arr(A.percRatio);
+    curves["bassPercRatio"] = arr(A.bassPercRatio);
+    curves["pitchMidi"] = arr(A.pitchMidi);
+    curves["pitchConf"] = arr(A.pitchConf);
+    Json chroma = Json::array();
+    for (auto& c : A.chroma) chroma.push(arr(c));
+    curves["chroma"] = chroma;
+    curves["waveformMin"] = arr(A.waveformMin);
+    curves["waveformMax"] = arr(A.waveformMax);
+    j["curves"] = curves;
+    j["beats"] = arr(A.beats);
+    j["beatStrength"] = arr(A.beatStrength);
+    j["beatInBar"] = arr(A.beatInBar);
+    j["downbeats"] = arr(A.downbeats);
     return j;
 }
 
@@ -111,6 +140,8 @@ int main(int argc, char** argv) {
         auto t0 = std::chrono::steady_clock::now();
         if (src == "demo") {
             A = audio::analyze(audio::render(audio::demoSong()));
+        } else if (src.rfind("random:", 0) == 0) {
+            A = audio::analyze(audio::render(audio::randomSong(std::stoull(src.substr(7)))));
         } else {
             std::string err;
             if (!audio::analyzeFile(src, A, err)) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }

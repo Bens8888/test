@@ -67,7 +67,7 @@ Style resolveStyle(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rn
     return rng.chance(0.7) ? Style::Modern : Style::Flow;
 }
 
-static Intent intentFor(SectionType t) {
+Intent intentFor(SectionType t) {
     switch (t) {
         case SectionType::Intro: return Intent::Intro;
         case SectionType::Verse: return Intent::Groove;
@@ -355,6 +355,23 @@ std::vector<Click> selectClicks(const audio::MusicAnalysis& A, const Part& part,
         }
         if (!added) break;
         std::sort(chosen.begin(), chosen.end(), [&](size_t a, size_t b) { return cands[a].t < cands[b].t; });
+    }
+    // ground modes: a click faster than the jump airtime needs an orb, and orb chains climb, so
+    // at most two fast clicks in a row (the weaker one of a third goes)
+    if (part.mode == Mode::Cube || part.mode == Mode::Robot) {
+        const double air = (part.mode == Mode::Robot ? 0.9 : 0.95) * cubeAirtime(part.speed, part.mini);
+        std::vector<size_t> kept;
+        int fastRun = 0;
+        for (size_t c : chosen) {
+            bool fast = !kept.empty() && cands[c].t - cands[kept.back()].t < air;
+            if (fast && fastRun >= 2) {
+                if (cands[c].sal > cands[kept.back()].sal * 1.2f && kept.size() >= 2 && cands[c].t - cands[kept[kept.size() - 2]].t >= gap) kept.back() = c;
+                continue;
+            }
+            fastRun = fast ? fastRun + 1 : 0;
+            kept.push_back(c);
+        }
+        chosen = std::move(kept);
     }
     for (size_t idx = 0; idx < chosen.size(); ++idx) {
         const auto& c = cands[chosen[idx]];

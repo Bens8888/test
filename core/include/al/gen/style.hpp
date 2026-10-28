@@ -45,7 +45,20 @@ struct PatternDef {
 // The full library (hand-authored families x parameters).
 const std::vector<PatternDef>& patternLibrary();
 const PatternDef* findPattern(const std::string& id);
+// Token = index of the pattern in the library (the model vocabulary), -1 if unknown.
+int patternToken(const PatternDef* d);
+int patternToken(const std::string& id);
+int vocabSize();
 std::vector<const PatternDef*> patternsFor(Mode m, float difficulty);
+
+// Feature vector of a context (shared by the rule model, the trained model and training code).
+constexpr int kContextFeatures = 24;
+
+// One earlier decision of the level being built: its context features and the chosen pattern.
+struct HistoryStep {
+    float f[kContextFeatures];
+    int token;
+};
 
 struct PatternContext {
     Mode mode = Mode::Cube;
@@ -62,10 +75,10 @@ struct PatternContext {
     bool hold = false;
     uint32_t motifKey = 0;            // hash of the local musical context (for motif repetition)
     std::string prevPattern, prevPattern2;
+    float density = -1;               // user density option (-1 = auto)
+    const std::vector<HistoryStep>* history = nullptr; // earlier decisions (oldest first)
 };
 
-// Feature vector of a context (shared by the rule model, the trained model and training code).
-constexpr int kContextFeatures = 24;
 void contextFeatures(const PatternContext& c, float out[kContextFeatures]);
 
 class StyleModel {

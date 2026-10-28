@@ -63,13 +63,14 @@ const PatternMemory::Use* PatternMemory::lastForContext(uint32_t ctx) const {
 
 const DifficultyProfile& Builder::profileFor(const Part& p) const { return m_profiles[size_t(std::clamp(p.index, 0, int(m_profiles.size()) - 1))]; }
 
-Builder::Mark Builder::mark() const { return {m_level.objects.size(), m_world.size(), m_inputs.events.size(), m_clicks.size()}; }
+Builder::Mark Builder::mark() const { return {m_level.objects.size(), m_world.size(), m_inputs.events.size(), m_clicks.size(), m_history.size()}; }
 
 void Builder::rollback(const Mark& m) {
     m_level.objects.resize(m.levelObjects);
     m_world.truncate(m.worldObjects);
     m_inputs.events.resize(m.inputEvents);
     m_clicks.resize(m.clickResults);
+    m_history.resize(std::min(m_history.size(), m.history));
 }
 
 LevelObject Builder::obj(int id, double x, double y, double rot) {
@@ -432,7 +433,7 @@ bool Builder::rebuildFrom(int index, const Progress* progress) {
         // drop memory uses of rebuilt parts
         m_memory.uses.erase(std::remove_if(m_memory.uses.begin(), m_memory.uses.end(), [&](const PatternMemory::Use& u) { return u.part >= index; }), m_memory.uses.end());
     } else if (index == 0) {
-        rollback({0, 0, 0, 0});
+        rollback({0, 0, 0, 0, 0});
         m_cursor = phys::initialState(m_world);
         m_parts.clear();
         m_memory.uses.clear();
