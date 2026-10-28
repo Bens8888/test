@@ -12,6 +12,7 @@ namespace {
 
 constexpr float kCell = 30.0f;
 constexpr int kOutlineSlope = 1338, kBlocksSlope = 1743;
+constexpr int kOutlineWide = 1339, kBlocksWide = 1744;
 constexpr float kLineHalf = 0.75f; // half thickness of the outline edge piece (30 x 1.5)
 
 LevelObject make(int id, double x, double y, double rot = 0) {
@@ -34,8 +35,20 @@ LevelObject edgeLine(int cx, int cy, uint8_t side) {
     }
 }
 
-void placeSlope(int cx, int cy, CellKind k, int id, std::vector<LevelObject>& out) {
+void placeSlope(int cx, int cy, CellKind k, int id, std::vector<LevelObject>& out, int wideId) {
     LevelObject o = make(id, cx * kCell + 15, cy * kCell + 15);
+    switch (k) {
+        // a 2-wide slope is one object centred on its two cells (placed with the left half)
+        case CellKind::WideFloorUpL: case CellKind::WideFloorDownL: case CellKind::WideCeilUpL: case CellKind::WideCeilDownL:
+            o = make(wideId, cx * kCell + kCell, cy * kCell + 15);
+            o.flipX = k == CellKind::WideFloorDownL || k == CellKind::WideCeilUpL;
+            o.flipY = k == CellKind::WideCeilUpL || k == CellKind::WideCeilDownL;
+            out.push_back(o);
+            return;
+        case CellKind::WideFloorUpR: case CellKind::WideFloorDownR: case CellKind::WideCeilUpR: case CellKind::WideCeilDownR:
+            return;
+        default: break;
+    }
     // simulator orientation: rot/90 + (flipX+flipY: 2, flipX: 1, flipY: 3); 0 = floor uphill
     switch (k) {
         case CellKind::SlopeFloorUp: break;
@@ -56,6 +69,14 @@ uint8_t fullSides(CellKind k) {
         case CellKind::SlopeFloorDown: return EdgeB | EdgeL;
         case CellKind::SlopeCeilUp: return EdgeT | EdgeL;
         case CellKind::SlopeCeilDown: return EdgeT | EdgeR;
+        case CellKind::WideFloorUpL: return EdgeB;
+        case CellKind::WideFloorUpR: return EdgeB | EdgeR;
+        case CellKind::WideFloorDownL: return EdgeB | EdgeL;
+        case CellKind::WideFloorDownR: return EdgeB;
+        case CellKind::WideCeilUpL: return EdgeT | EdgeL;
+        case CellKind::WideCeilUpR: return EdgeT;
+        case CellKind::WideCeilDownL: return EdgeT;
+        case CellKind::WideCeilDownR: return EdgeT | EdgeR;
         default: return 0;
     }
 }
@@ -124,11 +145,11 @@ void tileCells(const CellGrid& g, TileLook look, std::vector<LevelObject>& out) 
         const uint8_t e = g.exposed(cx, cy);
         if (look == TileLook::Blocks) {
             if (kind == CellKind::Solid) { if (e) out.push_back(make(oid::Block, cx * kCell + 15, cy * kCell + 15)); }
-            else placeSlope(cx, cy, kind, kBlocksSlope, out);
+            else placeSlope(cx, cy, kind, kBlocksSlope, out, kBlocksWide);
             continue;
         }
         if (kind != CellKind::Solid) {
-            placeSlope(cx, cy, kind, kOutlineSlope, out);
+            placeSlope(cx, cy, kind, kOutlineSlope, out, kOutlineWide);
             for (uint8_t side : {EdgeT, EdgeR, EdgeB, EdgeL}) if (e & side) out.push_back(edgeLine(cx, cy, side));
             continue;
         }

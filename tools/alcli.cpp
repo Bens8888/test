@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <optional>
 #include <string>
 
@@ -334,6 +335,21 @@ int main(int argc, char** argv) {
                     st.beatable ? "BEATABLE" : "NOT BEATABLE", sec2);
         for (auto& n : st.notes) std::printf("note: %s\n", n.c_str());
         {
+            int kinds[6] = {};
+            for (auto& [kk, kind] : st.cells.cells()) kinds[int(kind)]++;
+            std::printf("cells: solid %d, slopes %d %d %d %d\n", kinds[1], kinds[2], kinds[3], kinds[4], kinds[5]);
+            if (const char* d = std::getenv("AL_DUMP_X")) {
+                const float dx = float(std::atof(d));
+                for (auto& o : st.level.objects)
+                    if (std::fabs(o.x - dx) < 100 && o.y < 260)
+                        std::printf("  obj %d at (%.1f, %.1f) rot %.0f flip %d%d\n", o.id, o.x, o.y, o.rotation, o.flipX, o.flipY);
+                for (auto& [kk, kind] : st.cells.cells()) {
+                    int cx = int(int32_t(uint32_t(kk >> 32))), cy = int(int32_t(uint32_t(kk)));
+                    if (std::fabs(cx * 30 + 15 - dx) < 100 && cy < 9) std::printf("  cell %d,%d kind %d exposed %d\n", cx, cy, int(kind), st.cells.exposed(cx, cy));
+                }
+            }
+        }
+        {
             std::vector<std::pair<int, size_t>> w;
             for (size_t i = 0; i < st.checks.size(); ++i) w.push_back({st.checks[i].early + st.checks[i].late + 1, i});
             std::sort(w.begin(), w.end());
@@ -429,7 +445,7 @@ int main(int argc, char** argv) {
         if (!pngPath.empty()) {
             level::Level T = st.level;
             report::RenderOptions ro;
-            ro.scale = 0.5f;
+            ro.scale = std::getenv("AL_SCALE") ? float(std::atof(std::getenv("AL_SCALE"))) : 0.5f;
             ro.maxWidth = 2400;
             ro.x0 = x0;
             ro.x1 = x1;

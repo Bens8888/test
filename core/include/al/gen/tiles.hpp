@@ -18,6 +18,11 @@ enum class CellKind : uint8_t {
     SlopeFloorDown,  // "\", solid below the line (bottom and left sides full)
     SlopeCeilUp,     // "/", solid above the line (top and left sides full)
     SlopeCeilDown,   // "\", solid above the line (top and right sides full)
+    // 2-wide slopes (26.6 degrees) over two cells: the left (L) and right (R) half
+    WideFloorUpL, WideFloorUpR,
+    WideFloorDownL, WideFloorDownR,
+    WideCeilUpL, WideCeilUpR,
+    WideCeilDownL, WideCeilDownR,
 };
 
 // Edge bits of a cell.

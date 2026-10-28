@@ -236,11 +236,12 @@ void Structurer::addCell(int cx, int cy, CellKind k) {
         LevelObject b = make(oid::Block, cx * kCell + 15, cy * kCell + 15);
         m_W.addObject(b, -1);
     } else {
-        LevelObject s = make(1338, cx * kCell + 15, cy * kCell + 15);
-        if (k == CellKind::SlopeFloorDown) s.flipX = true;
-        if (k == CellKind::SlopeCeilUp) s.flipX = s.flipY = true;
-        if (k == CellKind::SlopeCeilDown) s.flipY = true;
-        m_W.addObject(s, -1);
+        // the slope object exactly as the tiler places it (a 2-wide slope with its left half)
+        CellGrid one;
+        one.set(cx, cy, k);
+        std::vector<LevelObject> objs;
+        tileCells(one, TileLook::Outline, objs);
+        for (auto& o : objs) if (o.info().kind == level::Kind::Slope) m_W.addObject(o, -1);
     }
 }
 
@@ -402,10 +403,15 @@ void Structurer::corridors() {
         const int floorRow = int(std::lround(q.floorY / kCell)), ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
         std::vector<int> top, bottom; // per column: solid floor up to top (exclusive), ceiling from bottom
         for (int c = c0; c <= c1; ++c) {
-            float lo, hi;
-            if (!m_env.range(c, lo, hi)) { top.push_back(floorRow); bottom.push_back(ceilRow + 1); continue; }
-            top.push_back(std::max(floorRow, int(std::floor((lo - m_margin) / kCell))));
-            bottom.push_back(std::min(ceilRow + 1, int(std::ceil((hi + m_margin) / kCell))));
+            // exactly the cells that may be built (the same test the placement uses)
+            // (cells already built, e.g. a pillar, count as part of the wall)
+            int t = floorRow;
+            while (t <= ceilRow && (m_res.cells.filled(c, t) || cellFree(c, t))) ++t;
+            int b = ceilRow + 1;
+            while (b - 1 >= t && (m_res.cells.filled(c, b - 1) || cellFree(c, b - 1))) --b;
+            if (t > ceilRow) { t = floorRow; b = ceilRow + 1; } // the whole column is free: no path here
+            top.push_back(t);
+            bottom.push_back(b);
         }
         // smooth: the walls move by at most one row per column (lowering a floor or raising a
         // ceiling only makes more room), so every change becomes a 45-degree slope
@@ -414,19 +420,39 @@ void Structurer::corridors() {
         for (size_t k = m; k-- > 1;) top[k - 1] = std::min(top[k - 1], top[k] + 1);
         for (size_t k = 1; k < m; ++k) bottom[k] = std::max(bottom[k], bottom[k - 1] - 1);
         for (size_t k = m; k-- > 1;) bottom[k - 1] = std::max(bottom[k - 1], bottom[k] - 1);
+        // one-column bumps go (lowering a floor / raising a ceiling only makes room)
+        for (size_t k = 1; k + 1 < m; ++k) {
+            if (top[k] > top[k - 1] && top[k] > top[k + 1]) top[k] = std::max(top[k - 1], top[k + 1]);
+            if (bottom[k] < bottom[k - 1] && bottom[k] < bottom[k + 1]) bottom[k] = std::min(bottom[k - 1], bottom[k + 1]);
+        }
+        // the wall cells: 45-degree slopes where the wall moves a row per column, 2-wide slopes
+        // where it moves a row over two columns (each only removes material from the wall)
+        std::vector<CellKind> fk(m, CellKind::Solid), ck(m, CellKind::Solid);
+        for (size_t k = 0; k < m; ++k) {
+            const int dIn = k > 0 ? top[k] - top[k - 1] : 0, dOut = k + 1 < m ? top[k + 1] - top[k] : 0;
+            if (fk[k] != CellKind::Solid) continue;
+            if (dIn == 1 && k + 1 < m && dOut == 0) { fk[k] = CellKind::WideFloorUpL; fk[k + 1] = CellKind::WideFloorUpR; continue; }
+            if (dOut == -1 && dIn == 0 && k > 0 && fk[k - 1] == CellKind::Solid) { fk[k - 1] = CellKind::WideFloorDownL; fk[k] = CellKind::WideFloorDownR; continue; }
+            if (dIn == 1 && dOut != -1) fk[k] = CellKind::SlopeFloorUp;
+            else if (dOut == -1 && dIn != 1) fk[k] = CellKind::SlopeFloorDown;
+        }
+        for (size_t k = 0; k < m; ++k) {
+            const int dIn = k > 0 ? bottom[k] - bottom[k - 1] : 0, dOut = k + 1 < m ? bottom[k + 1] - bottom[k] : 0;
+            if (ck[k] != CellKind::Solid) continue;
+            if (dIn == -1 && k + 1 < m && dOut == 0) { ck[k] = CellKind::WideCeilDownL; ck[k + 1] = CellKind::WideCeilDownR; continue; }
+            if (dOut == 1 && dIn == 0 && k > 0 && ck[k - 1] == CellKind::Solid) { ck[k - 1] = CellKind::WideCeilUpL; ck[k] = CellKind::WideCeilUpR; continue; }
+            if (dIn == -1 && dOut != 1) ck[k] = CellKind::SlopeCeilDown;
+            else if (dOut == 1 && dIn != -1) ck[k] = CellKind::SlopeCeilUp;
+        }
         for (int c = c0; c <= c1; ++c) {
             const size_t k = size_t(c - c0);
             const int t = top[k], b = bottom[k];
-            const bool riseIn = k > 0 && top[k - 1] + 1 == t, fallOut = k + 1 < m && top[k + 1] + 1 == t;
-            const bool downIn = k > 0 && bottom[k - 1] - 1 == b, upOut = k + 1 < m && bottom[k + 1] - 1 == b;
             for (int y = floorRow; y < t; ++y) {
-                CellKind kind = CellKind::Solid;
-                if (y == t - 1 && riseIn != fallOut) kind = riseIn ? CellKind::SlopeFloorUp : CellKind::SlopeFloorDown;
+                const CellKind kind = y == t - 1 ? fk[k] : CellKind::Solid;
                 if (cellFree(c, y)) { addCell(c, y, kind); ++m_res.corridorCells; }
             }
             for (int y = b; y <= ceilRow; ++y) {
-                CellKind kind = CellKind::Solid;
-                if (y == b && downIn != upOut) kind = downIn ? CellKind::SlopeCeilDown : CellKind::SlopeCeilUp;
+                const CellKind kind = y == b ? ck[k] : CellKind::Solid;
                 if (cellFree(c, y)) { addCell(c, y, kind); ++m_res.corridorCells; }
             }
         }

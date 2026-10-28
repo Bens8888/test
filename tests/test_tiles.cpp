@@ -102,3 +102,34 @@ TEST(tiles_outline_ceiling_plays_like_solid) {
         CHECK_MSG(a.dead == b.dead && std::fabs(a.y - b.y) < 0.01f, "press %d: dead %d/%d y %.1f/%.1f", press, a.dead, b.dead, a.y, b.y);
     }
 }
+
+TEST(tiles_wide_slopes) {
+    // a 2-wide rising floor slope over cells 10 and 11, a 2-wide falling ceiling slope over 20, 21
+    CellGrid g;
+    g.set(10, 0, CellKind::WideFloorUpL);
+    g.set(11, 0, CellKind::WideFloorUpR);
+    g.set(12, 0, CellKind::Solid);
+    g.set(20, 5, CellKind::WideCeilDownL);
+    g.set(21, 5, CellKind::WideCeilDownR);
+    std::vector<LevelObject> out;
+    tileCells(g, TileLook::Outline, out);
+    int wide = 0;
+    for (auto& o : out) {
+        if (o.id != 1339) continue;
+        ++wide;
+        phys::SimObject so;
+        REQUIRE(phys::World::makeSimObject(o, 0, so));
+        CHECK(std::fabs(so.hw - 30) < 0.01f && std::fabs(so.hh - 15) < 0.01f);
+        if (o.y < 100) {
+            CHECK(std::fabs(o.x - 330) < 0.01 && std::fabs(o.y - 15) < 0.01);
+            CHECK(so.slopeOrient == 0); // floor, rising
+        } else {
+            CHECK(std::fabs(o.x - 630) < 0.01 && std::fabs(o.y - 165) < 0.01);
+            CHECK(so.slopeOrient == 3); // ceiling, falling
+        }
+    }
+    CHECK(wide == 2);
+    // the right half's right side is full: the solid cell next to it has no left edge
+    CHECK((g.exposed(12, 0) & EdgeL) == 0);
+    CHECK((g.exposed(11, 0) & EdgeR) == 0);
+}

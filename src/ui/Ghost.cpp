@@ -94,8 +94,9 @@ void drawPiece(CCDrawNode* d, level::LevelObject const& o) {
         }
         case Kind::Slope: {
             const bool rising = so.slopeOrient == 0 || so.slopeOrient == 2;
-            if (rising) d->drawSegment({x - 15, y - 15}, {x + 15, y + 15}, 0.8f, white);
-            else d->drawSegment({x - 15, y + 15}, {x + 15, y - 15}, 0.8f, white);
+            const float hw = so.hw, hh = so.hh; // 45-degree or 2-wide
+            if (rising) d->drawSegment({x - hw, y - hh}, {x + hw, y + hh}, 0.8f, white);
+            else d->drawSegment({x - hw, y + hh}, {x + hw, y - hh}, 0.8f, white);
             break;
         }
         case Kind::Hazard: {
