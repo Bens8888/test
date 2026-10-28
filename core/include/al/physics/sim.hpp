@@ -70,12 +70,23 @@ public:
     // Candidate objects whose x-extent overlaps [x0, x1], sorted by index (deduplicated).
     void query(float x0, float x1, std::vector<int>& out) const;
 
+    // Incremental editing (used by the generator while it builds and backtracks).
+    // Returns the simulation index, or -1 if the object has no gameplay effect.
+    int addObject(const level::LevelObject& o, int levelIndex);
+    size_t size() const { return m_objects.size(); }
+    void truncate(size_t simCount);   // remove the most recently added objects
+    void setSettings(const level::LevelSettings& s) { m_settings = s; }
+
     // Start position (from a start-pos object if present, else (0, 15)).
     float startX() const { return m_startX; }
     float startY() const { return m_startY; }
 
+    // Convert a level object into a simulation object (false if it has no gameplay effect).
+    static bool makeSimObject(const level::LevelObject& o, int levelIndex, SimObject& out);
+
 private:
     void build();
+    void insertColumns(int index);
     std::vector<SimObject> m_objects;
     std::vector<std::vector<int>> m_columns;
     float m_colW = 32.0f;

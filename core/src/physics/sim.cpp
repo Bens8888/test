@@ -62,6 +62,59 @@ void PlayerState::markActivated(int idx) {
 
 // ---------------------------------------------------------------- World
 
+bool World::makeSimObject(const level::LevelObject& o, int levelIndex, SimObject& s) {
+    const auto& info = o.info();
+    if (o.props.count(121) && o.prop(121) == "1") return false; // no touch
+    if (o.props.count(134) && o.prop(134) == "1" && info.kind == Kind::Solid) return false; // passable
+    switch (info.kind) {
+        case Kind::Deco: case Kind::Trigger: case Kind::Coin: case Kind::StartPos: case Kind::EndTrigger: case Kind::MirrorPortal:
+            return false;
+        default: break;
+    }
+    s = SimObject{};
+    s.x = float(o.x);
+    s.y = float(o.y);
+    s.kind = info.kind;
+    s.sub = info.sub;
+    s.levelIndex = levelIndex;
+    double sx = o.scale * o.scaleX, sy = o.scale * o.scaleY;
+    double w = info.w * std::fabs(sx), h = info.h * std::fabs(sy);
+    double rot = std::fmod(o.rotation, 360.0);
+    if (rot < 0) rot += 360;
+    int quarter = int(std::lround(rot / 90.0)) % 4;
+    bool axis = std::fabs(rot - quarter * 90.0) < 0.01 || std::fabs(rot - 360.0) < 0.01;
+    if (info.kind == Kind::Saw) {
+        s.hw = s.hh = float(info.w * std::max(std::fabs(sx), std::fabs(sy)));
+    } else if (axis) {
+        if (quarter % 2 == 1) std::swap(w, h);
+        s.hw = float(w / 2);
+        s.hh = float(h / 2);
+    } else {
+        s.obb = true;
+        s.hw = float(w / 2);
+        s.hh = float(h / 2);
+        double r = -rot * 3.14159265358979323846 / 180.0; // GD rotation is clockwise
+        s.cosR = float(std::cos(r));
+        s.sinR = float(std::sin(r));
+    }
+    s.facingDown = (quarter == 2) != o.flipY;
+    if (o.props.count(99)) s.multiActivate = o.prop(99) == "1";
+    if (info.kind == Kind::Slope || info.kind == Kind::HazardSlope) {
+        int ori = quarter;
+        if (o.flipX && o.flipY) ori += 2;
+        else if (o.flipX) ori += 1;
+        else if (o.flipY) ori += 3;
+        s.slopeOrient = int8_t(ori % 4);
+    }
+    if (info.kind == Kind::Orb && (info.sub == uint8_t(OrbType::DashGreen) || info.sub == uint8_t(OrbType::DashPink))) {
+        double a = -o.rotation;
+        if (o.flipX) a += 180;
+        s.dashAngle = float(a);
+    }
+    if (info.kind == Kind::TeleportPortal) s.teleportOffset = float(o.propNum(54, 0));
+    return true;
+}
+
 World::World(const level::Level& lvl, const SimConfig& cfg) : m_cfg(cfg), m_settings(lvl.settings) {
     m_objects.reserve(lvl.objects.size());
     float lastX = 0;
@@ -70,61 +123,11 @@ World::World(const level::Level& lvl, const SimConfig& cfg) : m_cfg(cfg), m_sett
     for (size_t i = 0; i < lvl.objects.size(); ++i) {
         const auto& o = lvl.objects[i];
         const auto& info = o.info();
-        if (o.props.count(121) && o.prop(121) == "1") continue;  // no touch
-        if (o.props.count(134) && o.prop(134) == "1" && (info.kind == Kind::Solid)) continue; // passable
         if (info.kind == Kind::EndTrigger) { haveEnd = true; endTriggerX = std::max(endTriggerX, float(o.x)); continue; }
-        if (info.kind == Kind::StartPos) {
-            // Use the first enabled start pos only if requested by callers; by default the
-            // level starts at the level start (GD behaviour in normal mode).
-            continue;
-        }
-        if (info.kind == Kind::Deco || info.kind == Kind::Trigger || info.kind == Kind::Coin) {
-            if (info.kind == Kind::Coin) lastX = std::max(lastX, float(o.x));
-            continue;
-        }
+        if (info.kind == Kind::Coin) { lastX = std::max(lastX, float(o.x)); continue; }
         SimObject s;
-        s.x = float(o.x);
-        s.y = float(o.y);
-        s.kind = info.kind;
-        s.sub = info.sub;
-        s.levelIndex = int(i);
-        double sx = o.scale * o.scaleX, sy = o.scale * o.scaleY;
-        double w = info.w * std::fabs(sx), h = info.h * std::fabs(sy);
-        double rot = std::fmod(o.rotation, 360.0);
-        if (rot < 0) rot += 360;
-        int quarter = int(std::lround(rot / 90.0)) % 4;
-        bool axis = std::fabs(rot - quarter * 90.0) < 0.01 || std::fabs(rot - 360.0) < 0.01;
-        if (info.kind == Kind::Saw) {
-            s.hw = s.hh = float(info.w * std::max(std::fabs(sx), std::fabs(sy)));
-        } else if (axis) {
-            if (quarter % 2 == 1) std::swap(w, h);
-            s.hw = float(w / 2);
-            s.hh = float(h / 2);
-        } else {
-            s.obb = true;
-            s.hw = float(w / 2);
-            s.hh = float(h / 2);
-            double r = -rot * 3.14159265358979323846 / 180.0; // GD rotation is clockwise
-            s.cosR = float(std::cos(r));
-            s.sinR = float(std::sin(r));
-        }
-        s.facingDown = (quarter == 2) != o.flipY;
-        if (o.props.count(99)) s.multiActivate = o.prop(99) == "1";
-        if (info.kind == Kind::Slope || info.kind == Kind::HazardSlope) {
-            int ori = quarter;
-            if (o.flipX && o.flipY) ori += 2;
-            else if (o.flipX) ori += 1;
-            else if (o.flipY) ori += 3;
-            s.slopeOrient = int8_t(ori % 4);
-            // Slopes keep their unswapped size for the surface (60x30 rotated 90 becomes 30x60).
-        }
-        if (info.kind == Kind::Orb && (info.sub == uint8_t(OrbType::DashGreen) || info.sub == uint8_t(OrbType::DashPink))) {
-            double a = -o.rotation;
-            if (o.flipX) a += 180;
-            s.dashAngle = float(a);
-        }
-        if (info.kind == Kind::TeleportPortal) s.teleportOffset = float(o.propNum(54, 0));
-        if (info.kind != Kind::Trigger) lastX = std::max(lastX, s.x);
+        if (!makeSimObject(o, int(i), s)) continue;
+        lastX = std::max(lastX, s.x);
         m_objects.push_back(s);
     }
     m_endX = haveEnd ? endTriggerX : lastX + m_cfg.levelEndPadding;
@@ -132,19 +135,43 @@ World::World(const level::Level& lvl, const SimConfig& cfg) : m_cfg(cfg), m_sett
     build();
 }
 
-void World::build() {
-    float maxX = 0;
-    for (auto& o : m_objects) maxX = std::max(maxX, o.maxX());
-    size_t cols = size_t(std::max(1.0f, (maxX + 64) / m_colW)) + 2;
-    m_columns.assign(cols, {});
-    for (size_t i = 0; i < m_objects.size(); ++i) {
-        auto& o = m_objects[i];
+int World::addObject(const level::LevelObject& o, int levelIndex) {
+    SimObject s;
+    if (!makeSimObject(o, levelIndex, s)) return -1;
+    m_objects.push_back(s);
+    insertColumns(int(m_objects.size() - 1));
+    return int(m_objects.size() - 1);
+}
+
+void World::insertColumns(int index) {
+    const auto& o = m_objects[size_t(index)];
+    float ext = o.obb ? std::sqrt(o.hw * o.hw + o.hh * o.hh) : o.hw;
+    long c0 = std::max(0L, long(std::floor((o.x - ext) / m_colW)));
+    long c1 = long(std::floor((o.x + ext) / m_colW));
+    if (c1 < c0) c1 = c0;
+    if (c1 >= long(m_columns.size())) m_columns.resize(size_t(c1 + 1));
+    for (long c = c0; c <= c1; ++c) m_columns[size_t(c)].push_back(index);
+}
+
+void World::truncate(size_t n) {
+    while (m_objects.size() > n) {
+        int index = int(m_objects.size() - 1);
+        const auto& o = m_objects.back();
         float ext = o.obb ? std::sqrt(o.hw * o.hw + o.hh * o.hh) : o.hw;
-        long c0 = long(std::floor((o.x - ext) / m_colW)), c1 = long(std::floor((o.x + ext) / m_colW));
-        c0 = std::max(0L, c0);
-        c1 = std::min(long(cols) - 1, c1);
-        for (long c = c0; c <= c1; ++c) m_columns[size_t(c)].push_back(int(i));
+        long c0 = std::max(0L, long(std::floor((o.x - ext) / m_colW)));
+        long c1 = std::min(long(m_columns.size()) - 1, long(std::floor((o.x + ext) / m_colW)));
+        for (long c = c0; c <= c1; ++c) {
+            auto& col = m_columns[size_t(c)];
+            if (!col.empty() && col.back() == index) col.pop_back();
+            else col.erase(std::remove(col.begin(), col.end(), index), col.end());
+        }
+        m_objects.pop_back();
     }
+}
+
+void World::build() {
+    m_columns.clear();
+    for (size_t i = 0; i < m_objects.size(); ++i) insertColumns(int(i));
 }
 
 void World::query(float x0, float x1, std::vector<int>& out) const {

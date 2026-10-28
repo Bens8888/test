@@ -16,9 +16,11 @@ target_include_directories(autolayout_core
 target_compile_features(autolayout_core PUBLIC cxx_std_20)
 set_target_properties(autolayout_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if (MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    target_compile_definitions(autolayout_core PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
-else()
+if (WIN32)
+    # minimp3 includes windows.h: keep its min/max macros out of our code.
+    target_compile_definitions(autolayout_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+endif()
+if (NOT (MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
     # Third-party C sources are noisy; keep our own code warning-clean.
     set_source_files_properties(
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c
