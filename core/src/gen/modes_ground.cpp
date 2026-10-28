@@ -71,6 +71,34 @@ void placeHazard(GroundCtx& c, int id, float x, const Run& r) {
     c.b.place(o);
 }
 
+int spikeIdFor(const GenOptions& opt, int obstacle, int idx, Rng& rng);
+
+// A spike pit of `width` cells starting at gapStart in the current run. On the floor the spikes
+// sit on the ground; on raised (or ceiling) runs the pit is one row deep with a solid bottom so
+// falling in kills quickly instead of after a long fall.
+void placePit(GroundCtx& c, float gapStart, int width) {
+    auto& r = c.run;
+    if (r.floor) {
+        extendRun(c, gapStart + width * kCell);
+        for (int i = 0; i < width; ++i) placeHazard(c, spikeIdFor(c.b.options(), ObSpike1, i, c.b.rng()), gapStart + 15 + i * kCell, r);
+        return;
+    }
+    extendRun(c, gapStart);
+    Run bottom = r;
+    bottom.surf = r.surf - r.g * kCell;
+    for (int i = 0; i < width; ++i) {
+        float cx = gapStart + 15 + i * kCell;
+        placeHazard(c, spikeIdFor(c.b.options(), ObSpike1, i, c.b.rng()), cx, bottom);
+        int rows = 1;
+        if (r.g > 0) {
+            int height = int(std::lround(bottom.surf / kCell));
+            rows = height <= 4 ? height : 1;
+        }
+        for (int k = 0; k < rows; ++k) c.b.place(Builder::obj(oid::Block, cx, bottom.surf - r.g * (15.0f + kCell * k)));
+    }
+    r.builtTo = gapStart + width * kCell;
+}
+
 int spikeIdFor(const GenOptions& opt, int obstacle, int idx, Rng& rng) {
     if (obstacle == ObHalf1 || obstacle == ObHalf2) return oid::HalfSpike;
     if (obstacle == ObMix2) return idx == 0 ? oid::Spike : oid::HalfSpike;
@@ -142,7 +170,7 @@ Attempt evaluateImpl(GroundCtx& c, int pressEv, int pressTick, int nextClickTick
 Attempt evaluate(GroundCtx& c, int pressEv, int pressTick, int nextClickTick) {
     auto m = c.b.mark();
     Run saved = c.run;
-    extendRun(c, c.b.cursor().p[0].x + 600.0f);
+    extendRun(c, c.b.cursor().p[0].x + 1000.0f);
     Attempt r = evaluateImpl(c, pressEv, pressTick, nextClickTick);
     c.b.rollback(m);
     c.run = saved;
@@ -152,7 +180,10 @@ Attempt evaluate(GroundCtx& c, int pressEv, int pressTick, int nextClickTick) {
 Attempt evaluateImpl(GroundCtx& c, int pressEv, int pressTick, int nextClickTick) {
     Attempt r;
     phys::GameState s = c.b.cursor();
-    int horizon = std::min(nextClickTick > 0 ? nextClickTick - 1 : pressTick + 360, pressTick + 360);
+    // Invariant: every placement is safe if the player stops clicking after it (survive until the
+    // landing), so a later click that cannot be built never leaves the player in a death trap.
+    (void)nextClickTick;
+    int horizon = pressTick + 360;
     // find landing
     int land = -1;
     bool left = false;
@@ -166,7 +197,9 @@ Attempt evaluateImpl(GroundCtx& c, int pressEv, int pressTick, int nextClickTick
     if (!c.b.runTo(s, check)) return r;
     r.landTick = land;
     c.b.window(pressEv, check, c.maxShift, r.early, r.late);
-    r.forced = c.b.necessary(pressEv, check);
+    // necessity: without the press the player must die soon, judged independently of the next
+    // click (its geometry does not exist yet; the look-ahead terrain is plain)
+    r.forced = c.b.necessary(pressEv, std::max(check, pressTick + 150));
     r.ok = true;
     return r;
 }
@@ -246,19 +279,7 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
                 width += obstacleCount(d.a) > 0 ? 0 : 0;
                 float gapStart = std::floor(snap(apexX - width * kCell / 2 + off, 15.0f) / kCell) * kCell;
                 if (c.run.builtTo > gapStart + 1) return false; // terrain already exists there
-                if (c.run.floor) {
-                    extendRun(c, gapStart + width * kCell);
-                    for (int i = 0; i < width; ++i) placeHazard(c, spikeIdFor(b.options(), ObSpike1, i, b.rng()), gapStart + 15 + i * kCell, c.run);
-                } else {
-                    extendRun(c, gapStart);
-                    if (c.run.g > 0) {
-                        Run fl;
-                        fl.surf = 0;
-                        fl.g = 1;
-                        for (int i = 0; i < width; ++i) placeHazard(c, oid::Spike, gapStart + 15 + i * kCell, fl);
-                    }
-                    c.run.builtTo = gapStart + width * kCell;
-                }
+                placePit(c, gapStart, width);
                 return true;
             }
             default: return false;
@@ -283,19 +304,30 @@ bool placeOne(GroundCtx& c, const PatternDef& d, float off, int k, int hold, boo
     }
     int width = d.b == TrGap4 ? 4 : (d.b == TrGap3 ? 3 : 2);
     float gs = std::floor((lx - 45) / kCell) * kCell;
-    if (c.run.builtTo > gs + 1) return false;
-    extendRun(c, gs);
-    if (c.run.floor) {
-        extendRun(c, gs + width * kCell);
-        for (int i = 0; i < width; ++i) placeHazard(c, spikeIdFor(b.options(), ObSpike1, i, b.rng()), gs + 15 + i * kCell, c.run);
+    if (c.run.builtTo <= gs + 1) {
+        placePit(c, gs, width);
     } else {
-        if (c.run.g > 0) {
-            Run fl;
-            fl.surf = 0;
-            fl.g = 1;
-            for (int i = 0; i < width; ++i) placeHazard(c, oid::Spike, gs + 15 + i * kCell, fl);
+        // the landing area already exists (the previous pattern built it): spikes on the run
+        // where the player would land without the orb
+        float first = cellCenter(lx - 15.0f);
+        extendRun(c, first + width * kCell);
+        std::vector<int> near;
+        int placed = 0;
+        for (int i = 0; i < width; ++i) {
+            float cx = first + i * kCell;
+            float cy = hazardY(c.run, oid::Spike);
+            near.clear();
+            b.world().query(cx - 10, cx + 10, near);
+            bool occupied = false;
+            for (int si : near) {
+                const auto& so = b.world().objects()[size_t(si)];
+                if (std::fabs(so.y - cy) < 14.0f) occupied = true;
+            }
+            if (occupied) continue;
+            placeHazard(c, spikeIdFor(b.options(), ObSpike1, i, b.rng()), cx, c.run);
+            ++placed;
         }
-        c.run.builtTo = gs + width * kCell;
+        if (placed == 0) return false;
     }
     b.place(Builder::obj(d.c == SpOrbPink ? oid::OrbPink : oid::OrbYellow, ox, oy));
     (void)hold;
@@ -342,14 +374,14 @@ Choice choose(GroundCtx& c, const PatternContext& ctx, int k, int hold, int next
         if (orb && !c.prof.orbs) continue;
         if (d->a == ObSpike3 && !c.prof.tripleSpikes) continue;
         if (d->a <= ObMix2 && obstacleCount(d->a) > c.prof.maxSpikes) continue;
-        if (c.run.g < 0 && (d->b == TrUp1 || d->b == TrUp2 || d->b >= TrGap2)) continue; // ceilings: keep it simple
+        if (c.run.g < 0 && (d->b == TrUp1 || d->b == TrUp2)) continue; // ceilings: no steps up
         if (c.run.floor && (d->b == TrDown1 || d->b == TrDown2)) continue;
         if (d->b == TrDown2 && c.run.surf < 60) continue;
         if (c.run.surf >= 120 && (d->b == TrUp1 || d->b == TrUp2)) continue; // keep terrain low
         filtered.push_back(d);
     }
     Choice none;
-    if (filtered.empty()) return none;
+    if (filtered.empty()) { debugLog("    tick %d: no candidates pass the filter (of %zu, airborne %d, surf %.0f g %d)", k, cands.size(), airborne, c.run.surf, c.run.g); return none; }
     std::vector<float> w;
     RuleStyleModel rules;
     const StyleModel* model = b.styleModel() ? b.styleModel() : &rules;
@@ -382,14 +414,6 @@ Choice choose(GroundCtx& c, const PatternContext& ctx, int k, int hold, int next
                 Attempt at = evaluate(c, pressEv, k, nextClickTick);
                 int window = at.early + at.late + 1;
                 debugLog("    tick %d cand %s off %.0f: alive=%d window=%d/%d forced=%d | cursor %d x=%.0f takeoff=%.0f apex=%.0f land=%.0f surf=%.0f", k, d.id.c_str(), off, at.ok, window, c.minWindowTicks, at.forced, b.cursor().tick, b.cursor().p[0].x, arc.takeoffX, arc.apexX, arc.landX, c.run.surf);
-                if (debugEnabled() && k == 2873 && off == 0) {
-                    for (size_t oi2 = m.levelObjects; oi2 < b.level().objects.size(); ++oi2) {
-                        const auto& o = b.level().objects[oi2];
-                        debugLog("      placed id %d at (%.1f, %.1f)", o.id, o.x, o.y);
-                    }
-                    debugLog("      run surf %.0f builtTo %.0f floor %d; inputs:", c.run.surf, c.run.builtTo, c.run.floor);
-                    for (auto& e : b.inputs().events) if (e.tick > k - 200) debugLog("        %d %d", e.tick, e.press);
-                }
                 if (at.ok && window >= c.minWindowTicks && at.forced) {
                     float centre = float(at.late - at.early) * 0.5f;
                     float score = -std::fabs(centre) + 0.05f * float(std::min(window, 60));
@@ -446,14 +470,19 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         const Click& ck = plan.clicks[size_t(clickIndex)];
         int k = Builder::tickOf(ck.time);
         int nextK = ci + 1 < part.clicks.size() ? Builder::tickOf(plan.clicks[size_t(part.clicks[ci + 1])].time) : -1;
-        if (k <= b.cursor().tick + 2) { ++dropped; continue; }
+        if (k <= b.cursor().tick + 2) { debugLog("  ground: click at tick %d is behind the cursor (%d)", k, b.cursor().tick); ++dropped; continue; }
         // move the cursor close to the click (but before its window)
         int target = k - c.maxShift - 2;
         if (target > b.cursor().tick) {
             const auto& cp = b.cursor().p[0];
             float ups = float(phys::speedParams(cp.speed).unitsPerStep());
             extendRun(c, cp.x + float(target - b.cursor().tick) * ups + 20.0f);
-            if (!b.advanceCursor(target)) { debugLog("  ground: died advancing to tick %d (click %d)", target, clickIndex); return false; }
+            if (!b.advanceCursor(target)) {
+                phys::GameState d = b.cursor();
+                b.runTo(d, target);
+                debugLog("  ground: died advancing to tick %d (click %d): tick %d x=%.0f y=%.0f %s, run surf %.0f builtTo %.0f", target, clickIndex, d.tick, d.p[0].x, d.p[0].y, phys::deathCauseName(d.p[0].deathCause), c.run.surf, c.run.builtTo);
+                return false;
+            }
         }
         // is the player airborne at the click? (temporary look-ahead terrain)
         phys::GameState s = b.cursor();
@@ -490,6 +519,7 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         auto m = b.mark();
         Run saved = c.run;
         if (!choice.def || !placeOne(c, *choice.def, choice.offset, k, hold, airborne, arc)) {
+            debugLog("  ground: no fair pattern for the click at tick %d (airborne %d, arc %d)", k, airborne, arc.ok);
             b.rollback(m);
             c.run = saved;
             r.dropped = true;
@@ -503,7 +533,7 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
         int pressEv = int(b.inputs().events.size()) - 1;
         b.release(k + hold);
         Attempt ev = evaluate(c, pressEv, k, nextK);
-        if (!ev.ok) { b.rollback(m); c.run = saved; r.dropped = true; r.pattern = "dropped"; b.addClickResult(r); ++dropped; continue; }
+        if (!ev.ok) { debugLog("  ground: chosen pattern died on re-evaluation at tick %d", k); b.rollback(m); c.run = saved; r.dropped = true; r.pattern = "dropped"; b.addClickResult(r); ++dropped; continue; }
         r.pattern = pid;
         r.pressEvent = pressEv;
         r.windowEarly = ev.early;
