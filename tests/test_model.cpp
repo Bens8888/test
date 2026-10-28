@@ -2,6 +2,7 @@
 // training/make_test_fixture.py), file validation, and generation with a model plugged in.
 #include "test.hpp"
 
+#include <algorithm>
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
 #include <al/gen/generator.hpp>

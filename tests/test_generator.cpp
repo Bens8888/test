@@ -3,6 +3,7 @@
 // level file round trip.
 #include "test.hpp"
 
+#include <algorithm>
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
 #include <al/bot/bot.hpp>

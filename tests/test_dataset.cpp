@@ -3,6 +3,7 @@
 // round trip; filters reject broken levels.
 #include "test.hpp"
 
+#include <algorithm>
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
 #include <al/data/dataset.hpp>

@@ -1,5 +1,6 @@
 #include "test.hpp"
 
+#include <algorithm>
 #include <al/level/level.hpp>
 #include <al/physics/sim.hpp>
 

@@ -3,6 +3,7 @@
 // strict and creative faithfulness; every level must be beaten by its designed inputs.
 #include "test.hpp"
 
+#include <algorithm>
 #include <al/audio/analysis.hpp>
 #include <al/audio/synth.hpp>
 #include <al/gen/fusion.hpp>
