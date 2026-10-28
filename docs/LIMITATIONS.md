@@ -22,8 +22,9 @@ Stated plainly, with what each one means in practice.
   (`kEditorYOffset`) is the one to change.
 
 ## Generator (path-first builder, the default)
-- **Outline pieces unverified in GD.** The silhouettes rely on how GD draws its outline pieces by
-  default; Settings → Place piece test shows it in a minute (see the user guide).
+- **Outline pieces unverified in GD.** The outline look (Style → Look) relies on how GD draws its
+  outline pieces by default; Settings → Place piece test shows it in a minute (see the user
+  guide). The default block look does not depend on it.
 - **Not every click is strictly necessary.** 83-88% are (skipping them kills); ship and wave taps
   often only nudge the path, and some jumps have no spot for a hazard that would not also touch a
   fair early or late press. Timing windows are always kept.

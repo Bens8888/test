@@ -105,6 +105,7 @@ Json GenOptions::toJson() const {
     j["engine"] = engine;
     j["switchRate"] = switchRate;
     j["look"] = look;
+    j["optionsVersion"] = 2;
     return j;
 }
 
@@ -136,7 +137,13 @@ GenOptions GenOptions::fromJson(const Json& j) {
     o.faithfulness = float(std::clamp(j.get("faithfulness", 1.0), 0.0, 1.0));
     o.engine = std::clamp(j.get("engine", 2), 1, 2);
     o.switchRate = float(std::clamp(j.get("switchRate", -1.0), -1.0, 1.0));
-    o.look = std::clamp(j.get("look", 0), 0, 1);
+    o.look = std::clamp(j.get("look", o.look), 0, 1);
+    // options saved before version 2 carry the old defaults (outline look, 80% faithfulness):
+    // they move to the new ones
+    if (j.get("optionsVersion", 1) < 2) {
+        o.look = GenOptions{}.look;
+        o.faithfulness = GenOptions{}.faithfulness;
+    }
     return o;
 }
 

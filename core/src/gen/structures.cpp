@@ -38,6 +38,12 @@ public:
         }
         return false;
     }
+    // whether the reserved space in column c has something above y (dir > 0) or below it
+    bool beyond(int c, float y, int dir) const {
+        if (c < 0 || c >= int(m_cols.size())) return false;
+        for (auto& r : m_cols[size_t(c)]) if (dir > 0 ? r.y0 >= y : r.y1 <= y) return true;
+        return false;
+    }
     // lowest / highest reserved y in a column (false if the column is empty)
     bool range(int c, float& lo, float& hi) const {
         if (c < 0 || c >= int(m_cols.size()) || m_cols[size_t(c)].empty()) return false;
@@ -134,7 +140,12 @@ private:
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void frame();
+    void clusters();
     void edgeSpikes();
+    // spikes along a run of free cells (same row, consecutive columns): groups of 1-3 with gaps,
+    // as layouts place them (never a long identical row)
+    void spikeRun(const std::vector<std::pair<int, int>>& run, double rot, double chance, double near);
+    bool spikeAt(int cx, int cy, double rot, double near);
     void corridors();
     bool pillar(int cx, int rowFrom, int rowTo, int width, bool spikeTip, bool down, int floorRow);
     void measureWindows();
@@ -399,49 +410,206 @@ void Structurer::frame() {
     }
 }
 
-// Spikes on the edges of the structures (and on the floor / the bounds) that face the path:
-// spike rows on corridor walls, on platform ends and under floating blocks, side spikes, spiked
-// ground. Only where they keep off every fair run, and only near the path (where they matter).
-void Structurer::edgeSpikes() {
-    const float near = 75.0f;
-    auto tryPlace = [&](int cx, int cy, double rot, double chance) {
-        if (cy < 0 || cy > kTopRow || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return;
-        if (m_hazardCells.count({cx, cy})) return;
-        LevelObject sp = make(oid::Spike, cx * kCell + 15, cy * kCell + 15, rot);
-        // near the path, but clear of it
-        Box b{cx * kCell, cy * kCell, cx * kCell + kCell, cy * kCell + kCell};
-        if (!m_env.hits(b, near)) return;
-        if (!at(cx * 64 + cy, 0x5B1E).chance(chance)) return;
-        if (!hazardFree(sp)) return;
-        addHazard(sp);
+// Small block groups floating next to the path, the shapes layouts are made of: a hanging block
+// with a spike under it, short slabs with a spike at one end, 2x2 blocks, T shapes, steps,
+// columns. Written with the path below them (row 0 is the row nearest the path, spikes on row
+// -1 point at it); under the path they are mirrored.
+namespace {
+struct Motif {
+    std::vector<std::pair<int, int>> cells, spikes;
+    int width;
+};
+const std::vector<Motif>& motifs() {
+    static const std::vector<Motif> m = {
+        {{{0, 0}}, {{0, -1}}, 1},                                         // block, spike
+        {{{0, 0}, {1, 0}}, {{0, -1}, {1, -1}}, 2},                        // slab of two, two spikes
+        {{{0, 0}, {1, 0}, {2, 0}}, {{2, -1}}, 3},                         // slab of three, end spike
+        {{{0, 0}, {1, 0}, {2, 0}}, {{0, -1}}, 3},
+        {{{0, 0}, {0, 1}, {0, 2}}, {{0, -1}}, 1},                         // column, spike tip
+        {{{0, 0}, {1, 0}, {0, 1}, {1, 1}}, {{0, -1}, {1, -1}}, 2},        // 2x2, two spikes
+        {{{0, 0}, {1, 0}, {2, 0}, {1, 1}}, {{1, -1}}, 3},                 // T
+        {{{0, 0}, {1, 0}, {2, 0}, {3, 0}}, {{0, -1}, {3, -1}}, 4},        // long slab, both ends
+        {{{0, 0}, {1, 0}, {1, 1}}, {{0, -1}}, 2},                         // step
+        {{{0, 0}, {1, 0}, {2, 0}}, {}, 3},                                // plain slab
+        {{{0, 0}, {0, 1}}, {{0, -1}}, 1},                                 // short column
     };
+    return m;
+}
+} // namespace
+
+void Structurer::clusters() {
+    if (m_nominal.empty()) return;
+    const auto& lib = motifs();
+    const int cFirst = int(std::floor(m_nominal.front().x / kCell)) + 4;
+    const int cLast = int(std::floor(m_nominal.back().x / kCell)) - 3;
+    // the nominal sample at a column (the player's mode and bounds there)
+    size_t si = 0;
+    auto sampleAt = [&](int cx) -> const Sample& {
+        while (si + 1 < m_nominal.size() && m_nominal[si].x < (cx + 0.5f) * kCell) ++si;
+        return m_nominal[si];
+    };
+    int cx = cFirst;
+    while (cx < cLast) {
+        const Sample& q = sampleAt(cx);
+        const double t = double(si + 1) / phys::kTPS;
+        // flying stretches are framed more densely (both sides of the path are open)
+        const float modeBoost = isFlyingMode(q.mode) ? 1.5f : 1.0f;
+        const float dens = std::clamp(m_density * (0.55f + 0.9f * intensityAt(t)) * modeBoost, 0.05f, 1.0f);
+        Rng r = at(cx, 0xC1A5);
+        const int gap = 2 + int(std::lround((1.0f - dens) * 4.0f)) + int(r.below(3));
+        if (!r.chance(0.35 + 0.6 * double(dens))) { cx += gap; continue; }
+        const Motif& mo = lib[r.below(lib.size())];
+        const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
+        const int ceilRow = q.bounded ? int(std::lround(q.ceilY / kCell)) - 1 : kTopRow;
+        // where the path is over the motif's columns
+        float lo = 1e9f, hi = -1e9f;
+        bool any = false;
+        for (int x = cx - 1; x <= cx + mo.width; ++x) {
+            float a, b;
+            if (m_env.range(x, a, b)) { lo = std::min(lo, a); hi = std::max(hi, b); any = true; }
+        }
+        if (!any) { cx += gap; continue; }
+        // above the path (hanging) or under it, where there is room for the motif to float
+        int height = 0;
+        for (auto [x, y] : mo.cells) height = std::max(height, y + 1);
+        const bool hasSpikes = !mo.spikes.empty();
+        const int aboveRow = int(std::ceil((hi + m_margin) / kCell)) + (hasSpikes ? 1 : 0); // nearest block row above
+        const int belowRow = int(std::floor((lo - m_margin) / kCell)) - 1 - (hasSpikes ? 1 : 0);
+        const int slack = q.bounded ? 0 : 1; // the bounds of a flying stretch can carry a group
+        const bool roomAbove = aboveRow + height - 1 <= ceilRow - slack;
+        const bool roomBelow = belowRow - (height - 1) >= floorRow + slack;
+        if (!roomAbove && !roomBelow) { cx += gap; continue; }
+        bool up = roomAbove && (!roomBelow || r.chance(q.g > 0 ? 0.6 : 0.4));
+        bool placed = false;
+        for (int attempt = 0; attempt < 2 && !placed; ++attempt, up = !up) {
+            if (up ? !roomAbove : !roomBelow) continue;
+            // the nearest rows first, then up to two rows further away
+            for (int d = 0; d < 3 && !placed; ++d) {
+                const int row0 = up ? aboveRow + d : belowRow - d;
+                const int dir = up ? 1 : -1;
+                auto cellOf = [&](std::pair<int, int> c) { return std::pair<int, int>{cx + c.first, row0 + dir * c.second}; };
+                bool ok = true;
+                for (auto c : mo.cells) {
+                    auto [x, y] = cellOf(c);
+                    // floating, or standing on / hanging from the bounds of a flying stretch
+                    const bool onBounds = q.bounded && (y == floorRow || y == ceilRow);
+                    if (y < floorRow || y > ceilRow || ((y == floorRow || y == ceilRow) && !onBounds) || !cellFree(x, y)) { ok = false; break; }
+                    // keep a free cell around it (separate groups, not one blob)
+                    for (int dx = -1; dx <= 1 && ok; ++dx)
+                        for (int dy = -1; dy <= 1 && ok; ++dy)
+                            if (m_res.cells.filled(x + dx, y + dy)) ok = false;
+                }
+                if (!ok) continue;
+                for (auto c : mo.cells) { auto [x, y] = cellOf(c); addCell(x, y); }
+                for (auto c : mo.spikes) {
+                    auto [x, y] = cellOf(c);
+                    if (r.chance(0.55 + 0.45 * double(dens))) spikeAt(x, y, up ? 180 : 0, 0);
+                }
+                // now and then a spike on its front, pointing at the player
+                if (r.chance(0.2)) spikeAt(cx - 1, row0, 270, 0);
+                ++m_res.pillars;
+                placed = true;
+            }
+        }
+        // no room here: try the next column (a placed group keeps its distance)
+        cx += placed ? mo.width + gap : 1;
+    }
+}
+
+bool Structurer::spikeAt(int cx, int cy, double rot, double near) {
+    if (cy < 0 || cy > kTopRow || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return false;
+    if (m_hazardCells.count({cx, cy})) return false;
+    // never a spike standing on (or hanging from) another hazard
+    if (rot == 0 && m_hazardCells.count({cx, cy - 1})) return false;
+    if (rot == 180 && m_hazardCells.count({cx, cy + 1})) return false;
+    if (rot == 270 && m_hazardCells.count({cx + 1, cy})) return false;
+    LevelObject sp = make(oid::Spike, cx * kCell + 15, cy * kCell + 15, rot);
+    // near the path (where it matters), but clear of every fair run
+    Box b{cx * kCell, cy * kCell, cx * kCell + kCell, cy * kCell + kCell};
+    if (near > 0 && !m_env.hits(b, float(near))) return false;
+    // pointing at the path: a spike on top has the path above it, one underneath has it below
+    // (never on the far side of a wall)
+    if (rot == 0 && !m_env.beyond(cx, b.y1 - 2, 1)) return false;
+    if (rot == 180 && !m_env.beyond(cx, b.y0 + 2, -1)) return false;
+    if (!hazardFree(sp)) return false;
+    addHazard(sp);
+    return true;
+}
+
+void Structurer::spikeRun(const std::vector<std::pair<int, int>>& run, double rot, double chance, double near) {
+    if (run.empty()) return;
+    Rng r = at(run.front().first * 64 + run.front().second, 0x5B1E + uint64_t(rot));
+    if (!r.chance(chance)) return;
+    size_t k = r.below(2); // start on the first or second cell
+    while (k < run.size()) {
+        const int len = 1 + int(r.below(3));          // a group of 1-3
+        for (int n = 0; n < len && k < run.size(); ++n, ++k) spikeAt(run[k].first, run[k].second, rot, near);
+        k += 1 + r.below(3);                          // then a gap of 1-3
+    }
+}
+
+// Spikes on the edges of the structures (and on the floor / the bounds) that face the path, in
+// groups: on top of blocks under the path, under blocks over it, one side spike on a wall facing
+// the player. Only where they keep off every fair run, and only near the path.
+void Structurer::edgeSpikes() {
+    const double near = 75.0;
     const double base = std::clamp(0.35 + 0.55 * double(m_density), 0.2, 0.95);
-    // structures and platforms
+    auto solid = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
     std::vector<std::pair<int, int>> cells;
     for (auto& [k, kind] : m_res.cells.cells()) if (kind == CellKind::Solid) cells.push_back({int(int32_t(uint32_t(k >> 32))), int(int32_t(uint32_t(k)))});
     for (auto& [k, kind] : m_platforms.cells()) cells.push_back({int(int32_t(uint32_t(k >> 32))), int(int32_t(uint32_t(k)))});
-    std::sort(cells.begin(), cells.end());
+    std::sort(cells.begin(), cells.end(), [](auto a, auto b) { return a.second != b.second ? a.second < b.second : a.first < b.first; });
     cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
-    auto solid = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
-    for (auto [cx, cy] : cells) {
-        if (!solid(cx, cy + 1)) tryPlace(cx, cy + 1, 0, base);           // on top
-        if (cy > 0 && !solid(cx, cy - 1)) tryPlace(cx, cy - 1, 180, base); // underneath
-        if (!solid(cx - 1, cy)) tryPlace(cx - 1, cy, 270, base * 0.5);   // left end, pointing left
-        if (!solid(cx + 1, cy)) tryPlace(cx + 1, cy, 90, base * 0.3);    // right end
+    // horizontal faces: runs of free cells on top of / under the blocks (row by row, left to right)
+    for (int side : {1, -1}) {
+        std::vector<std::pair<int, int>> run;
+        auto flush = [&]() { spikeRun(run, side > 0 ? 0 : 180, base, near); run.clear(); };
+        for (auto [cx, cy] : cells) {
+            const int y = cy + side;
+            if (y < 0 || solid(cx, y)) continue;
+            if (!run.empty() && (run.back().second != y || run.back().first != cx - 1)) flush();
+            run.push_back({cx, y});
+        }
+        flush();
+    }
+    // walls facing the player: one spike per wall, at the height the player passes
+    std::sort(cells.begin(), cells.end());
+    for (size_t i = 0; i < cells.size();) {
+        const int cx = cells[i].first;
+        size_t j = i;
+        while (j + 1 < cells.size() && cells[j + 1].first == cx && cells[j + 1].second == cells[j].second + 1) ++j;
+        if (!at(cx * 64 + cells[i].second, 0x51DE).chance(base * 0.45)) { i = j + 1; continue; }
+        float lo = 0, hi = 0;
+        const float pathY = m_env.range(cx - 1, lo, hi) ? 0.5f * (lo + hi) : -1e9f;
+        int best = -1;
+        float bd = 1e9f;
+        for (size_t k = i; k <= j; ++k) {
+            const int cy = cells[k].second;
+            if (solid(cx - 1, cy)) continue;
+            const float d = std::fabs((cy + 0.5f) * kCell - pathY);
+            if (d < bd) { bd = d; best = cy; }
+        }
+        if (best >= 0) spikeAt(cx - 1, best, 270, near);
+        i = j + 1;
     }
     // the floor (and the floor/ceiling of flying stretches) where the player never runs
+    std::vector<std::pair<int, int>> floorRun, ceilRun;
     int lastCx = -1;
     for (const Sample& q : m_nominal) {
         const int cx = int(std::floor(q.x / kCell));
         if (cx == lastCx) continue;
         lastCx = cx;
         const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
-        if (!solid(cx, floorRow)) tryPlace(cx, floorRow, 0, base);
+        if (!floorRun.empty() && (floorRun.back().second != floorRow || floorRun.back().first != cx - 1)) { spikeRun(floorRun, 0, base, near); floorRun.clear(); }
+        if (!solid(cx, floorRow)) floorRun.push_back({cx, floorRow});
         if (q.bounded) {
             const int ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
-            if (!solid(cx, ceilRow)) tryPlace(cx, ceilRow, 180, base);
+            if (!ceilRun.empty() && (ceilRun.back().second != ceilRow || ceilRun.back().first != cx - 1)) { spikeRun(ceilRun, 180, base, near); ceilRun.clear(); }
+            if (!solid(cx, ceilRow)) ceilRun.push_back({cx, ceilRow});
         }
     }
+    spikeRun(floorRun, 0, base, near);
+    spikeRun(ceilRun, 180, base, near);
 }
 
 void Structurer::corridors() {
@@ -575,6 +743,7 @@ StructureResult Structurer::run() {
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     corridors();
     frame();
+    clusters();
     edgeSpikes();
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards
     level::Level& L = m_res.level;

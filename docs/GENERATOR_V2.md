@@ -10,8 +10,9 @@ layouts are made the other way round, and that is what v2 does:
 3. **Structures around the path.** Pillars, platforms, spikes, saws and slopes placed in the free
    space around the path's timing envelope. Every click is made necessary: the path the player
    takes without the click (or with it too early or too late) runs into a hazard.
-4. **Look.** Structures are kept as solid cells and slopes, then tiled with the outline set (white
-   silhouettes, the usual layout look) or with default blocks.
+4. **Look.** Structures are kept as solid cells and slopes, then tiled with default blocks (the
+   default, as in most layout videos) or with the outline set (white silhouettes). The path's
+   platforms use the same look.
 5. **Verify.** The bot plays the designed inputs, timing windows are measured, failures are
    repaired (as in v1).
 
@@ -32,13 +33,21 @@ style (modern layouts change every 1-4 clicks, classic ones every section) and t
 switch on the drop and speed up). The mode is chosen for the click rhythm: fast streams suit
 wave/ship/swing, spaced clicks cube/robot/ball/ufo, long notes holds.
 
-## Structures (starter pool, before learning from real levels)
-- hanging pillar (from the top), 1-3 cells wide, spike tip(s), optional 45° slope corner
-- rising pillar (from the floor), spikes on top, optional step and slope corner
-- platform the player runs on, extended down to the floor
-- spike rows and single spikes on structures, floating saws in pockets next to the path
-- wave/ship corridors: top and bottom boundaries following the path with 45° slopes
-- ball/spider: surfaces with slope corners, diamond blocks between the lanes
+## Structures (modelled on reference layouts)
+- small block groups floating next to the path, above or below it: a hanging block with a spike
+  under it, slabs of 2-4 with a spike at one or both ends, 2x2 blocks, T shapes, steps, short
+  columns with a spike tip. Now and then there is a spike on the front, pointing at the player.
+  Groups keep a free cell between them, so they stay separate shapes instead of one blob. In
+  flying stretches they also stand on, or hang from, the floor and ceiling, and they are placed
+  more densely.
+- hanging pillars (from the top) and rising pillars (from the floor) with spike tips, over jump
+  apexes and under the path
+- saw clusters in the pockets next to the path
+- wave/ship corridors: top and bottom walls following the path with 45° slopes (the wave's are
+  sharp triangles)
+- spikes in groups of 1-3 with gaps, never long identical rows. Spikes only go on faces that
+  point at the path (never on the far side of a wall), and only one side spike per wall, at the
+  height the player passes. A spike never stands on another spike.
 
 ## What is learned from real levels (gen/profile, done)
 - per gamemode: how often each click action is used (jump, each orb colour, tap, hold), pads and

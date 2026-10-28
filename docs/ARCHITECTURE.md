@@ -61,11 +61,12 @@ Generator v2 (the default, docs/GENERATOR_V2.md) replaces steps 3-5 below:
 - **Path** (gen/path): beam search over what every click does (jump, orb of any colour, tap/hold,
   flip) and what happens between clicks (platform to land on, pad, gravity portal, the next
   stretch's portals), judged by the simulator in a local world per search node; a rescue (back to
-  a plain cube) when nothing survives a stretch. Platforms are planned with their exact outline
-  pieces (the game's stair-snap rule depends on them).
+  a plain cube) when nothing survives a stretch. Platforms are planned with their exact pieces
+  (blocks or outline pieces: the game's stair-snap rule depends on them).
 - **Structures** (gen/structures): the envelope of early/late presses is reserved; the run without
-  each click gets a hazard where it leaves the envelope; framing pillars, saws and slope corridors
-  keep off the envelope; cells are tiled into outline silhouettes (gen/tiles); windows measured on
+  each click gets a hazard where it leaves the envelope; framing pillars, floating block groups,
+  saws and slope corridors keep off the envelope; spikes come in groups facing the path; cells are
+  tiled into blocks or outline silhouettes (gen/tiles); windows measured on
   the finished level; lighter versions if the final check ever fails.
 - **Profile** (gen/profile): action frequencies per gamemode, stretch lengths, mode transitions and
   structure density counted on bot runs of real levels; used as preferences by all of the above.

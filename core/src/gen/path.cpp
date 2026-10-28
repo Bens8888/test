@@ -68,8 +68,8 @@ LevelObject make(int id, double x, double y, double rot = 0) {
     return o;
 }
 
-// A surface as the outline pieces it will have in the finished level (the stair-snap rule of
-// the game depends on the exact pieces, so planning uses the same ones). Each piece gets its own
+// A surface as the pieces it will have in the finished level (outline pieces or blocks: the
+// stair-snap rule of the game depends on the exact pieces, so planning uses the same ones). Each piece gets its own
 // object id: kSurfaceIds + surface id * 512 + n.
 constexpr int kSurfaceIds = 1 << 24;
 template <class F>
@@ -77,7 +77,7 @@ void forEachSurfaceBlock(const PathSurface& s, int gid, F&& f) {
     CellGrid g;
     g.fill(s.cx0, s.cy0, s.cx1, s.cy1);
     std::vector<LevelObject> tiles;
-    tileCells(g, TileLook::Outline, tiles);
+    tileCells(g, TileLook(s.look), tiles);
     int n = 0;
     for (auto& o : tiles) f(std::move(o), kSurfaceIds + (gid & 0x7fff) * 512 + std::min(n++, 511));
 }
@@ -462,6 +462,7 @@ bool Planner::addLandings(const Cand& base, int fromTick, int Tn, std::vector<Ca
         if (q.g * (q.y - q0.y) >= 0) continue;
         const float feet = q.y - float(q.g) * q.half;
         PathSurface sf;
+        sf.look = uint8_t(m_opt.look == 1 ? TileLook::Blocks : TileLook::Outline);
         sf.g = q.g;
         sf.click = base.info.click;
         if (q.g > 0) {

@@ -8,8 +8,8 @@ layouts from a song, inside the editor. It works in two modes:
 
 It works like a layout maker with a macro: first the gameplay path (what every click does: a
 jump, an orb, a tap, a hold, a flip; pads, portals and gamemode switches in between), then
-structures built around that path (pillars with spike tips, saws, wave and ship corridors with
-slopes), drawn as outline silhouettes. Every layout is played by a built-in physics bot before you
+structures built around that path (floating block groups and pillars with spike tips, saws,
+wave and ship corridors with slopes), in default blocks or as outline silhouettes. Every layout is played by a built-in physics bot before you
 see it, and it can learn your style from levels you like. The output is a layout only: no
 decoration.
 

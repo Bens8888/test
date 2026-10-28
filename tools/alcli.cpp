@@ -41,7 +41,7 @@ static int usage() {
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
         "               [--density 0-1] [--speed-changes 0-3] [--engine 1|2] [--switch 0-1] [--look 0|1] [--profile p.json]\n"
-        "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
+        "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png] [--crop x0:x1]\n");
     return 2;
 }
 
@@ -493,6 +493,7 @@ int main(int argc, char** argv) {
         gen::GenOptions opt;
         opt.variants = 1;
         std::string out, reportPath, inputsPath, pngPath;
+        float cropX0 = 0, cropX1 = -1;
         bool exactSeed = false;
         std::string recordingPath;
         for (int i = 3; i + 1 < argc; i += 2) {
@@ -520,6 +521,7 @@ int main(int argc, char** argv) {
             else if (k == "--report") reportPath = v;
             else if (k == "--inputs") inputsPath = v;
             else if (k == "--png") pngPath = v;
+            else if (k == "--crop") { cropX0 = std::stof(v.substr(0, v.find(':'))); cropX1 = std::stof(v.substr(v.find(':') + 1)); }
             else if (k == "--modes") {
                 // comma-separated gamemode indices to allow (0 cube,1 ship,2 ball,3 ufo,4 wave,5 robot,6 spider,7 swing)
                 opt.modeWeights.fill(0.0f);
@@ -578,6 +580,12 @@ int main(int argc, char** argv) {
             report::RenderOptions ro;
             ro.scale = 0.35f;
             ro.maxWidth = 2400;
+            if (cropX1 > cropX0) {
+                // a close-up at editor scale
+                ro.scale = 1.0f;
+                ro.x0 = cropX0;
+                ro.x1 = cropX1;
+            }
             writeFile(pngPath, report::renderPng(best.level, &best.inputs, ro));
             std::printf("wrote %s\n", pngPath.c_str());
         }

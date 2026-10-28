@@ -50,6 +50,7 @@ struct PathSurface {
     int cx0 = 0, cx1 = 0, cy0 = 0, cy1 = 0;
     int g = 1;
     int click = -1;             // the click it was built for
+    uint8_t look = 0;           // TileLook it is tiled with (planned with the exact pieces)
 };
 
 struct PathObject {
