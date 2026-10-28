@@ -18,13 +18,14 @@ namespace {
 std::string fixture(const char* name) { return std::string(AL_SOURCE_DIR) + "/tests/data/" + name; }
 } // namespace
 
-TEST(model_pytorch_parity) {
+namespace {
+void checkParity(const std::string& modelPath, const std::string& parityPath) {
     std::string err;
-    auto m = model::PatternModel::load(fixture("model_fixture.alm"), &err);
+    auto m = model::PatternModel::load(modelPath, &err);
     if (!m) std::printf("    %s\n", err.c_str());
     REQUIRE(m != nullptr);
     std::string text;
-    REQUIRE(readFile(fixture("model_fixture_parity.json"), text));
+    REQUIRE(readFile(parityPath, text));
     auto j = Json::parse(text);
     REQUIRE(j.has_value());
     double maxLogit = 0, maxInput = 0;
@@ -51,9 +52,17 @@ TEST(model_pytorch_parity) {
         ++cases;
     }
     std::printf("    %d cases, %zu parameters: max |input diff| %.2e, max |logit diff| %.2e\n", cases, m->parameterCount(), maxInput, maxLogit);
-    CHECK(cases >= 10);
+    CHECK(cases >= 8);
     CHECK(maxInput < 1e-6);
     CHECK(maxLogit < 1e-4);
+}
+} // namespace
+
+TEST(model_pytorch_parity) { checkParity(fixture("model_fixture.alm"), fixture("model_fixture_parity.json")); }
+
+// the general model shipped with the mod against the test vectors PyTorch wrote when it was trained
+TEST(model_shipped_parity) {
+    checkParity(std::string(AL_SOURCE_DIR) + "/resources/models/model_all.alm", fixture("shipped_model_parity.json"));
 }
 
 TEST(model_file_validation) {

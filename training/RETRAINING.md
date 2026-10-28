@@ -57,7 +57,7 @@ python3 training/train_patterns.py --data training/data/selfplay.jsonl training/
   - `parity_*.json`, test vectors;
   - `train_report_*.json`, with data sizes, validation accuracy, hardware and wall time.
 
-The reference run (training/models/EVALUATION.md) took **25.4 s** for the general model and 8
+The reference run (training/models/EVALUATION.md) took **15.7 s** for the general model and 8
 style fine-tunes, on an Intel Xeon @ 2.30 GHz with 4 threads, CPU only.
 
 ## 4. Check that the new model is better (optional, recommended)

@@ -1,0 +1,593 @@
+{
+ "data": {
+  "files": [
+   "training/data/selfplay.jsonl"
+  ],
+  "sequences": 900,
+  "decisions": 46112,
+  "train_sequences": 810,
+  "val_sequences": 90
+ },
+ "baseline_accuracy": 0.09119960668633235,
+ "models": {
+  "all": {
+   "file": "training/models/final/model_all.alm",
+   "bytes": 265472,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 4.73534616609899,
+     "accuracy": 0.0752212389380531,
+     "top5": 0.31563421828908556,
+     "nll": 3.9506682074292687,
+     "decisions": 4068,
+     "seconds": 0.9078412055969238
+    },
+    {
+     "epoch": 2,
+     "train_loss": 3.4346313214883573,
+     "accuracy": 0.1516715830875123,
+     "top5": 0.5034414945919371,
+     "nll": 3.0771719215249123,
+     "decisions": 4068,
+     "seconds": 0.8867371082305908
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.8147315106740813,
+     "accuracy": 0.16125860373647985,
+     "top5": 0.5580137659783677,
+     "nll": 2.8436584581667694,
+     "decisions": 4068,
+     "seconds": 0.8890464305877686
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.63765500231487,
+     "accuracy": 0.1735496558505408,
+     "top5": 0.5909537856440511,
+     "nll": 2.7440313590487198,
+     "decisions": 4068,
+     "seconds": 0.9510700702667236
+    },
+    {
+     "epoch": 5,
+     "train_loss": 2.545257981230573,
+     "accuracy": 0.18436578171091444,
+     "top5": 0.6027531956735497,
+     "nll": 2.6681490922337554,
+     "decisions": 4068,
+     "seconds": 0.9107480049133301
+    },
+    {
+     "epoch": 6,
+     "train_loss": 2.480874834991083,
+     "accuracy": 0.18264503441494592,
+     "top5": 0.6093903638151426,
+     "nll": 2.630534365524116,
+     "decisions": 4068,
+     "seconds": 0.9481873512268066
+    },
+    {
+     "epoch": 7,
+     "train_loss": 2.425990162826166,
+     "accuracy": 0.18657817109144542,
+     "top5": 0.6111111111111112,
+     "nll": 2.612689846824404,
+     "decisions": 4068,
+     "seconds": 0.9634394645690918
+    },
+    {
+     "epoch": 8,
+     "train_loss": 2.391846915570701,
+     "accuracy": 0.18706981317600788,
+     "top5": 0.6209439528023599,
+     "nll": 2.603188351690476,
+     "decisions": 4068,
+     "seconds": 0.8906424045562744
+    },
+    {
+     "epoch": 9,
+     "train_loss": 2.371894112447413,
+     "accuracy": 0.1851032448377581,
+     "top5": 0.6106194690265486,
+     "nll": 2.5939009093195056,
+     "decisions": 4068,
+     "seconds": 0.9059834480285645
+    },
+    {
+     "epoch": 10,
+     "train_loss": 2.3542082106194844,
+     "accuracy": 0.19075712881022616,
+     "top5": 0.6224188790560472,
+     "nll": 2.582123412964032,
+     "decisions": 4068,
+     "seconds": 0.9680049419403076
+    },
+    {
+     "epoch": 11,
+     "train_loss": 2.3310466481418146,
+     "accuracy": 0.18952802359882007,
+     "top5": 0.6241396263520157,
+     "nll": 2.578350515550803,
+     "decisions": 4068,
+     "seconds": 0.8975849151611328
+    },
+    {
+     "epoch": 12,
+     "train_loss": 2.3504347306926077,
+     "accuracy": 0.1914945919370698,
+     "top5": 0.6226647000983284,
+     "nll": 2.576727379388162,
+     "decisions": 4068,
+     "seconds": 0.9173128604888916
+    }
+   ],
+   "best": {
+    "accuracy": 0.1914945919370698,
+    "top5": 0.6226647000983284,
+    "nll": 2.576727379388162,
+    "decisions": 4068
+   }
+  },
+  "flow": {
+   "file": "training/models/final/model_flow.alm",
+   "bytes": 265490,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.3822245359420777,
+     "accuracy": 0.18992654774396642,
+     "top5": 0.6002098635886673,
+     "nll": 2.689568087286614,
+     "decisions": 953,
+     "seconds": 0.1342926025390625
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.325096106529236,
+     "accuracy": 0.18153200419727178,
+     "top5": 0.5907660020986358,
+     "nll": 2.7010497476471684,
+     "decisions": 953,
+     "seconds": 0.12854647636413574
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.306414318084717,
+     "accuracy": 0.1794333683105981,
+     "top5": 0.5855194123819517,
+     "nll": 2.7091864618899817,
+     "decisions": 953,
+     "seconds": 0.12801766395568848
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.317544865608215,
+     "accuracy": 0.18048268625393493,
+     "top5": 0.5886673662119623,
+     "nll": 2.708664399754463,
+     "decisions": 953,
+     "seconds": 0.13049817085266113
+    }
+   ],
+   "best": {
+    "accuracy": 0.18992654774396642,
+    "top5": 0.6002098635886673,
+    "nll": 2.689568087286614,
+    "decisions": 953
+   }
+  },
+  "tight": {
+   "file": "training/models/final/model_tight.alm",
+   "bytes": 265492,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.3174333373705545,
+     "accuracy": 0.20155038759689922,
+     "top5": 0.6542635658914728,
+     "nll": 2.4904592669287395,
+     "decisions": 645,
+     "seconds": 0.13976716995239258
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.2981626788775125,
+     "accuracy": 0.19534883720930232,
+     "top5": 0.6387596899224807,
+     "nll": 2.490445660435876,
+     "decisions": 645,
+     "seconds": 0.1336979866027832
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.269981066385905,
+     "accuracy": 0.16744186046511628,
+     "top5": 0.662015503875969,
+     "nll": 2.4953099154686744,
+     "decisions": 645,
+     "seconds": 0.13424396514892578
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.263911724090576,
+     "accuracy": 0.16589147286821707,
+     "top5": 0.6589147286821705,
+     "nll": 2.49556974736295,
+     "decisions": 645,
+     "seconds": 0.14803338050842285
+    }
+   ],
+   "best": {
+    "accuracy": 0.19534883720930232,
+    "top5": 0.6387596899224807,
+    "nll": 2.490445660435876,
+    "decisions": 645
+   }
+  },
+  "chaotic": {
+   "file": "training/models/final/model_chaotic.alm",
+   "bytes": 265481,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.4469122648239137,
+     "accuracy": 0.23046875,
+     "top5": 0.650390625,
+     "nll": 2.5195107327308506,
+     "decisions": 512,
+     "seconds": 0.12948036193847656
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.4441069841384886,
+     "accuracy": 0.232421875,
+     "top5": 0.642578125,
+     "nll": 2.5255650305189192,
+     "decisions": 512,
+     "seconds": 0.11909818649291992
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.431698441505432,
+     "accuracy": 0.244140625,
+     "top5": 0.650390625,
+     "nll": 2.5302610176149756,
+     "decisions": 512,
+     "seconds": 0.1145026683807373
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.4036388635635375,
+     "accuracy": 0.244140625,
+     "top5": 0.650390625,
+     "nll": 2.530519353924319,
+     "decisions": 512,
+     "seconds": 0.11252498626708984
+    }
+   ],
+   "best": {
+    "accuracy": 0.23046875,
+    "top5": 0.650390625,
+    "nll": 2.5195107327308506,
+    "decisions": 512
+   }
+  },
+  "minimal": {
+   "file": "training/models/final/model_minimal.alm",
+   "bytes": 265497,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.195901799201965,
+     "accuracy": 0.19854280510018216,
+     "top5": 0.6375227686703097,
+     "nll": 2.5622198034505375,
+     "decisions": 549,
+     "seconds": 0.11154484748840332
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.20503568649292,
+     "accuracy": 0.1785063752276867,
+     "top5": 0.6284153005464481,
+     "nll": 2.5647414195298714,
+     "decisions": 549,
+     "seconds": 0.11496615409851074
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.1611876249313355,
+     "accuracy": 0.18579234972677597,
+     "top5": 0.6320582877959927,
+     "nll": 2.571384899386074,
+     "decisions": 549,
+     "seconds": 0.11154484748840332
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.131909728050232,
+     "accuracy": 0.1912568306010929,
+     "top5": 0.6338797814207651,
+     "nll": 2.5715363633654373,
+     "decisions": 549,
+     "seconds": 0.11255788803100586
+    }
+   ],
+   "best": {
+    "accuracy": 0.19854280510018216,
+    "top5": 0.6375227686703097,
+    "nll": 2.5622198034505375,
+    "decisions": 549
+   }
+  },
+  "retro": {
+   "file": "training/models/final/model_retro.alm",
+   "bytes": 265492,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.3182459831237794,
+     "accuracy": 0.29080118694362017,
+     "top5": 0.7537091988130564,
+     "nll": 2.241584766512455,
+     "decisions": 337,
+     "seconds": 0.10619139671325684
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.3334089040756227,
+     "accuracy": 0.27299703264094954,
+     "top5": 0.7507418397626113,
+     "nll": 2.256403420728463,
+     "decisions": 337,
+     "seconds": 0.10486268997192383
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.2842865705490114,
+     "accuracy": 0.29376854599406527,
+     "top5": 0.7596439169139466,
+     "nll": 2.2427220726579162,
+     "decisions": 337,
+     "seconds": 0.12200069427490234
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.2867238521575928,
+     "accuracy": 0.29376854599406527,
+     "top5": 0.7596439169139466,
+     "nll": 2.2442239455723976,
+     "decisions": 337,
+     "seconds": 0.10261392593383789
+    }
+   ],
+   "best": {
+    "accuracy": 0.29080118694362017,
+    "top5": 0.7537091988130564,
+    "nll": 2.241584766512455,
+    "decisions": 337
+   }
+  },
+  "modern": {
+   "file": "training/models/final/model_modern.alm",
+   "bytes": 265495,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.4064066648483275,
+     "accuracy": 0.1431980906921241,
+     "top5": 0.5871121718377088,
+     "nll": 2.672948322887921,
+     "decisions": 419,
+     "seconds": 0.11833977699279785
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.359560799598694,
+     "accuracy": 0.13126491646778043,
+     "top5": 0.60381861575179,
+     "nll": 2.676365968435647,
+     "decisions": 419,
+     "seconds": 0.11492180824279785
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.3426258087158205,
+     "accuracy": 0.1360381861575179,
+     "top5": 0.60381861575179,
+     "nll": 2.6735583466960025,
+     "decisions": 419,
+     "seconds": 0.10625195503234863
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.2922614574432374,
+     "accuracy": 0.13842482100238662,
+     "top5": 0.6109785202863962,
+     "nll": 2.6717384880084127,
+     "decisions": 419,
+     "seconds": 0.10910439491271973
+    }
+   ],
+   "best": {
+    "accuracy": 0.13842482100238662,
+    "top5": 0.6109785202863962,
+    "nll": 2.6717384880084127,
+    "decisions": 419
+   }
+  },
+  "memory": {
+   "file": "training/models/final/model_memory.alm",
+   "bytes": 265495,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.3087371826171874,
+     "accuracy": 0.18059299191374664,
+     "top5": 0.5902964959568733,
+     "nll": 2.6343215058113367,
+     "decisions": 371,
+     "seconds": 0.10980391502380371
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.2554898023605348,
+     "accuracy": 0.16981132075471697,
+     "top5": 0.5929919137466307,
+     "nll": 2.644443835852281,
+     "decisions": 371,
+     "seconds": 0.10827279090881348
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.2928895235061644,
+     "accuracy": 0.1752021563342318,
+     "top5": 0.5876010781671159,
+     "nll": 2.642511555448054,
+     "decisions": 371,
+     "seconds": 0.10428261756896973
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.2560389280319213,
+     "accuracy": 0.1778975741239892,
+     "top5": 0.5741239892183289,
+     "nll": 2.6428311802948903,
+     "decisions": 371,
+     "seconds": 0.10597705841064453
+    }
+   ],
+   "best": {
+    "accuracy": 0.18059299191374664,
+    "top5": 0.5902964959568733,
+    "nll": 2.6343215058113367,
+    "decisions": 371
+   }
+  },
+  "decor": {
+   "file": "training/models/final/model_decor.alm",
+   "bytes": 265492,
+   "history": [
+    {
+     "epoch": 1,
+     "train_loss": 2.371945333480835,
+     "accuracy": 0.13120567375886524,
+     "top5": 0.5283687943262412,
+     "nll": 2.737702078853093,
+     "decisions": 282,
+     "seconds": 0.0999913215637207
+    },
+    {
+     "epoch": 2,
+     "train_loss": 2.3362576007843017,
+     "accuracy": 0.1453900709219858,
+     "top5": 0.5106382978723404,
+     "nll": 2.7381674381012613,
+     "decisions": 282,
+     "seconds": 0.10317158699035645
+    },
+    {
+     "epoch": 3,
+     "train_loss": 2.3208898305892944,
+     "accuracy": 0.1524822695035461,
+     "top5": 0.5283687943262412,
+     "nll": 2.7301000331310514,
+     "decisions": 282,
+     "seconds": 0.10873246192932129
+    },
+    {
+     "epoch": 4,
+     "train_loss": 2.3346715211868285,
+     "accuracy": 0.14893617021276595,
+     "top5": 0.5212765957446809,
+     "nll": 2.7301424784017794,
+     "decisions": 282,
+     "seconds": 0.1322917938232422
+    }
+   ],
+   "best": {
+    "accuracy": 0.1524822695035461,
+    "top5": 0.5283687943262412,
+    "nll": 2.7301000331310514,
+    "decisions": 282
+   }
+  }
+ },
+ "hardware": {
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.30GHz",
+  "threads": 4,
+  "torch": "2.14.1+cu130",
+  "python": "3.13.17",
+  "os": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+  "gpu": "none (CPU only)"
+ },
+ "seconds": 15.68900990486145,
+ "log": [
+  "data: 900 sequences, 46112 decisions, vocab 174; train 810 / val 90 sequences",
+  "baseline (most frequent pattern per gamemode): val accuracy 0.091",
+  "model: GRU hidden 96, embed 24, window 16, 66294 parameters (259 KB)",
+  "  epoch  1/12: loss 4.735  val acc 0.075 top5 0.316 nll 3.951  (0.9 s)",
+  "  epoch  2/12: loss 3.435  val acc 0.152 top5 0.503 nll 3.077  (0.9 s)",
+  "  epoch  3/12: loss 2.815  val acc 0.161 top5 0.558 nll 2.844  (0.9 s)",
+  "  epoch  4/12: loss 2.638  val acc 0.174 top5 0.591 nll 2.744  (1.0 s)",
+  "  epoch  5/12: loss 2.545  val acc 0.184 top5 0.603 nll 2.668  (0.9 s)",
+  "  epoch  6/12: loss 2.481  val acc 0.183 top5 0.609 nll 2.631  (0.9 s)",
+  "  epoch  7/12: loss 2.426  val acc 0.187 top5 0.611 nll 2.613  (1.0 s)",
+  "  epoch  8/12: loss 2.392  val acc 0.187 top5 0.621 nll 2.603  (0.9 s)",
+  "  epoch  9/12: loss 2.372  val acc 0.185 top5 0.611 nll 2.594  (0.9 s)",
+  "  epoch 10/12: loss 2.354  val acc 0.191 top5 0.622 nll 2.582  (1.0 s)",
+  "  epoch 11/12: loss 2.331  val acc 0.190 top5 0.624 nll 2.578  (0.9 s)",
+  "  epoch 12/12: loss 2.350  val acc 0.191 top5 0.623 nll 2.577  (0.9 s)",
+  "wrote training/models/final/model_all.alm (259 KB)",
+  "fine-tuning for style flow (96 sequences)",
+  "  epoch  1/4: loss 2.382  val acc 0.190 top5 0.600 nll 2.690  (0.1 s)",
+  "  epoch  2/4: loss 2.325  val acc 0.182 top5 0.591 nll 2.701  (0.1 s)",
+  "  epoch  3/4: loss 2.306  val acc 0.179 top5 0.586 nll 2.709  (0.1 s)",
+  "  epoch  4/4: loss 2.318  val acc 0.180 top5 0.589 nll 2.709  (0.1 s)",
+  "wrote training/models/final/model_flow.alm",
+  "fine-tuning for style tight (108 sequences)",
+  "  epoch  1/4: loss 2.317  val acc 0.202 top5 0.654 nll 2.490  (0.1 s)",
+  "  epoch  2/4: loss 2.298  val acc 0.195 top5 0.639 nll 2.490  (0.1 s)",
+  "  epoch  3/4: loss 2.270  val acc 0.167 top5 0.662 nll 2.495  (0.1 s)",
+  "  epoch  4/4: loss 2.264  val acc 0.166 top5 0.659 nll 2.496  (0.1 s)",
+  "wrote training/models/final/model_tight.alm",
+  "fine-tuning for style chaotic (93 sequences)",
+  "  epoch  1/4: loss 2.447  val acc 0.230 top5 0.650 nll 2.520  (0.1 s)",
+  "  epoch  2/4: loss 2.444  val acc 0.232 top5 0.643 nll 2.526  (0.1 s)",
+  "  epoch  3/4: loss 2.432  val acc 0.244 top5 0.650 nll 2.530  (0.1 s)",
+  "  epoch  4/4: loss 2.404  val acc 0.244 top5 0.650 nll 2.531  (0.1 s)",
+  "wrote training/models/final/model_chaotic.alm",
+  "fine-tuning for style minimal (117 sequences)",
+  "  epoch  1/4: loss 2.196  val acc 0.199 top5 0.638 nll 2.562  (0.1 s)",
+  "  epoch  2/4: loss 2.205  val acc 0.179 top5 0.628 nll 2.565  (0.1 s)",
+  "  epoch  3/4: loss 2.161  val acc 0.186 top5 0.632 nll 2.571  (0.1 s)",
+  "  epoch  4/4: loss 2.132  val acc 0.191 top5 0.634 nll 2.572  (0.1 s)",
+  "wrote training/models/final/model_minimal.alm",
+  "fine-tuning for style retro (96 sequences)",
+  "  epoch  1/4: loss 2.318  val acc 0.291 top5 0.754 nll 2.242  (0.1 s)",
+  "  epoch  2/4: loss 2.333  val acc 0.273 top5 0.751 nll 2.256  (0.1 s)",
+  "  epoch  3/4: loss 2.284  val acc 0.294 top5 0.760 nll 2.243  (0.1 s)",
+  "  epoch  4/4: loss 2.287  val acc 0.294 top5 0.760 nll 2.244  (0.1 s)",
+  "wrote training/models/final/model_retro.alm",
+  "fine-tuning for style modern (111 sequences)",
+  "  epoch  1/4: loss 2.406  val acc 0.143 top5 0.587 nll 2.673  (0.1 s)",
+  "  epoch  2/4: loss 2.360  val acc 0.131 top5 0.604 nll 2.676  (0.1 s)",
+  "  epoch  3/4: loss 2.343  val acc 0.136 top5 0.604 nll 2.674  (0.1 s)",
+  "  epoch  4/4: loss 2.292  val acc 0.138 top5 0.611 nll 2.672  (0.1 s)",
+  "wrote training/models/final/model_modern.alm",
+  "fine-tuning for style memory (81 sequences)",
+  "  epoch  1/4: loss 2.309  val acc 0.181 top5 0.590 nll 2.634  (0.1 s)",
+  "  epoch  2/4: loss 2.255  val acc 0.170 top5 0.593 nll 2.644  (0.1 s)",
+  "  epoch  3/4: loss 2.293  val acc 0.175 top5 0.588 nll 2.643  (0.1 s)",
+  "  epoch  4/4: loss 2.256  val acc 0.178 top5 0.574 nll 2.643  (0.1 s)",
+  "wrote training/models/final/model_memory.alm",
+  "fine-tuning for style decor (108 sequences)",
+  "  epoch  1/4: loss 2.372  val acc 0.131 top5 0.528 nll 2.738  (0.1 s)",
+  "  epoch  2/4: loss 2.336  val acc 0.145 top5 0.511 nll 2.738  (0.1 s)",
+  "  epoch  3/4: loss 2.321  val acc 0.152 top5 0.528 nll 2.730  (0.1 s)",
+  "  epoch  4/4: loss 2.335  val acc 0.149 top5 0.521 nll 2.730  (0.1 s)",
+  "wrote training/models/final/model_decor.alm"
+ ]
+}
