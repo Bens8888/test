@@ -164,6 +164,20 @@ ClickFusion fuseClicks(const rec::Recording& rec, const audio::MusicAnalysis& A)
     return F;
 }
 
+double levelStartFor(const rec::Recording& r) {
+    auto presses = r.pressTimes();
+    if (presses.empty()) return 0;
+    const double first = presses.front();
+    // a short run-up before the first click; nothing to trim for a click in the first seconds
+    return first > 6.0 ? first - 2.5 : 0.0;
+}
+
+rec::Recording shiftRecording(const rec::Recording& r, double songStart) {
+    rec::Recording out = r;
+    out.songOffset -= songStart;
+    return out;
+}
+
 DesignPlan planFromRecording(const ClickFusion& F, const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng) {
     const double f = std::clamp(double(opt.faithfulness), 0.0, 1.0);
     DesignPlan plan;

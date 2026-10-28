@@ -1432,6 +1432,71 @@ MusicAnalysis analyze(const AudioBuffer& input, const AnalysisOptions& opt, cons
     return A;
 }
 
+MusicAnalysis trimStart(const MusicAnalysis& A, double start, double* used) {
+    MusicAnalysis B = A;
+    const double step = A.hopCoarse > 0 ? A.hopCoarse : A.hop;
+    if (step <= 0 || start <= 0) {
+        if (used) *used = 0;
+        return B;
+    }
+    const size_t nCoarse = size_t(std::floor(std::min(start, A.duration) / step));
+    const double s = double(nCoarse) * step;
+    if (used) *used = s;
+    if (nCoarse == 0) return B;
+    const size_t nFine = A.hop > 0 ? size_t(std::lround(s / A.hop)) : 0;
+    auto dropFront = [](auto& v, size_t n) { v.erase(v.begin(), v.begin() + long(std::min(n, v.size()))); };
+    dropFront(B.rmsDb, nFine);
+    dropFront(B.onsetEnv, nFine);
+    for (auto& b : B.bandOnset) dropFront(b, nFine);
+    dropFront(B.intensity, nFine);
+    dropFront(B.percRatio, nCoarse);
+    dropFront(B.bassPercRatio, nCoarse);
+    dropFront(B.pitchMidi, nCoarse);
+    dropFront(B.pitchConf, nCoarse);
+    dropFront(B.chroma, nCoarse);
+    B.duration = std::max(0.0, A.duration - s);
+    // beats (and their per-beat data) before the start go; indices shift
+    size_t firstBeat = 0;
+    while (firstBeat < A.beats.size() && A.beats[firstBeat] < s) ++firstBeat;
+    dropFront(B.beats, firstBeat);
+    dropFront(B.beatStrength, firstBeat);
+    dropFront(B.beatInBar, firstBeat);
+    for (auto& b : B.beats) b -= s;
+    size_t firstDown = 0;
+    while (firstDown < A.downbeats.size() && A.downbeats[firstDown] < s) ++firstDown;
+    dropFront(B.downbeats, firstDown);
+    for (auto& d : B.downbeats) d -= s;
+    size_t firstTempo = 0;
+    while (firstTempo + 1 < A.tempo.size() && A.tempo[firstTempo].end <= s) ++firstTempo;
+    dropFront(B.tempo, firstTempo);
+    for (auto& t : B.tempo) { t.start = std::max(0.0, t.start - s); t.end -= s; }
+    size_t firstSection = 0;
+    while (firstSection + 1 < A.sections.size() && A.sections[firstSection].end <= s) ++firstSection;
+    dropFront(B.sections, firstSection);
+    for (auto& sec : B.sections) {
+        sec.start = std::max(0.0, sec.start - s);
+        sec.end -= s;
+        sec.firstBar = std::max(0, sec.firstBar - int(firstDown));
+    }
+    B.events.clear();
+    for (const auto& e : A.events) {
+        if (e.time < s) continue;
+        MusicEvent f = e;
+        f.time -= s;
+        if (f.type == EventType::Beat || f.type == EventType::Downbeat) f.index -= int(firstBeat);
+        else if (f.type == EventType::SectionStart) f.index -= int(firstSection);
+        else if (f.type == EventType::TempoChange) f.index -= int(firstTempo);
+        B.events.push_back(f);
+    }
+    if (A.duration > 0 && !A.waveformMin.empty()) {
+        const size_t bins = A.waveformMin.size();
+        const size_t cut = std::min(bins, size_t(double(bins) * s / A.duration));
+        dropFront(B.waveformMin, cut);
+        dropFront(B.waveformMax, cut);
+    }
+    return B;
+}
+
 bool analyzeFile(const std::string& path, MusicAnalysis& out, std::string& error, const AnalysisOptions& opt, const Progress* progress) {
     AudioBuffer buf;
     if (progress) progress->report("decode", 0);

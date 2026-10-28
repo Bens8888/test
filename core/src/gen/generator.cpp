@@ -216,6 +216,7 @@ GenResult generateVariant(const audio::MusicAnalysis& A, const GenOptions& opt, 
     // the final bot verification with the designed inputs; returns true if they beat the level
     auto finishAndVerify = [&]() {
         res.level = b.level();
+        res.level.settings.songOffset = res.plan.songStart;
         res.inputs = b.inputs();
         res.clicks = b.clickResults();
         res.parts = b.partResults();

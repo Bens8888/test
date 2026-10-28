@@ -78,7 +78,9 @@ offset.
      music. The classic builder also thins out clicks that are too close for its gamemode.
 
 The level ends about two seconds after your last click. A recording of part of the song makes a
-level of that part. If a playtest started from a start position or the middle of the level, the
+level of that part. If the first click comes late in the song (a take of the middle), the level
+starts about 2.5 seconds before it, and its song offset is set to match. You don't get a long
+empty run first. If a playtest started from a start position or the middle of the level, the
 song's real position is measured, so the clicks still match the song.
 
 AutoLayout also measures your latency (how late you click on average) and removes it. It finds

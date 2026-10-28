@@ -8,6 +8,7 @@
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
 #include <al/rec/demo.hpp>
+#include <al/level/level.hpp>
 #include <al/rec/taps.hpp>
 
 #include <algorithm>
@@ -123,4 +124,56 @@ TEST(taps_track_makes_a_level_of_the_tapped_part) {
     for (auto& o : res.level.objects) maxX = std::max(maxX, o.x);
     const double endX = res.level.objects.empty() ? 0 : maxX;
     CHECK_MSG(endX < 30000.0, "objects up to x=%.0f", endX);
+}
+
+TEST(taps_late_take_starts_the_level_at_the_song_offset) {
+    auto song = audio::demoSong();
+    auto A = audio::analyze(audio::render(song));
+    // the trimmed analysis is the same music, shifted
+    double used = 0;
+    auto B = audio::trimStart(A, 12.3, &used);
+    CHECK(used > 12.2 && used <= 12.3);
+    CHECK_NEAR(B.duration, A.duration - used, 1e-9);
+    for (double t : {0.5, 3.0, 10.0}) {
+        CHECK_NEAR(B.onsetAt(t), A.onsetAt(t + used), 1e-6);
+        CHECK_NEAR(B.intensityAt(t), A.intensityAt(t + used), 1e-6);
+        CHECK_NEAR(B.pitchAt(t), A.pitchAt(t + used), 1e-6);
+    }
+    REQUIRE(!B.events.empty() && !B.beats.empty());
+    CHECK(B.events.front().time >= 0 && B.beats.front() >= 0);
+    CHECK(B.beats.size() == B.beatStrength.size() && B.beats.size() == B.beatInBar.size());
+    CHECK(!B.sections.empty() && B.sections.front().start == 0.0);
+    // a take of the middle of the song
+    auto demoRec = demoRecording(song);
+    std::vector<Tap> take;
+    for (double t : demoRec.pressTimes()) if (t > 20.0 && t < 34.0) take.push_back(tap(t));
+    REQUIRE(take.size() > 8);
+    TapTrack tr;
+    tr.merge(take);
+    auto rec = tr.toRecording();
+    const double start = gen::levelStartFor(rec);
+    CHECK(start > 15.0 && start < take.front().time);
+    double songStart = 0;
+    auto At = audio::trimStart(A, start, &songStart);
+    auto F = gen::fuseClicks(gen::shiftRecording(rec, songStart), At);
+    gen::GenOptions opt;
+    opt.seed = 9;
+    Rng rng(opt.seed);
+    auto plan = gen::planFromRecording(F, At, opt, rng);
+    plan.songStart = songStart;
+    // the first click comes after a short run-up, not 20 s of nothing
+    REQUIRE(!plan.clicks.empty());
+    CHECK(plan.clicks.front().time > 1.0 && plan.clicks.front().time < 4.0);
+    CHECK_NEAR(plan.clicks.front().time + songStart, take.front().time - F.latencyMs / 1000.0, 1e-6);
+    auto res = gen::generateVariant(At, opt, opt.seed, nullptr, nullptr, &plan);
+    CHECK(res.report.beatable);
+    CHECK_NEAR(res.level.settings.songOffset, songStart, 1e-9);
+    {
+        auto back = level::Level::fromLevelString(res.level.toLevelString());
+        REQUIRE(back.has_value());
+        CHECK_NEAR(back->settings.songOffset, songStart, 1e-3);
+    }
+    // re-rolling a part keeps the song offset
+    auto rr = gen::rerollPart(res, 0, At, opt, 77, nullptr);
+    CHECK_NEAR(rr.level.settings.songOffset, songStart, 1e-9);
 }

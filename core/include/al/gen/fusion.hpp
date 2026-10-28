@@ -62,6 +62,13 @@ struct ClickFusion {
 // Analyse a recording against the music (player 1's jump button).
 ClickFusion fuseClicks(const rec::Recording& rec, const audio::MusicAnalysis& A);
 
+// Where a level of this recording should start in the song: a little before the first click when
+// that comes late (a take of the middle of the song), else 0. The level gets this as its song
+// offset; analyse with audio::trimStart and shift the recording by it (shiftRecording).
+double levelStartFor(const rec::Recording& r);
+// The recording with its times relative to a level starting at `songStart` of the song.
+rec::Recording shiftRecording(const rec::Recording& r, double songStart);
+
 // Design plan from the fused clicks: parts and gamemodes from the music (gamemodes that suit the
 // recorded rhythm, or the recorded gamemodes when following strictly), clicks from the recording
 // steered by opt.faithfulness.

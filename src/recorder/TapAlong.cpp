@@ -48,7 +48,7 @@ rec::TapTrack& TapAlong::track(LevelEditorLayer* lel) {
     bool loaded = false;
     if (std::filesystem::exists(path)) {
         if (auto text = file::readString(path)) {
-            if (auto j = Json::parse(text.unwrap())) {
+            if (auto j = al::Json::parse(text.unwrap())) {
                 if (auto t = rec::TapTrack::fromJson(*j)) {
                     m_track = std::move(*t);
                     loaded = true;

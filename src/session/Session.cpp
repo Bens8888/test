@@ -228,15 +228,24 @@ std::shared_ptr<Job> Session::startGenerate(GJGameLevel* level) {
                 A = a;
                 Session::get().storeAnalysis(key, A);
             }
-            job->analysis = A;
             std::optional<gen::DesignPlan> plan;
             if (recording) {
+                // clicks that start late in the song: the level starts a little before the first
+                // one (its song offset) instead of with a long empty run
+                rec::Recording clicks = *recording;
+                double songStart = 0;
+                if (double start = gen::levelStartFor(clicks); start > 0) {
+                    A = std::make_shared<const audio::MusicAnalysis>(audio::trimStart(*A, start, &songStart));
+                    clicks = gen::shiftRecording(clicks, songStart);
+                }
                 setStage(*job, "Fusing your clicks with the music", 0.36f);
-                auto F = gen::fuseClicks(*recording, *A);
+                auto F = gen::fuseClicks(clicks, *A);
                 job->fusion = F;
                 Rng rng(opt.seed);
                 plan = gen::planFromRecording(F, *A, opt, rng);
+                plan->songStart = songStart;
             }
+            job->analysis = A;
             prog.onProgress = [&](std::string const& stage, float f) {
                 static char const* names[] = {"plan", "build", "verify"};
                 std::string s = stage;

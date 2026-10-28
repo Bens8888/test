@@ -543,11 +543,18 @@ int main(int argc, char** argv) {
             else if (readFile(recordingPath, bytes)) r = rec::importAny(bytes, &err);
             else err = "cannot read " + recordingPath;
             if (!r) { std::fprintf(stderr, "error: %s\n", err.c_str()); return 1; }
+            double songStart = 0;
+            if (double start = gen::levelStartFor(*r); start > 0) {
+                A = audio::trimStart(A, start, &songStart);
+                *r = gen::shiftRecording(*r, songStart);
+                std::printf("the level starts at %.2f s of the song (song offset)\n", songStart);
+            }
             auto F = gen::fuseClicks(*r, A);
             std::printf("recording: %s\n", F.summary().c_str());
             opt.input = gen::InputSource::Recording;
             Rng prng(opt.seed);
             recPlan = gen::planFromRecording(F, A, opt, prng);
+            recPlan->songStart = songStart;
         }
         const gen::DesignPlan* planPtr = recPlan ? &*recPlan : nullptr;
         if (exactSeed) results.push_back(gen::generateVariant(A, opt, opt.seed, nullptr, nullptr, planPtr));

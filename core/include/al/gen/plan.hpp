@@ -67,6 +67,9 @@ struct DesignPlan {
     // generator v2: `parts` are the gamemode segments; the music's own parts (intent, intensity,
     // difficulty per section) are kept here
     std::vector<Part> music;
+    // song time at the level's start (its song offset): a level of a part of the song that starts
+    // late; every time in the plan and the analysis is relative to it
+    double songStart = 0;
 
     std::vector<Moment> moments() const;
 };

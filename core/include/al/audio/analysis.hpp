@@ -116,4 +116,9 @@ MusicAnalysis analyze(const AudioBuffer& audio, const AnalysisOptions& opt = {},
 bool analyzeFile(const std::string& path, MusicAnalysis& out, std::string& error,
                  const AnalysisOptions& opt = {}, const Progress* progress = nullptr);
 
+// The analysis of the song from `start` seconds on, with times relative to `start` (for a level
+// that starts in the middle of the song, through its song offset). `start` is rounded down to a
+// whole coarse frame so the curves stay aligned; the start actually used is returned in `used`.
+MusicAnalysis trimStart(const MusicAnalysis& A, double start, double* used = nullptr);
+
 } // namespace al::audio

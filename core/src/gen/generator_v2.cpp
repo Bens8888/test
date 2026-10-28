@@ -81,6 +81,7 @@ GenResult generateVariantV2(const audio::MusicAnalysis& A, const GenOptions& opt
                                          : "necessity hazards removed: the simplified version failed the final check");
     }
     res.level = st.level;
+    res.level.settings.songOffset = plan.songStart;
     res.level.name = "AutoLayout";
     res.inputs = path.inputs;
     // ---- the plan as the UI shows it: one part per gamemode segment
