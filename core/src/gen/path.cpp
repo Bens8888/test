@@ -210,6 +210,7 @@ struct Cand {
     bool used = false;
     PathClick info;
     double score = 0;
+    int orbWindow = -1;             // ticks the player overlaps the orb around the press (orbs)
     // results of the last evaluation
     phys::GameState end;
     std::vector<TraceSample> trace; // from the node's tick + 1
@@ -355,6 +356,25 @@ void Planner::clickOptions(int k, int T, int Tn, std::vector<Cand>& out) {
             const float reach = 18 + 16;
             if (m_node) for (auto& r : m_node->tail) if (r.pressed && std::fabs(r.x - x) < reach && std::fabs(r.y - y) < reach) { early = true; break; }
             if (early) continue;
+            // the orb's window: ticks the player overlaps it before (the stretch so far) and after
+            // the press (no click)
+            int win = 1;
+            if (m_node)
+                for (auto it = m_node->tail.rbegin(); it != m_node->tail.rend(); ++it) {
+                    if (std::fabs(it->x - x) < 18 + it->half && std::fabs(it->y - y) < 18 + it->half) ++win;
+                    else break;
+                }
+            {
+                phys::GameState q = m_start;
+                phys::refreshTouching(m_lw.W, q);
+                std::vector<TraceSample> after;
+                runLocal(m_lw.W, q, {}, std::min(Tn - 1, T + 60), &after);
+                for (size_t a = 1; a < after.size(); ++a) {
+                    if (std::fabs(after[a].x - x) < 18 + after[a].half && std::fabs(after[a].y - y) < 18 + after[a].half) ++win;
+                    else break;
+                }
+            }
+            c.orbWindow = win;
             LevelObject o = make(id, std::round(x * 2) / 2, std::round(y * 2) / 2);
             if (p.upsideDown && (id == oid::OrbDash || id == oid::OrbDashPink)) o.flipY = true;
             addObj(c, o, Act::Orb, k);
@@ -642,6 +662,11 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     // big actions on strong hits
     const bool big = (c.act == Act::Orb && (c.sub == oid::OrbRed || c.sub == oid::OrbBlack || c.sub == oid::OrbDash || c.sub == oid::OrbGreen || c.sub == oid::OrbBlue));
     if (big) s += 0.8 * (ck.strength - 0.45);
+    // orbs the player only grazes have short windows: keep them for higher difficulties
+    if (c.orbWindow >= 0) {
+        const double target = profileAt(m_D).minWindowMs / 1000.0 * phys::kTPS;
+        if (c.orbWindow < target) s -= 2.0 * (1.0 - double(c.orbWindow) / target);
+    }
     // events between clicks
     int pads = 0, grav = 0, lands = 0;
     for (auto& ob : c.objs) { pads += ob.act == Act::Pad; grav += ob.act == Act::GravityPortal; }
@@ -653,7 +678,7 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     for (auto& q : c.trace) {
         hi = std::max(hi, q.y);
         lo = std::min(lo, q.y);
-        if (q.onGround && q.y < 20) ++ground;
+        if (q.onGround && groundMode(q.mode)) ++ground; // running on the floor or a platform
     }
     const auto& e = c.end.p[0];
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
@@ -663,7 +688,12 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
         const float mid = (e.floorY + e.ceilY) * 0.5f;
         s -= 0.4 * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
     }
-    if (!c.trace.empty()) s -= 0.5 * double(ground) / double(c.trace.size()) * (m_D >= 3 ? 1.0 : 0.3);
+    // long runs make wide platforms: prefer landing shortly before the next click
+    if (!c.trace.empty()) {
+        const double runTicks = double(ground);
+        s -= 0.5 * runTicks / double(c.trace.size()) * (m_D >= 3 ? 1.0 : 0.3);
+        if (runTicks > 0.35 * phys::kTPS) s -= 0.8 * (runTicks / phys::kTPS - 0.35);
+    }
     s += 0.08 * std::min(4.0f, (hi - lo) / 30.0f);
     if (lands) s += 0.1;
     (void)T;

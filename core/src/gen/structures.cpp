@@ -281,8 +281,8 @@ bool Structurer::tryKill(size_t i, const std::vector<Sample>& skip, const std::v
     };
     for (size_t j = 0; j < skip.size(); j += 3) {
         const Sample& q = skip[j];
-        Box qb{q.x - q.half, q.y - q.half, q.x + q.half, q.y + q.half};
-        if (m_env.hits(qb, m_margin + 6)) continue; // still where a fair run goes
+        // (no test on the player box here: only the hazard has to keep off the reserved space,
+        // e.g. a spike right under the arc of the jump)
         const int cx = int(std::floor((q.x + q.half + 2) / kCell));
         const int cyc = int(std::floor(q.y / kCell));
         const size_t mk = mark();
@@ -354,7 +354,7 @@ void Structurer::frame() {
         const Sample& a = m_nominal[size_t(i - 2)];
         const Sample& b = m_nominal[size_t(i + 2)];
         const int cx = int(std::floor(q.x / kCell));
-        if (cx - lastX < 4) continue;
+        if (cx - lastX < 3) continue;
         const bool apex = float(q.g) * q.y > float(q.g) * a.y && float(q.g) * q.y >= float(q.g) * b.y && !q.onGround;
         const bool trough = float(q.g) * q.y < float(q.g) * a.y && float(q.g) * q.y <= float(q.g) * b.y && !q.onGround;
         if (!apex && !trough) continue;
@@ -483,7 +483,7 @@ StructureResult Structurer::run() {
     m_halfWin = std::clamp(int(std::lround(prof.minWindowMs * 0.5 / 1000.0 * phys::kTPS)), 4, 30);
     m_margin = std::clamp(prof.clearance * 0.3f + 2.0f, 2.0f, 16.0f);
     m_seed = m_rng.next();
-    m_density = m_prm.density >= 0 ? m_prm.density : (m_plan.style == Style::Minimal ? 0.3f : m_plan.style == Style::Chaotic ? 0.8f : 0.55f);
+    m_density = m_prm.density >= 0 ? m_prm.density : (m_plan.style == Style::Minimal ? 0.3f : m_plan.style == Style::Chaotic ? 0.85f : 0.65f);
     // the path as planned: its objects and platform pieces (same objects, same order)
     m_base = pathLevel(m_path);
     for (auto& sf : m_path.surfaces) m_platforms.fill(sf.cx0, sf.cy0, sf.cx1, sf.cy1);

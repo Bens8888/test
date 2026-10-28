@@ -5,6 +5,7 @@
 #include <al/gen/fusion.hpp>
 #include <al/gen/generator.hpp>
 #include <al/gen/path.hpp>
+#include <al/gen/profile.hpp>
 #include <al/gen/structures.hpp>
 #include <al/gen/test_pattern.hpp>
 #include <al/model/model.hpp>
@@ -21,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <map>
 #include <optional>
 #include <string>
 
@@ -38,7 +40,7 @@ static int usage() {
         "  alcli render <level.gmd|piece-test> <out.png> [x0] [x1]   draw a level (outline silhouettes, orbs, pads, portals)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
-        "               [--density 0-1] [--speed-changes 0-3]\n"
+        "               [--density 0-1] [--speed-changes 0-3] [--engine 1|2] [--switch 0-1] [--look 0|1] [--profile p.json]\n"
         "               [--out level.gmd] [--report report.json] [--inputs inputs.txt] [--png preview.png]\n");
     return 2;
 }
@@ -296,6 +298,17 @@ int main(int argc, char** argv) {
             else if (k == "--png") pngPath = v;
             else if (k == "--x0") x0 = std::stof(v);
             else if (k == "--x1") x1 = std::stof(v);
+            else if (k == "--density") opt.density = std::stof(v);
+            else if (k == "--modes") {
+                opt.modeWeights.fill(0.0f);
+                for (size_t pos = 0; pos < v.size();) {
+                    size_t e = v.find(',', pos);
+                    int m = std::stoi(v.substr(pos, e == std::string::npos ? std::string::npos : e - pos));
+                    if (m >= 0 && m < 8) opt.modeWeights[size_t(m)] = 1.0f;
+                    if (e == std::string::npos) break;
+                    pos = e + 1;
+                }
+            }
         }
         auto t0 = std::chrono::steady_clock::now();
         Rng rng(opt.seed);
@@ -326,7 +339,9 @@ int main(int argc, char** argv) {
             }
         }
         auto t2 = std::chrono::steady_clock::now();
-        gen::StructureResult st = gen::buildStructures(path, plan, opt, rng);
+        gen::StructureParams sparams;
+        sparams.density = opt.density;
+        gen::StructureResult st = gen::buildStructures(path, plan, opt, rng, sparams);
         double sec2 = std::chrono::duration<double>(std::chrono::steady_clock::now() - t2).count();
         int forced = 0, minWin = 1000;
         for (auto& c : st.checks) { forced += c.forced; minWin = std::min(minWin, c.early + c.late + 1); }
@@ -357,6 +372,14 @@ int main(int argc, char** argv) {
             const float target = gen::profileAt(plan.baseDifficulty).minWindowMs;
             for (auto& [win, i] : w) below += win * 1000.0 / 240.0 < target * 0.85;
             std::printf("windows below %.0f ms: %d of %zu\n", target * 0.85, below, w.size());
+            std::map<std::string, std::pair<int, int>> byAct; // act -> (forced, total)
+            for (size_t i = 0; i < st.checks.size(); ++i) {
+                auto& c = path.clicks[i];
+                std::string key = std::string(level::modeName(c.mode)) + ":" + gen::actName(c.act) + (c.grounded ? "(ground)" : "");
+                byAct[key].second++;
+                byAct[key].first += st.checks[i].forced;
+            }
+            for (auto& [k, v] : byAct) std::printf("  %-22s forced %d of %d\n", k.c_str(), v.first, v.second);
             for (size_t k = 0; k < w.size() && k < 10; ++k) {
                 auto& c = path.clicks[w[k].second];
                 auto& ck = st.checks[w[k].second];
@@ -483,6 +506,16 @@ int main(int argc, char** argv) {
             else if (k == "--difficulty") opt.difficulty = gen::Difficulty(std::stoi(v));
             else if (k == "--variants") opt.variants = std::stoi(v);
             else if (k == "--style") opt.style = gen::Style(std::stoi(v));
+            else if (k == "--engine") opt.engine = std::stoi(v);
+            else if (k == "--switch") opt.switchRate = std::stof(v);
+            else if (k == "--look") opt.look = std::stoi(v);
+            else if (k == "--profile") {
+                std::string text;
+                if (readFile(v, text))
+                    if (auto j = Json::parse(text))
+                        if (auto p = gen::StyleProfile::fromJson(*j)) opt.profile = std::make_shared<gen::StyleProfile>(*p);
+                if (!opt.profile) { std::fprintf(stderr, "cannot read the profile %s\n", v.c_str()); return 1; }
+            }
             else if (k == "--out") out = v;
             else if (k == "--report") reportPath = v;
             else if (k == "--inputs") inputsPath = v;
@@ -536,7 +569,7 @@ int main(int argc, char** argv) {
         if (!reportPath.empty()) writeFile(reportPath, best.report.toJson().dump(1));
         if (!pngPath.empty()) {
             report::RenderOptions ro;
-            ro.scale = 0.25f;
+            ro.scale = 0.35f;
             ro.maxWidth = 2400;
             writeFile(pngPath, report::renderPng(best.level, &best.inputs, ro));
             std::printf("wrote %s\n", pngPath.c_str());
