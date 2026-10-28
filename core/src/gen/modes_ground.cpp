@@ -443,26 +443,44 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
 
     // settle into the part: run until the player is grounded in this mode
     {
-        phys::GameState s = b.cursor();
+        const phys::GameState s0 = b.cursor();
         int firstClick = part.clicks.empty() ? k1 : Builder::tickOf(plan.clicks[size_t(part.clicks.front())].time);
-        int settleLimit = std::max(s.tick + 1, std::min(firstClick - c.maxShift - 4, k0 + 120));
-        while (s.tick < settleLimit) {
-            if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while settling at tick %d x=%.0f (%s)", s.tick, s.p[0].x, phys::deathCauseName(s.p[0].deathCause)); return false; }
-            if (s.p[0].mode == part.mode && s.p[0].onGround && s.tick > k0) break;
+        int settleLimit = std::max(s0.tick + 1, std::min(firstClick - c.maxShift - 4, k0 + 120));
+        auto settle = [&](phys::GameState& s) {
+            while (s.tick < settleLimit) {
+                if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while settling at tick %d x=%.0f (%s)", s.tick, s.p[0].x, phys::deathCauseName(s.p[0].deathCause)); return false; }
+                if (s.p[0].mode == part.mode && s.p[0].onGround && s.p[0].upsideDown == part.flipped && s.tick > k0) break;
+            }
+            return true;
+        };
+        phys::GameState s = s0;
+        if (!settle(s)) return false;
+        if (!s.p[0].onGround) {
+            // still airborne (coming from a flying part or a gravity flip with nothing to land on):
+            // build the surface it is heading for from just ahead of the settle start, settle again
+            const auto& p = s.p[0];
+            c.run.g = p.flip();
+            c.run.floor = c.run.g > 0;
+            c.run.surf = c.run.g > 0 ? 0.0f : std::clamp(std::ceil((s0.p[0].y + 90.0f) / kCell) * kCell, 150.0f, 300.0f);
+            c.run.builtTo = std::floor((s0.p[0].x + 30.0f) / kCell) * kCell;
+            extendRun(c, p.x + 240.0f);
+            debugLog("  ground: airborne after settling (tick %d y %.0f g %d): surface %.0f from x %.0f", s.tick, p.y, c.run.g, c.run.surf, s0.p[0].x);
+            s = s0;
+            if (!settle(s)) return false;
+            while (!s.p[0].onGround && s.tick < k0 + 240) {
+                extendRun(c, s.p[0].x + 240.0f);
+                if (!b.runTo(s, s.tick + 1)) { debugLog("  ground: died while landing at tick %d", s.tick); return false; }
+            }
         }
         b.setCursor(s);
         const auto& p = s.p[0];
+        float builtSoFar = c.run.builtTo;
         c.run.g = p.flip();
         float feet = p.y - c.run.g * p.height() * 0.5f;
         c.run.surf = std::round(feet / 15.0f) * 15.0f;
         c.run.floor = c.run.g > 0 && c.run.surf <= 0.5f;
         if (c.run.floor) c.run.surf = 0;
-        c.run.builtTo = p.x + 1;
-        if (!c.run.floor && !p.onGround) {
-            // airborne (coming from a flying part) with no floor below: give it the floor
-            c.run.surf = c.run.g > 0 ? 0 : 300;
-            c.run.floor = c.run.g > 0;
-        }
+        c.run.builtTo = std::max(builtSoFar, p.x + 1);
     }
     int dropped = 0;
     for (size_t ci = 0; ci < part.clicks.size(); ++ci) {
@@ -481,6 +499,15 @@ bool buildGroundPart(Builder& b, const Part& part, int attempt) {
                 phys::GameState d = b.cursor();
                 b.runTo(d, target);
                 debugLog("  ground: died advancing to tick %d (click %d): tick %d x=%.0f y=%.0f %s, run surf %.0f builtTo %.0f", target, clickIndex, d.tick, d.p[0].x, d.p[0].y, phys::deathCauseName(d.p[0].deathCause), c.run.surf, c.run.builtTo);
+                if (debugEnabled()) {
+                    phys::GameState q = b.cursor();
+                    while (!q.dead && q.tick < target) {
+                        b.runTo(q, q.tick + 1);
+                        if (q.tick > d.tick - 25) debugLog("      t %d x %.1f y %.1f v %.2f mode %d g %d ground %d", q.tick, q.p[0].x, q.p[0].y, q.p[0].v, int(q.p[0].mode), q.p[0].flip(), q.p[0].onGround);
+                    }
+                    for (auto& e : b.inputs().events) if (e.tick > d.tick - 200) debugLog("      input %d %d", e.tick, e.press);
+                    if (d.p[0].deathObj >= 0) { const auto& so = b.world().objects()[size_t(d.p[0].deathObj)]; debugLog("      killer kind %d at (%.0f, %.0f) %.0fx%.0f", int(so.kind), so.x, so.y, so.hw * 2, so.hh * 2); }
+                }
                 return false;
             }
         }

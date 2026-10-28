@@ -16,8 +16,6 @@ using namespace pp;
 
 namespace {
 
-struct Sample { float x, y, half; int player; };
-
 const PatternDef* pickFamily(Builder& b, const Part& part, const std::vector<int>& clicks) {
     auto cands = patternsFor(part.mode, part.difficulty);
     if (cands.empty()) return nullptr;
@@ -68,38 +66,94 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     const bool toggleMode = part.mode == Mode::Wave || part.mode == Mode::Swing;
     const float margin = std::max(25.0f, prof.clearance + h);
     const float bandLo = F + margin, bandHi = C - margin;
+    // Timing: every input needs a window of minWin ticks, i.e. room of about half of it to both
+    // neighbouring inputs.
+    const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
+    const int halfWin = minWin / 2 + 1;
+    const bool taps = part.mode == Mode::Ufo || part.mode == Mode::Swing; // press + release 5 ticks later
+    const int gapT = halfWin + 2 + (taps ? 5 : 0);
     // Forward pass: lay the click inputs down in time order. For wave/swing, also insert a toggle
     // whenever the path would leave the band [bandLo, bandHi] (snapped to the 16th-note grid when
-    // that is close), so the path never needs the floor/ceiling.
+    // that is close), so the path never needs the floor/ceiling. Toggles keep gapT away from the
+    // musical clicks: a toggle needed right after a click means the click is cancelled at once, so
+    // that click is dropped instead; a toggle needed right before a click is moved earlier.
     phys::GameState sim = b.cursor();
     std::vector<phys::GameState> history; // recent states for rewinding to a toggle tick
+    int lastPressTick = -1000;
+    struct LastClick { bool valid = false; int tick = 0; size_t slot = 0; size_t events = 0; phys::GameState state; } lastClick;
     auto movingUp = [&](const phys::PlayerState& p) {
         if (p.mode == Mode::Wave) return p.holding ? !p.upsideDown : p.upsideDown;
+        if (p.mode == Mode::Swing) return p.upsideDown; // gravity flips at once, the velocity follows later
         return p.v * p.flip() > 0;
     };
-    auto advanceBand = [&](int untilTick) -> bool {
+    auto rewindTo = [&](int t) {
+        // latest remembered state strictly before tick t
+        for (auto it = history.rbegin(); it != history.rend(); ++it)
+            if (it->tick < t) { sim = *it; history.erase(it.base(), history.end()); return true; }
+        return false;
+    };
+    auto toggleAt = [&](int t) {
+        if (part.mode == Mode::Wave) {
+            if (b.heldAfterInputs()) b.release(t); else b.press(t);
+        } else { // swing: a tap flips
+            if (b.heldAfterInputs()) b.release(t - 1);
+            b.press(t);
+            b.release(t + 5);
+        }
+        lastPressTick = t;
+        lastClick.valid = false;
+    };
+    auto advanceBand = [&](int untilTick, int nextClickTick) -> bool {
         while (sim.tick < untilTick) {
             phys::GameState before = sim;
             if (!b.runTo(sim, sim.tick + 1)) return false;
+            history.push_back(before);
+            if (history.size() > 96) history.erase(history.begin());
             if (!toggleMode || sim.p[0].mode != part.mode) continue;
             if (sim.tick <= b.lastInputTick() + 1) continue; // a scheduled input (e.g. a tap release) is still pending
             float y = sim.p[0].y;
             bool up = movingUp(sim.p[0]);
-            if ((y > bandHi && up) || (y < bandLo && !up)) {
-                int t = sim.tick;
-                double snapped = b.music().snapToGrid(Builder::timeOf(t), 4);
-                int st = Builder::tickOf(snapped);
-                if (st < t && st > t - 14 && st > b.lastInputTick()) t = st;
-                if (t <= b.lastInputTick()) t = b.lastInputTick() + 1;
-                if (b.heldAfterInputs()) b.release(t); else b.press(t);
-                // rewind to just before the toggle and continue
-                sim = before;
-                if (sim.tick >= t) {
-                    for (auto it = history.rbegin(); it != history.rend(); ++it) if (it->tick < t) { sim = *it; break; }
+            if (!((y > bandHi && up) || (y < bandLo && !up))) continue;
+            int t = sim.tick;
+            if (lastClick.valid && t - lastClick.tick < gapT) {
+                // the click just placed sends the player out of the band. The band is soft: if the
+                // player stays clear of the hard bounds, the corrective toggle simply waits.
+                const int tw = lastClick.tick + gapT;
+                phys::GameState q = sim;
+                bool clear = true;
+                const float hardLo = F + h * 0.5f + 4.0f, hardHi = C - h * 0.5f - 4.0f;
+                while (q.tick < tw - 1 && clear) {
+                    if (!b.runTo(q, q.tick + 1)) clear = false;
+                    else if (q.p[0].y < hardLo || q.p[0].y > hardHi) clear = false;
                 }
+                if (clear && (nextClickTick < 0 || nextClickTick - tw >= gapT)) {
+                    while (sim.tick < tw - 1) {
+                        history.push_back(sim);
+                        if (history.size() > 96) history.erase(history.begin());
+                        b.runTo(sim, sim.tick + 1);
+                    }
+                    toggleAt(tw);
+                    continue;
+                }
+                // otherwise the click is cancelled at once: drop it
+                auto m = b.mark();
+                m.inputEvents = lastClick.events;
+                b.rollback(m);
+                clickEv[lastClick.slot] = -1;
+                sim = lastClick.state;
+                history.clear();
+                lastClick.valid = false;
+                lastPressTick = b.inputs().events.empty() ? -1000 : b.lastInputTick();
+                continue;
             }
-            history.push_back(before);
-            if (history.size() > 32) history.erase(history.begin());
+            double snapped = b.music().snapToGrid(Builder::timeOf(t), 4);
+            int st = Builder::tickOf(snapped);
+            if (st < t && st > t - 14) t = st;
+            if (nextClickTick > 0 && nextClickTick - t < gapT) t = std::min(t, nextClickTick - gapT);
+            t = std::max(t, std::max(lastPressTick + gapT, b.lastInputTick() + 1));
+            if (!rewindTo(t)) t = std::max(sim.tick, b.lastInputTick() + 1);
+            toggleAt(t);
+            if (sim.tick >= t) rewindTo(t);
         }
         return true;
     };
@@ -110,8 +164,10 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
     for (int ci : part.clicks) {
         const Click& ck = plan.clicks[size_t(ci)];
         int k = Builder::tickOf(ck.time);
-        if (!advanceBand(k - 1)) return false;
-        if (k <= b.lastInputTick() + 1 || k <= startTick + 2) { clickEv.push_back(-1); continue; }
+        if (!advanceBand(k - 1, k)) return false;
+        if (k <= b.lastInputTick() + 1 || k <= startTick + 2 || k < lastPressTick + gapT) { clickEv.push_back(-1); continue; }
+        lastClick = {true, k, clickEv.size(), b.inputs().events.size(), sim};
+        lastPressTick = k;
         switch (part.mode) {
             case Mode::Wave:
                 if (b.heldAfterInputs()) b.release(k); else b.press(k);
@@ -133,22 +189,15 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
                 break;
         }
     }
-    if (!advanceBand(std::max(startTick + 2, k1 - 30))) return false;
+    if (!advanceBand(std::max(startTick + 2, k1 - 30), -1)) return false;
 
-    // ---- simulate the intended path
-    std::vector<Sample> path;
-    phys::GameState s = b.cursor();
+    // ---- the intended path plus its timing variants (the tube is carved around all of them, so
+    // every input keeps at least the required window by construction)
+    std::vector<PathSample> path;
     const int endTick = std::max(startTick + 2, k1 - 30);
-    while (s.tick < endTick) {
-        if (!b.runTo(s, s.tick + 1)) return false;
-        int n = s.dual ? 2 : 1;
-        for (int i = 0; i < n; ++i) {
-            const auto& pp = s.p[size_t(i)];
-            path.push_back({pp.x, pp.y, pp.height() * 0.5f, i});
-        }
-        if (s.p[0].mode != part.mode) break;
-    }
+    if (!b.pathEnvelope(startTick, endTick, halfWin, part.mode, path)) { debugLog("  flying: intended path died"); return false; }
     if (path.empty()) { debugLog("  %s: empty path", "flying"); return false; }
+    auto nextPressAfter = [&](size_t ev) { return b.nextPressAfter(int(ev)); };
 
     // ---- carve the tube (30-unit columns)
     const float widen = 1.0f + 0.2f * float(attempt);
@@ -252,7 +301,6 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
         phys::GameState v = b.cursor();
         if (!b.runTo(v, endTick)) { debugLog("  flying: verification died at tick %d x=%.0f y=%.0f (%s)", v.tick, v.p[0].x, v.p[0].y, phys::deathCauseName(v.p[0].deathCause)); return false; }
     }
-    const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
     int tooTight = 0;
     for (size_t i = 0; i < part.clicks.size(); ++i) {
         ClickResult r;
@@ -271,13 +319,28 @@ bool buildFlyingPart(Builder& b, const Part& part, int attempt) {
         phys::GameState pre = saved;
         b.runTo(pre, std::max(saved.tick, tick - 40));
         b.setCursor(pre);
-        b.window(ev, std::min(endTick, tick + 120), 36, r.windowEarly, r.windowLate);
+        b.window(ev, std::min(endTick, nextPressAfter(size_t(ev)) + 12), 36, r.windowEarly, r.windowLate);
         r.forced = b.necessary(ev, std::min(endTick, tick + 120));
         b.setCursor(saved);
         phys::GameState at = pre;
         b.runTo(at, tick);
         r.x = at.p[0].x;
-        if (r.windowEarly + r.windowLate + 1 < minWin) ++tooTight;
+        if (r.windowEarly + r.windowLate + 1 < minWin) {
+            ++tooTight;
+            if (debugEnabled()) {
+                // why: try the first failing shift and report the death
+                for (int sign : {-1, 1}) {
+                    int sh = sign * ((sign < 0 ? r.windowEarly : r.windowLate) + 1);
+                    bot::InputTrack mod;
+                    mod.events = b.inputs().events;
+                    mod.events[size_t(ev)].tick += sh;
+                    if (size_t(ev) + 1 < mod.events.size() && !mod.events[size_t(ev) + 1].press && mod.events[size_t(ev) + 1].tick - tick <= 8) mod.events[size_t(ev) + 1].tick += sh;
+                    phys::GameState q = pre;
+                    bool alive = b.runToWithInputs(q, std::min(endTick, nextPressAfter(size_t(ev)) + 12), mod);
+                    debugLog("    tight: click tick %d early %d late %d | shift %d: %s at tick %d x=%.0f y=%.0f (%s) prev ev %d next ev %d", tick, r.windowEarly, r.windowLate, sh, alive ? "alive" : "dies", q.tick, q.p[0].x, q.p[0].y, phys::deathCauseName(q.p[0].deathCause), ev > 0 ? b.inputs().events[size_t(ev - 1)].tick : -1, size_t(ev) + 1 < b.inputs().events.size() ? b.inputs().events[size_t(ev) + 1].tick : -1);
+                }
+            }
+        }
         b.addClickResult(r);
         b.memory().uses.push_back({r.pattern, part.index, 0, plan.clicks[size_t(r.click)].time});
     }

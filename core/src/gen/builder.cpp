@@ -129,15 +129,19 @@ bool Builder::advanceCursor(int tick) {
 void Builder::window(int ev, int horizonTick, int maxShift, int& early, int& late) const {
     early = late = 0;
     if (ev < 0 || ev >= int(m_inputs.events.size())) return;
-    const int t = m_inputs.events[size_t(ev)].tick;
-    const int lo = ev > 0 ? m_inputs.events[size_t(ev - 1)].tick + 1 : m_cursor.tick + 1;
-    const int hi = ev + 1 < int(m_inputs.events.size()) ? m_inputs.events[size_t(ev + 1)].tick - 1 : t + maxShift;
+    const auto& E = m_inputs.events;
+    const int t = E[size_t(ev)].tick;
+    // a tap (press + release within a few ticks) moves as a whole
+    const bool tap = E[size_t(ev)].press && ev + 1 < int(E.size()) && !E[size_t(ev + 1)].press && E[size_t(ev + 1)].tick - t <= 8;
+    const int last = tap ? ev + 1 : ev;
+    const int lo = ev > 0 ? E[size_t(ev - 1)].tick + 1 : m_cursor.tick + 1;
+    const int hi = last + 1 < int(E.size()) ? E[size_t(last + 1)].tick - 1 - (E[size_t(last)].tick - t) : t + maxShift;
     auto survives = [&](int shift) {
         int nt = t + shift;
         if (nt < lo || nt > hi || nt <= m_cursor.tick) return false;
         bot::InputTrack mod;
-        mod.events = m_inputs.events;
-        mod.events[size_t(ev)].tick = nt;
+        mod.events = E;
+        for (int j = ev; j <= last; ++j) mod.events[size_t(j)].tick += shift;
         phys::GameState s = m_cursor;
         return runToWithInputs(s, horizonTick + std::max(0, shift), mod);
     };
@@ -172,6 +176,71 @@ bool Builder::necessary(int pressEv, int horizonTick) const {
     mod.events.erase(mod.events.begin() + pressEv, mod.events.begin() + pressEv + long(n));
     phys::GameState s = m_cursor;
     return !runToWithInputs(s, horizonTick, mod);
+}
+
+int Builder::nextPressAfter(int ev) const {
+    const auto& E = m_inputs.events;
+    for (size_t j = size_t(ev) + 1; j < E.size(); ++j) if (E[j].press) return E[j].tick;
+    return E[size_t(ev)].tick + 120;
+}
+
+bool Builder::pathEnvelope(int startTick, int endTick, int halfWin, level::Mode mode, std::vector<PathSample>& out) const {
+    std::vector<phys::GameState> states;
+    phys::GameState s = m_cursor;
+    states.push_back(s);
+    auto add = [&](const phys::GameState& st) {
+        int n = st.dual ? 2 : 1;
+        for (int i = 0; i < n; ++i) {
+            const auto& p = st.p[size_t(i)];
+            out.push_back({p.x, p.y, p.height() * 0.5f, i});
+        }
+    };
+    while (s.tick < endTick) {
+        if (!runTo(s, s.tick + 1)) return false;
+        add(s);
+        states.push_back(s);
+        if (s.p[0].mode != mode) break;
+    }
+    const auto& E = m_inputs.events;
+    for (size_t ev = 0; ev < E.size(); ++ev) {
+        const int t = E[ev].tick;
+        if (t <= startTick + 1 || t >= endTick) continue;
+        if (!E[ev].press && ev > 0 && E[ev - 1].press && t - E[ev - 1].tick <= 8) continue; // tap release: moves with its press
+        const bool tap = E[ev].press && ev + 1 < E.size() && !E[ev + 1].press && E[ev + 1].tick - t <= 8;
+        const size_t last = tap ? ev + 1 : ev;
+        const int lo = ev > 0 ? E[ev - 1].tick + 1 : startTick + 1;
+        const int hi = last + 1 < E.size() ? E[last + 1].tick - 1 - (E[last].tick - t) : t + halfWin;
+        const int until = std::min(endTick, nextPressAfter(int(ev)) + 12);
+        for (int shift : {-halfWin, -(halfWin + 1) / 2, (halfWin + 1) / 2, halfWin}) {
+            int nt = std::clamp(t + shift, std::max(lo, startTick + 1), std::max(hi, startTick + 1));
+            if (nt == t) continue;
+            bot::InputTrack mod;
+            mod.events = E;
+            for (size_t j = ev; j <= last; ++j) mod.events[j].tick += nt - t;
+            int from = std::min(t, nt) - 1 - m_cursor.tick;
+            if (from < 0 || size_t(from) >= states.size()) continue;
+            phys::GameState v = states[size_t(from)];
+            while (v.tick < until) {
+                if (!runToWithInputs(v, v.tick + 1, mod)) break;
+                if (v.p[0].mode != mode) break;
+                add(v);
+            }
+        }
+    }
+    return true;
+}
+
+bool clearOf(const level::LevelObject& o, const std::vector<PathSample>& samples, float margin) {
+    phys::SimObject so;
+    if (!phys::World::makeSimObject(o, 0, so)) return true;
+    float hw = so.hw, hh = so.kind == level::Kind::Saw ? so.hw : so.hh;
+    if (so.obb) { float r = std::hypot(so.hw, so.hh); hw = hh = r; }
+    for (const auto& p : samples) {
+        if (std::fabs(p.x - so.x) >= p.half + hw + margin) continue;
+        if (std::fabs(p.y - so.y) >= p.half + hh + margin) continue;
+        return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- transitions

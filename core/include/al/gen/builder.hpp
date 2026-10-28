@@ -21,6 +21,9 @@ namespace al::gen {
 bool debugEnabled();
 void debugLog(const char* fmt, ...);
 
+// A sample of a player's path (centre and half size of its hitbox).
+struct PathSample { float x, y, half; int player; };
+
 struct ClickResult {
     int click = -1;          // index into DesignPlan::clicks
     int pressEvent = -1;     // index into the input track
@@ -100,6 +103,14 @@ public:
     void window(int ev, int horizonTick, int maxShift, int& early, int& late) const;
     // True if removing the press `ev` (and its release) makes the run die before horizonTick.
     bool necessary(int pressEv, int horizonTick) const;
+    // Tick of the first press after input event `ev` (or tick(ev) + 120 if there is none).
+    int nextPressAfter(int ev) const;
+    // The intended path from the cursor to endTick, plus timing variants: every input after
+    // startTick shifted by +-halfWin and +-halfWin/2 (neighbouring inputs stay put, a tap moves
+    // with its release), each variant followed until a little after the next press, when the
+    // player can correct. Geometry kept clear of all samples gives every input at least a
+    // 2*halfWin window. Samples stop at a change away from `mode`. False if the nominal path dies.
+    bool pathEnvelope(int startTick, int endTick, int halfWin, level::Mode mode, std::vector<PathSample>& out) const;
 
     // Song time <-> ticks, x of the player at a tick on the intended path (from simulation).
     static int tickOf(double t) { return int(std::lround(t * phys::kTPS)); }
@@ -139,6 +150,9 @@ private:
     int m_nextGroup = 1000;
     mutable std::vector<DifficultyProfile> m_profiles;
 };
+
+// True if the gameplay object's simulated hitbox, grown by `margin`, touches none of the samples.
+bool clearOf(const level::LevelObject& o, const std::vector<PathSample>& samples, float margin);
 
 // Gamemode builders (implemented in modes_*.cpp). Each builds geometry + inputs for the clicks of
 // one part, verifying every decision with the simulator. Return false if the part could not be

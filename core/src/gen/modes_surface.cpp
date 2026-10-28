@@ -22,7 +22,8 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     {
         phys::GameState s = b.cursor();
         int limit = std::min(k1 - 10, k0 + 90);
-        while (s.tick < limit && (s.p[0].mode != part.mode || !s.p[0].onGround)) if (!b.runTo(s, s.tick + 1)) return false;
+        while (s.tick < limit && (s.p[0].mode != part.mode || !s.p[0].onGround))
+            if (!b.runTo(s, s.tick + 1)) { debugLog("  surface: died while settling at tick %d x=%.0f y=%.0f (%s)", s.tick, s.p[0].x, s.p[0].y, phys::deathCauseName(s.p[0].deathCause)); return false; }
         if (s.p[0].mode != part.mode) { debugLog("  surface: player never entered the mode (mode %d at tick %d)", int(s.p[0].mode), s.tick); return false; }
         b.setCursor(s);
     }
@@ -63,8 +64,14 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
         H = std::min(H, 180.0f);
     }
     H = std::min(H, C - F);
-    const float floorY = F + std::floor((C - F - H) / 2.0f / 30.0f) * 30.0f;
-    const float ceilY = floorY + H;
+    // anchor the corridor on the surface the player stands on
+    const float feet = p0.y - p0.flip() * h * 0.5f;
+    const float surf = std::round(feet / 30.0f) * 30.0f;
+    float floorY, ceilY;
+    if (p0.upsideDown) { ceilY = std::clamp(surf, F + H, C); floorY = ceilY - H; }
+    else { floorY = std::clamp(surf, F, C - H); ceilY = floorY + H; }
+    const bool needFloor = floorY > F + 0.5f;
+    const bool needCeil = ceilY < C - 0.5f || !p0.bounded;
 
     // ---- inputs: taps on the clicks
     const int startTick = b.cursor().tick;
@@ -85,46 +92,42 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
     const float xStart = std::floor((s.p[0].x + 45.0f) / 30.0f) * 30.0f;
     const float xEnd = probe.p[0].x;
     for (float x = xStart + 15; x < xEnd; x += 30) {
-        if (floorY > F + 0.5f) b.place(Builder::obj(oid::Block, x, floorY - 15));
-        if (ceilY < C - 0.5f) b.place(Builder::obj(oid::Block, x, ceilY + 15));
+        if (needFloor) b.place(Builder::obj(oid::Block, x, floorY - 15));
+        if (needCeil) b.place(Builder::obj(oid::Block, x, ceilY + 15));
     }
-    // ---- intended path
-    std::vector<std::pair<float, float>> floorContact, ceilContact; // x intervals where the player touches
-    std::vector<float> xs, ys;
-    s = b.cursor();
-    while (s.tick < endTick) {
-        if (!b.runTo(s, s.tick + 1)) return false;
-        xs.push_back(s.p[0].x);
-        ys.push_back(s.p[0].y);
-    }
-    const float half = h * 0.5f;
-    // hazards on the surfaces wherever the path is far from them
+    // ---- intended path plus timing variants; hazards go wherever none of them passes
+    const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
+    const int halfWin = minWin / 2 + 1;
+    std::vector<PathSample> env;
+    if (!b.pathEnvelope(startTick, endTick, halfWin, part.mode, env)) { debugLog("  surface: intended path died"); return false; }
+    const float margin = std::max(3.0f, prof.clearance * 0.25f);
     const float step = dense ? 30.0f : 60.0f;
-    auto clearOfPath = [&](float x, float yLo, float yHi) {
-        for (size_t i = 0; i < xs.size(); ++i) {
-            if (std::fabs(xs[i] - x) > half + 6.0f) continue;
-            if (ys[i] + half > yLo - 3.0f && ys[i] - half < yHi + 3.0f) return false;
-        }
+    int hazards = 0;
+    auto tryPlace = [&](const LevelObject& o) {
+        if (!clearOf(o, env, margin)) return false;
+        b.place(o);
+        ++hazards;
         return true;
     };
     for (float x = xStart + 75; x < xEnd - 30; x += step) {
         if (family == SuGaps && int(x / 30) % 4 == 0) continue;
-        int spikeId = family == SuBlocks ? oid::Block : oid::Spike;
-        if (spikeId == oid::Spike) {
-            if (clearOfPath(x, floorY, floorY + 12.0f)) b.place(Builder::obj(oid::Spike, x, floorY + 15.0f));
-            if (clearOfPath(x, ceilY - 12.0f, ceilY)) b.place(Builder::obj(oid::Spike, x, ceilY - 15.0f, 180));
+        if (family == SuBlocks) {
+            // bumps: a half block with a spike behind it, on whichever surface is clear
+            LevelObject f1 = Builder::obj(195, x - 7.5, floorY + 7.5), f2 = Builder::obj(oid::Spike, x + 7.5, floorY + 15.0f);
+            if (clearOf(f1, env, margin) && clearOf(f2, env, margin)) { tryPlace(f1); tryPlace(f2); }
+            LevelObject c1 = Builder::obj(195, x - 7.5, ceilY - 7.5), c2 = Builder::obj(oid::Spike, x + 7.5, ceilY - 15.0f, 180);
+            if (clearOf(c1, env, margin) && clearOf(c2, env, margin)) { tryPlace(c1); tryPlace(c2); }
         } else {
-            // bumps of half blocks the player must avoid by being on the other side
-            if (clearOfPath(x, floorY, floorY + 15.0f)) { b.place(Builder::obj(195, x - 7.5, floorY + 7.5)); b.place(Builder::obj(oid::Spike, x + 7.5, floorY + 15.0f + 0.0f)); }
-            if (clearOfPath(x, ceilY - 15.0f, ceilY)) { b.place(Builder::obj(195, x - 7.5, ceilY - 7.5)); b.place(Builder::obj(oid::Spike, x + 7.5, ceilY - 15.0f, 180)); }
+            tryPlace(Builder::obj(oid::Spike, x, floorY + 15.0f));
+            tryPlace(Builder::obj(oid::Spike, x, ceilY - 15.0f, 180));
         }
     }
+    debugLog("  surface: %d hazards, corridor %.0f-%.0f", hazards, floorY, ceilY);
     // ---- verify and measure
     {
         phys::GameState v = b.cursor();
         if (!b.runTo(v, endTick)) { debugLog("  surface: verification died at tick %d x=%.0f y=%.0f (%s)", v.tick, v.p[0].x, v.p[0].y, phys::deathCauseName(v.p[0].deathCause)); return false; }
     }
-    const int minWin = std::max(4, int(std::ceil(prof.minWindowMs * phys::kTPS / 1000.0)) - attempt / 3);
     int tooTight = 0;
     for (size_t i = 0; i < part.clicks.size(); ++i) {
         ClickResult r;
@@ -138,7 +141,7 @@ bool buildSurfacePart(Builder& b, const Part& part, int attempt) {
         phys::GameState pre = saved;
         b.runTo(pre, std::max(saved.tick, tick - 40));
         b.setCursor(pre);
-        b.window(ev, std::min(endTick, tick + 120), 36, r.windowEarly, r.windowLate);
+        b.window(ev, std::min(endTick, b.nextPressAfter(ev) + 12), 36, r.windowEarly, r.windowLate);
         r.forced = b.necessary(ev, std::min(endTick, tick + 120));
         b.setCursor(saved);
         phys::GameState at = pre;
