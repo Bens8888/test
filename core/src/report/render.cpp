@@ -146,13 +146,21 @@ std::string renderPng(const level::Level& lvl, const bot::InputTrack* inputs, co
                 break;
             }
             case Kind::Hazard: {
-                float hw = std::max(so.hw, 12.0f), hh = std::max(so.hh, 12.0f);
-                bool down = std::fabs(std::fmod(o.rotation + 360.0, 360.0) - 180) < 1 || o.flipY;
-                float base = down ? py_ - hh * s : py_ + hh * s, tip = down ? py_ + hh * s : py_ - hh * s;
-                if (o.id == level::id::HalfSpike) { base = down ? py_ - 6 * s : py_ + 6 * s; tip = down ? py_ + 6 * s : py_ - 6 * s; }
-                img.triangle(px_ - hw * s, base, px_ + hw * s, base, px_, tip, 0xffffffff);
-                const float in = 2.0f * s;
-                img.triangle(px_ - hw * s + in * 1.5f, base + (down ? in : -in), px_ + hw * s - in * 1.5f, base + (down ? in : -in), px_, tip + (down ? -in * 2 : in * 2), 0x0a0a28ff);
+                // spikes point up (0), right (90), down (180) or left (270)
+                int q = int(std::lround(std::fmod(o.rotation + 360.0, 360.0) / 90.0)) % 4;
+                if (o.flipY) q = (q + 2) % 4;
+                const float R = (o.id == level::id::HalfSpike ? 8.0f : 15.0f) * s, W = 14.0f * s;
+                float bx0, by0, bx1, by1, tx, ty;
+                switch (q) {
+                    case 1: bx0 = px_ - R; by0 = py_ - W; bx1 = px_ - R; by1 = py_ + W; tx = px_ + R; ty = py_; break;
+                    case 2: bx0 = px_ - W; by0 = py_ - R; bx1 = px_ + W; by1 = py_ - R; tx = px_; ty = py_ + R; break;
+                    case 3: bx0 = px_ + R; by0 = py_ - W; bx1 = px_ + R; by1 = py_ + W; tx = px_ - R; ty = py_; break;
+                    default: bx0 = px_ - W; by0 = py_ + R; bx1 = px_ + W; by1 = py_ + R; tx = px_; ty = py_ - R; break;
+                }
+                img.triangle(bx0, by0, bx1, by1, tx, ty, 0xffffffff);
+                const float cx = (bx0 + bx1 + tx) / 3, cy = (by0 + by1 + ty) / 3;
+                img.triangle(cx + (bx0 - cx) * 0.7f, cy + (by0 - cy) * 0.7f, cx + (bx1 - cx) * 0.7f, cy + (by1 - cy) * 0.7f, cx + (tx - cx) * 0.7f,
+                             cy + (ty - cy) * 0.7f, 0x0a0a28ff);
                 break;
             }
             case Kind::Saw:

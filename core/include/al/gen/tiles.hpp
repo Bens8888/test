@@ -1,7 +1,8 @@
 #pragma once
-// Structures as a grid of 30x30 cells (solid or 45-degree slope), turned into level objects.
+// Structures as a grid of 30x30 cells (solid or slope), turned into level objects.
 // The outline look draws only the silhouette of each structure: every solid cell gets the outline
 // piece that matches its exposed edges, interior cells get nothing (they cannot be reached).
+// The blocks look fills every cell with a default block.
 #include <al/level/level.hpp>
 
 #include <cstdint>

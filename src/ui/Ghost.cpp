@@ -100,9 +100,12 @@ void drawPiece(CCDrawNode* d, level::LevelObject const& o) {
             break;
         }
         case Kind::Hazard: {
-            const bool down = std::fabs(std::fmod(o.rotation + 360.0, 360.0) - 180) < 1 || o.flipY;
-            const float base = down ? y + 15 : y - 15, tip = down ? y - 15 : y + 15;
-            CCPoint v[3] = {{x - 14, base}, {x + 14, base}, {x, tip}};
+            // up (0), right (90), down (180), left (270); cocos y points up
+            int q = int(std::lround(std::fmod(o.rotation + 360.0, 360.0) / 90.0)) % 4;
+            if (o.flipY) q = (q + 2) % 4;
+            static const float dir[4][2] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+            const float ux = dir[q][0], uy = dir[q][1];
+            CCPoint v[3] = {{x - ux * 15 - uy * 14, y - uy * 15 + ux * 14}, {x - ux * 15 + uy * 14, y - uy * 15 - ux * 14}, {x + ux * 15, y + uy * 15}};
             d->drawPolygon(v, 3, {0.04f, 0.04f, 0.15f, 1.f}, 0.8f, white);
             break;
         }

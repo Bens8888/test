@@ -144,7 +144,8 @@ void tileCells(const CellGrid& g, TileLook look, std::vector<LevelObject>& out) 
         const int cx = int(int32_t(uint32_t(k >> 32))), cy = int(int32_t(uint32_t(k)));
         const uint8_t e = g.exposed(cx, cy);
         if (look == TileLook::Blocks) {
-            if (kind == CellKind::Solid) { if (e) out.push_back(make(oid::Block, cx * kCell + 15, cy * kCell + 15)); }
+            // default blocks: every cell filled (each block shows its own border, the classic look)
+            if (kind == CellKind::Solid) out.push_back(make(oid::Block, cx * kCell + 15, cy * kCell + 15));
             else placeSlope(cx, cy, kind, kBlocksSlope, out, kBlocksWide);
             continue;
         }

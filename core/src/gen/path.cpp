@@ -478,6 +478,11 @@ bool Planner::addLandings(const Cand& base, int fromTick, int Tn, std::vector<Ca
         const float ups = float(phys::speedParams(m_start.p[0].speed).unitsPerStep());
         sf.cx0 = int(std::floor((q.x - 40) / kCell));
         sf.cx1 = int(std::floor((q.x + float(Tn - L) * ups + 45) / kCell));
+        // high platforms float (1-2 rows thick, like most layouts) instead of standing on the
+        // floor / hanging from the top; low ones stay solid
+        const int thick = 1 + int((uint32_t(sf.cx0) * 2654435761u >> 7) & 1u);
+        if (q.g > 0 && sf.cy1 >= 3) sf.cy0 = std::max(0, sf.cy1 - thick + 1);
+        if (q.g < 0 && sf.cy0 <= kTopRow - 4) sf.cy1 = sf.cy0 + thick - 1;
         // the platform must not stand in the way of the path before the landing (including the
         // end of the previous stretch)
         bool blocked = false;

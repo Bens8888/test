@@ -134,6 +134,7 @@ private:
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void frame();
+    void edgeSpikes();
     void corridors();
     bool pillar(int cx, int rowFrom, int rowTo, int width, bool spikeTip, bool down, int floorRow);
     void measureWindows();
@@ -380,10 +381,66 @@ void Structurer::frame() {
             const float gapHi = q.g > 0 ? q.y - q.half : float(ceilRow + 1) * kCell;
             if (gapHi - gapLo > 80) {
                 LevelObject sw = make(gapHi - gapLo > 130 ? oid::SawLarge : oid::SawMedium, cx * kCell + 15, std::round((gapLo + gapHi) * 0.5f / 15.0f) * 15.0f);
-                if (hazardFree(sw)) { addHazard(sw); ++m_res.saws; placed = true; }
+                if (hazardFree(sw)) {
+                    addHazard(sw);
+                    ++m_res.saws;
+                    placed = true;
+                    // a small cluster: one or two smaller saws next to it
+                    const int extra = int(r.below(3));
+                    static const float off[4][2] = {{38, 22}, {-36, -20}, {30, -30}, {-30, 28}};
+                    for (int e = 0, k = int(r.below(4)); e < extra; ++e, k = (k + 1) % 4) {
+                        LevelObject s2 = make(oid::SawSmall, sw.x + off[k][0], sw.y + off[k][1]);
+                        if (hazardFree(s2)) { addHazard(s2); ++m_res.saws; }
+                    }
+                }
             }
         }
         if (placed) lastX = cx;
+    }
+}
+
+// Spikes on the edges of the structures (and on the floor / the bounds) that face the path:
+// spike rows on corridor walls, on platform ends and under floating blocks, side spikes, spiked
+// ground. Only where they keep off every fair run, and only near the path (where they matter).
+void Structurer::edgeSpikes() {
+    const float near = 75.0f;
+    auto tryPlace = [&](int cx, int cy, double rot, double chance) {
+        if (cy < 0 || cy > kTopRow || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return;
+        if (m_hazardCells.count({cx, cy})) return;
+        LevelObject sp = make(oid::Spike, cx * kCell + 15, cy * kCell + 15, rot);
+        // near the path, but clear of it
+        Box b{cx * kCell, cy * kCell, cx * kCell + kCell, cy * kCell + kCell};
+        if (!m_env.hits(b, near)) return;
+        if (!at(cx * 64 + cy, 0x5B1E).chance(chance)) return;
+        if (!hazardFree(sp)) return;
+        addHazard(sp);
+    };
+    const double base = std::clamp(0.35 + 0.55 * double(m_density), 0.2, 0.95);
+    // structures and platforms
+    std::vector<std::pair<int, int>> cells;
+    for (auto& [k, kind] : m_res.cells.cells()) if (kind == CellKind::Solid) cells.push_back({int(int32_t(uint32_t(k >> 32))), int(int32_t(uint32_t(k)))});
+    for (auto& [k, kind] : m_platforms.cells()) cells.push_back({int(int32_t(uint32_t(k >> 32))), int(int32_t(uint32_t(k)))});
+    std::sort(cells.begin(), cells.end());
+    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+    auto solid = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
+    for (auto [cx, cy] : cells) {
+        if (!solid(cx, cy + 1)) tryPlace(cx, cy + 1, 0, base);           // on top
+        if (cy > 0 && !solid(cx, cy - 1)) tryPlace(cx, cy - 1, 180, base); // underneath
+        if (!solid(cx - 1, cy)) tryPlace(cx - 1, cy, 270, base * 0.5);   // left end, pointing left
+        if (!solid(cx + 1, cy)) tryPlace(cx + 1, cy, 90, base * 0.3);    // right end
+    }
+    // the floor (and the floor/ceiling of flying stretches) where the player never runs
+    int lastCx = -1;
+    for (const Sample& q : m_nominal) {
+        const int cx = int(std::floor(q.x / kCell));
+        if (cx == lastCx) continue;
+        lastCx = cx;
+        const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
+        if (!solid(cx, floorRow)) tryPlace(cx, floorRow, 0, base);
+        if (q.bounded) {
+            const int ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
+            if (!solid(cx, ceilRow)) tryPlace(cx, ceilRow, 180, base);
+        }
     }
 }
 
@@ -517,12 +574,14 @@ StructureResult Structurer::run() {
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     corridors();
     frame();
+    edgeSpikes();
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards
     level::Level& L = m_res.level;
     L = m_base;
     tileCells(m_res.cells, m_prm.look, L.objects);
     for (auto& h : m_hazards) L.objects.push_back(h);
-    LevelObject end = make(oid::TrigEnd, std::round((m_nominal.empty() ? 600.0f : m_nominal.back().x) / 30.0f) * 30.0f + 15, 600);
+    // the end: a little before the last planned position (the run beyond it is not planned)
+    LevelObject end = make(oid::TrigEnd, std::floor(((m_nominal.empty() ? 600.0f : m_nominal.back().x) - 45.0f) / 30.0f) * 30.0f + 15, 600);
     end.setProp(36, std::string("1"));
     L.objects.push_back(end);
     // ---- verified on the finished layout itself: the designed run, then the timing windows
