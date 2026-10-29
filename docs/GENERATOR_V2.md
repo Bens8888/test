@@ -23,7 +23,8 @@ layouts are made the other way round, and that is what v2 does:
 | cube | jump from a platform; orb (yellow, pink, red, blue, green, black, green/pink dash) | land on a platform, pad (yellow, pink, red, blue), gravity portal, mode/speed/size portal in mid-air |
 | robot | jump (hold length = the click's hold), orb | as cube |
 | ship, ufo | tap or hold | gravity portal, mode portal; ufo: orbs |
-| wave, swing | tap or hold (direction change) | gravity portal, mode portal |
+| wave | every click turns the wave: one click presses, the next releases it (music clicks), or press and hold for half the gap (even zig-zag) | gravity portal, mode portal |
+| swing | tap (direction change) | gravity portal, mode portal |
 | ball | flip from a surface; blue/green orb | surface to land on, blue pad, gravity portal |
 | spider | teleport flip; spider orb | surface, spider pad |
 
@@ -48,8 +49,17 @@ wave/ship/swing, spaced clicks cube/robot/ball/ufo, long notes holds.
   apexes and under the path
 - saw clusters in the pockets next to the path (a saw may cut into a wall, but it is never buried
   in it)
-- wave/ship corridors: top and bottom walls following the path with 45° slopes (the wave's are
-  sharp triangles)
+- wave parts, built from presets the way wave layouts are:
+  - a 45° triangle rises from the floor under every peak of the zig-zag and hangs from the ceiling
+    over every dip, as big as the reserved space allows. Neighbouring triangles merge into a W.
+  - where the zig-zag is too small for a triangle, a block slab sits under or over it with a few
+    spikes on its face;
+  - an occasional saw in the open space beyond a turn.
+
+  Nothing else is placed in wave parts: no corridor filling, no extra spikes or blocks. Wave runs
+  at 2x speed or faster, through the middle of its bounds, for strokes long enough for the
+  triangles.
+- ship corridors: top and bottom walls following the path with 45° and 2-wide slopes
 - spikes in groups of 1-3 with gaps, never long identical rows. Spikes only go on faces that
   point at the path (never on the far side of a wall), and only one side spike per wall, at the
   height the player passes. A spike never stands on another spike.

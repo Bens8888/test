@@ -32,7 +32,8 @@ float rhythmFit(Mode m, double med, double shortest, float holds) {
         case Mode::Spider: return 0.2f + 0.7f * band(med, 0.16, 0.5);
         case Mode::Ufo: return 0.1f + 0.8f * band(med, 0.16, 0.42);
         case Mode::Ship: return 0.25f + 0.4f * band(med, 0.15, 0.6) + 0.6f * holds;
-        case Mode::Wave: return 0.15f + 0.85f * band(med, 0.08, 0.28) + 0.3f * holds + (shortest < 0.14 ? 0.3f : 0.0f);
+        // wave: long diagonal strokes between triangles (a click every quarter to half second)
+        case Mode::Wave: return 0.15f + 0.85f * band(med, 0.2, 0.55) + 0.2f * holds - (shortest < 0.12 ? 0.3f : 0.0f);
         case Mode::Swing: return 0.2f + 0.7f * band(med, 0.14, 0.4);
         default: return 0.1f;
     }
@@ -150,9 +151,10 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         int cap = D >= 6 ? 3 : (D >= 3 ? 3 : 2);
         if ((sg.mode == Mode::Wave || sg.mode == Mode::Swing || sg.mode == Mode::Spider) && D < 6) cap = 2;
         sg.speed = std::clamp(sp, 1, cap);
+        if (sg.mode == Mode::Wave) sg.speed = std::max(sg.speed, 2); // longer strokes, bigger triangles
         // size: mini for fast streams in flying modes
         const double miniChance = opt.sizeChanges == Tri::Off ? 0.0 : opt.sizeChanges == Tri::On ? 0.4 : (D >= 3 && med < 0.25 ? 0.3 : 0.08);
-        sg.mini = (sg.mode == Mode::Wave || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && own.chance(miniChance);
+        sg.mini = ((sg.mode == Mode::Wave && opt.sizeChanges == Tri::On) || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && own.chance(miniChance);
         // gravity: some ground segments run upside down
         const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 3 ? 0.18 : 0.0);
         sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && own.chance(flipChance);

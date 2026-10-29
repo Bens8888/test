@@ -128,7 +128,12 @@ private:
         for (auto& e : m_path.inputs.events) if (e.press && e.tick > tick) return e.tick;
         return m_path.endTick;
     }
-    std::vector<bot::InputEvent> shifted(int pressTick, int shift, bool remove) const;
+    // the inputs with click i moved by `shift` ticks (or left out); a press takes its own release
+    // along, a wave release click moves alone
+    std::vector<bot::InputEvent> shifted(size_t i, int shift, bool remove) const;
+    // ticks the press/release of click i may move to: (lo, hi) exclusive
+    void moveRange(size_t i, int& lo, int& hi) const;
+    std::set<int> m_releaseTicks;     // release events that are clicks of their own (wave)
     bool runFrom(const phys::GameState& from, const std::vector<bot::InputEvent>& ev, int until, std::vector<Sample>* out, int* deathTick = nullptr) const;
     void buildEnvelope();
     bool cellFree(int cx, int cy) const;
@@ -142,6 +147,8 @@ private:
     void frame();
     void clusters();
     void walls();
+    void waveTriangles();
+    bool triangle(float x, bool fromFloor, float pathY, int floorRow, int ceilRow);
     void edgeSpikes();
     // spikes along a run of free cells (same row, consecutive columns): groups of 1-3 with gaps,
     // as layouts place them (never a long identical row)
@@ -152,23 +159,52 @@ private:
     void measureWindows();
 };
 
-std::vector<bot::InputEvent> Structurer::shifted(int pressTick, int shift, bool remove) const {
+std::vector<bot::InputEvent> Structurer::shifted(size_t ci, int shift, bool remove) const {
+    const PathClick& c = m_path.clicks[ci];
+    const bool release = c.act == Act::Release;
     std::vector<bot::InputEvent> ev;
     const auto& src = m_path.inputs.events;
     for (size_t i = 0; i < src.size(); ++i) {
-        if (src[i].press && src[i].tick == pressTick) {
-            int rel = i + 1 < src.size() ? src[i + 1].tick : pressTick + 3;
-            if (!remove) {
-                ev.push_back({pressTick + shift, true});
-                ev.push_back({rel + shift, false});
+        if (release) {
+            if (!src[i].press && src[i].tick == c.tick) {
+                if (!remove) ev.push_back({c.tick + shift, false});
+                continue;
             }
-            ++i; // skip the release
+            ev.push_back(src[i]);
+            continue;
+        }
+        if (src[i].press && src[i].tick == c.tick) {
+            const bool relIsClick = i + 1 < src.size() && m_releaseTicks.count(src[i + 1].tick);
+            const int rel = i + 1 < src.size() ? src[i + 1].tick : c.tick + 3;
+            if (!remove) ev.push_back({c.tick + shift, true});
+            if (relIsClick) ev.push_back(src[i + 1]);
+            else if (!remove) ev.push_back({rel + shift, false});
+            ++i; // the release is handled
             continue;
         }
         ev.push_back(src[i]);
     }
     std::sort(ev.begin(), ev.end(), [](const auto& a, const auto& b) { return a.tick < b.tick; });
     return ev;
+}
+
+void Structurer::moveRange(size_t ci, int& lo, int& hi) const {
+    const PathClick& c = m_path.clicks[ci];
+    const auto& src = m_path.inputs.events;
+    lo = 0;
+    hi = m_path.endTick;
+    if (c.act == Act::Release) {
+        for (auto& e : src) if (e.press && e.tick < c.tick) lo = e.tick;
+        hi = nextPressAfter(c.tick);
+        return;
+    }
+    for (auto& e : src) if (!e.press && e.tick < c.tick) lo = e.tick;
+    hi = nextPressAfter(c.tick);
+    for (auto& e : src)
+        if (!e.press && e.tick > c.tick) {
+            if (m_releaseTicks.count(e.tick)) hi = std::min(hi, e.tick); // its release is the next click
+            break;
+        }
 }
 
 bool Structurer::runFrom(const phys::GameState& from, const std::vector<bot::InputEvent>& ev, int until, std::vector<Sample>* out, int* deathTick) const {
@@ -198,13 +234,13 @@ void Structurer::buildEnvelope() {
         uint32_t want = 0;
         for (int t = T; t <= T + 3 && t - 1 < int(m_nominal.size()); ++t) want |= m_nominal[size_t(t - 1)].events & kClickEvents;
         const int horizon = std::min(m_path.endTick, nextPressAfter(T) + 15);
-        int prevRelease = 0;
-        for (auto& e : m_path.inputs.events) if (!e.press && e.tick < T) prevRelease = e.tick;
+        int lo, hi;
+        moveRange(i, lo, hi);
         for (int s = -m_halfWin; s <= m_halfWin; s += (std::abs(s) <= 2 ? 1 : 2)) {
-            if (s == 0 || T + s <= prevRelease + 1) continue;
-            if (s > 0 && T + s >= nextPressAfter(T) - 1) continue;
+            if (s == 0 || T + s <= lo + 1) continue;
+            if (s > 0 && T + s >= hi - 1) continue;
             std::vector<Sample> tr;
-            auto ev = shifted(T, s, false);
+            auto ev = shifted(i, s, false);
             const int startTick = m_pre[i].tick;
             runFrom(m_pre[i], ev, horizon, &tr);
             if (want) {
@@ -296,6 +332,7 @@ bool Structurer::tryKill(size_t i, const std::vector<Sample>& skip, const std::v
     };
     for (size_t j = 0; j < skip.size(); j += 3) {
         const Sample& q = skip[j];
+        if (q.mode == Mode::Wave) continue; // wave parts keep their clean triangles
         // (no test on the player box here: only the hazard has to keep off the reserved space,
         // e.g. a spike right under the arc of the jump)
         const int cx = int(std::floor((q.x + q.half + 2) / kCell));
@@ -350,7 +387,7 @@ void Structurer::necessity() {
         ClickCheck ck;
         ck.click = c.click;
         const int horizon = std::min(m_path.endTick, std::max(nextPressAfter(c.tick) + 30, c.tick + 90));
-        auto ev = shifted(c.tick, 0, true);
+        auto ev = shifted(i, 0, true);
         std::vector<Sample> skip;
         int dt = -1;
         runFrom(m_pre[i], ev, horizon, &skip, &dt);
@@ -369,7 +406,7 @@ void Structurer::frame() {
         const Sample& a = m_nominal[size_t(i - 2)];
         const Sample& b = m_nominal[size_t(i + 2)];
         const int cx = int(std::floor(q.x / kCell));
-        if (cx - lastX < 3) continue;
+        if (cx - lastX < 3 || q.mode == Mode::Wave) continue;
         const bool apex = float(q.g) * q.y > float(q.g) * a.y && float(q.g) * q.y >= float(q.g) * b.y && !q.onGround;
         const bool trough = float(q.g) * q.y < float(q.g) * a.y && float(q.g) * q.y <= float(q.g) * b.y && !q.onGround;
         if (!apex && !trough) continue;
@@ -454,6 +491,7 @@ void Structurer::clusters() {
     int cx = cFirst;
     while (cx < cLast) {
         const Sample& q = sampleAt(cx);
+        if (q.mode == Mode::Wave) { ++cx; continue; }
         const double t = double(si + 1) / phys::kTPS;
         // flying stretches are framed more densely (both sides of the path are open)
         const float modeBoost = isFlyingMode(q.mode) ? 1.5f : 1.0f;
@@ -519,6 +557,101 @@ void Structurer::clusters() {
     }
 }
 
+// Wave parts are built from one preset, as in wave layouts: a 45-degree triangle rises from the
+// floor under every peak of the zig-zag and hangs from the ceiling over every dip, as big as the
+// reserved space allows, with open space around them (no corridor filling, nothing else inside).
+bool Structurer::triangle(float x, bool fromFloor, float pathY, int floorRow, int ceilRow) {
+    const int c = int(std::lround(x / kCell)) - 1; // the tip is between columns c and c+1
+    const int tipLimit = fromFloor ? int(std::floor(pathY / kCell)) - 1 : int(std::floor(pathY / kCell)) + 1;
+    const int maxH = fromFloor ? tipLimit - floorRow + 1 : ceilRow - tipLimit + 1;
+    auto usable = [&](int cx, int cy) {
+        if (m_res.cells.filled(cx, cy)) return true; // merges with a neighbouring triangle
+        return cellFree(cx, cy);
+    };
+    for (int h = maxH; h >= 4; --h) {
+        struct Cell { int x, y; CellKind k; };
+        std::vector<Cell> cells;
+        for (int k = 0; k < h; ++k) {
+            const int y = fromFloor ? floorRow + h - 1 - k : ceilRow - (h - 1) + k;
+            const int left = c - k, right = c + 1 + k;
+            cells.push_back({left, y, fromFloor ? CellKind::SlopeFloorUp : CellKind::SlopeCeilDown});
+            for (int xx = left + 1; xx < right; ++xx) cells.push_back({xx, y, CellKind::Solid});
+            cells.push_back({right, y, fromFloor ? CellKind::SlopeFloorDown : CellKind::SlopeCeilUp});
+        }
+        bool ok = true;
+        for (auto& e : cells) if (!usable(e.x, e.y)) { ok = false; break; }
+        if (!ok) continue;
+        for (auto& e : cells) {
+            const CellKind have = m_res.cells.get(e.x, e.y);
+            if (have == CellKind::Solid) continue;
+            // where two triangles meet, the notch between them is filled
+            const CellKind k = have == CellKind::Empty || have == e.k ? e.k : CellKind::Solid;
+            if (have == k) continue;
+            addCell(e.x, e.y, k);
+            ++m_res.corridorCells;
+        }
+        ++m_res.pillars;
+        return true;
+    }
+    // too little room for a triangle (a small zig-zag): a block slab under / over it with a few
+    // spikes on its face, the other wave preset
+    for (int h = std::min(maxH, 3); h >= 1; --h) {
+        bool ok = true;
+        for (int xx = c - 1; xx <= c + 2 && ok; ++xx)
+            for (int k = 0; k < h && ok; ++k) {
+                const int y = fromFloor ? floorRow + k : ceilRow - k;
+                if (!usable(xx, y)) ok = false;
+            }
+        if (!ok) continue;
+        for (int xx = c - 1; xx <= c + 2; ++xx)
+            for (int k = 0; k < h; ++k) {
+                const int y = fromFloor ? floorRow + k : ceilRow - k;
+                if (m_res.cells.get(xx, y) != CellKind::Solid) addCell(xx, y, CellKind::Solid);
+            }
+        const int face = fromFloor ? floorRow + h : ceilRow - h;
+        Rng r = at(c, 0x51AB);
+        if (r.chance(0.4 + 0.5 * double(m_density))) {
+            spikeAt(c, face, fromFloor ? 0 : 180, 0);
+            if (r.chance(0.5)) spikeAt(c + 1, face, fromFloor ? 0 : 180, 0);
+        }
+        return true;
+    }
+    return false;
+}
+
+void Structurer::waveTriangles() {
+    const int n = int(m_nominal.size());
+    int i = 0;
+    while (i < n) {
+        const Sample& q = m_nominal[size_t(i)];
+        if (q.mode != Mode::Wave || !q.bounded) { ++i; continue; }
+        int j = i;
+        while (j < n && m_nominal[size_t(j)].mode == Mode::Wave && m_nominal[size_t(j)].bounded) ++j;
+        const int floorRow = int(std::lround(q.floorY / kCell)), ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
+        for (int k = i + 1; k + 1 < j; ++k) {
+            const Sample& a = m_nominal[size_t(k - 1)];
+            const Sample& b = m_nominal[size_t(k)];
+            const Sample& c = m_nominal[size_t(k + 1)];
+            const bool peak = b.y > a.y && b.y >= c.y;
+            const bool dip = b.y < a.y && b.y <= c.y;
+            if (!peak && !dip) continue;
+            // the bounds where the turn is (a new wave portal can move them)
+            const int fRow = b.bounded ? int(std::lround(b.floorY / kCell)) : floorRow;
+            const int cRow = b.bounded ? int(std::lround(b.ceilY / kCell)) - 1 : ceilRow;
+            triangle(b.x, peak, b.y, fRow, cRow);
+            // now and then a saw in the open space on the other side of the turn
+            Rng r = at(int(std::floor(b.x / kCell)), 0x5A3E);
+            const float room = peak ? b.ceilY - (b.y + b.half) : (b.y - b.half) - b.floorY;
+            if (room > 110 && r.chance(0.3 * double(m_density) + 0.1)) {
+                const float sy = peak ? b.y + b.half + room * 0.6f : b.y - b.half - room * 0.6f;
+                LevelObject sw = make(room > 160 ? oid::SawLarge : oid::SawMedium, std::round(b.x / 15.0f) * 15.0f, std::round(sy / 15.0f) * 15.0f);
+                if (hazardFree(sw)) { addHazard(sw); ++m_res.saws; }
+            }
+        }
+        i = j;
+    }
+}
+
 // Walls that follow the path, the backbone of most layouts: pillars hanging from the top and
 // rising from the floor, broken into columns 1-3 wide with gaps, each column ending right at the
 // reserved space (so the walls step along with the path), spike tips pointing at the player.
@@ -545,6 +678,7 @@ void Structurer::walls() {
     int cx = cFirst;
     while (cx < cLast) {
         const Sample& q = sampleAt(cx);
+        if (q.mode == Mode::Wave) { ++cx; continue; } // wave parts: triangles only
         const double t = double(si + 1) / phys::kTPS;
         const float dens = std::clamp(m_density * (0.6f + 0.8f * intensityAt(t)), 0.05f, 1.0f);
         Rng r = at(cx, 0x3A11);
@@ -666,6 +800,13 @@ void Structurer::edgeSpikes() {
         const int cx = int(std::floor(q.x / kCell));
         if (cx == lastCx) continue;
         lastCx = cx;
+        if (q.mode == Mode::Wave) {
+            spikeRun(floorRun, 0, base, near);
+            spikeRun(ceilRun, 180, base, near);
+            floorRun.clear();
+            ceilRun.clear();
+            continue;
+        }
         const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
         if (!floorRun.empty() && (floorRun.back().second != floorRow || floorRun.back().first != cx - 1)) { spikeRun(floorRun, 0, base, near); floorRun.clear(); }
         if (!solid(cx, floorRow)) floorRun.push_back({cx, floorRow});
@@ -686,10 +827,10 @@ void Structurer::corridors() {
     int i = 0;
     while (i < n) {
         const Sample& q = m_nominal[size_t(i)];
-        if (!(q.mode == Mode::Wave || q.mode == Mode::Ship || q.mode == Mode::Swing) || !q.bounded) { ++i; continue; }
+        if (!(q.mode == Mode::Ship || q.mode == Mode::Swing) || !q.bounded) { ++i; continue; }
         int j = i;
         while (j < n && m_nominal[size_t(j)].mode == q.mode && m_nominal[size_t(j)].bounded) ++j;
-        if (q.mode != Mode::Wave && !at(int(std::floor(q.x / kCell)), 0xC0DD).chance(0.6)) { i = j; continue; }
+        if (!at(int(std::floor(q.x / kCell)), 0xC0DD).chance(0.6)) { i = j; continue; }
         const int c0 = int(std::floor(m_nominal[size_t(i)].x / kCell)) + 2;
         const int c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell)) - 2;
         const int floorRow = int(std::lround(q.floorY / kCell)), ceilRow = int(std::lround(q.ceilY / kCell)) - 1;
@@ -757,11 +898,11 @@ void Structurer::measureWindows() {
     for (size_t i = 0; i < m_path.clicks.size() && i < m_res.checks.size(); ++i) {
         const PathClick& c = m_path.clicks[i];
         const int horizon = std::min(m_path.endTick, nextPressAfter(c.tick) + 15);
-        int prevRelease = 0;
-        for (auto& e : m_path.inputs.events) if (!e.press && e.tick < c.tick) prevRelease = e.tick;
+        int lo, hi;
+        moveRange(i, lo, hi);
         auto ok = [&](int s) {
-            if (c.tick + s <= prevRelease + 1 || c.tick + s >= nextPressAfter(c.tick) - 1) return false;
-            return runFrom(m_pre[i], shifted(c.tick, s, false), horizon, nullptr);
+            if (c.tick + s <= lo + 1 || c.tick + s >= hi - 1) return false;
+            return runFrom(m_pre[i], shifted(i, s, false), horizon, nullptr);
         };
         int e = 0, l = 0;
         while (e < m_halfWin * 2 && ok(-(e + 1))) ++e;
@@ -779,6 +920,7 @@ StructureResult Structurer::run() {
     m_density = m_prm.density >= 0 ? m_prm.density : (m_plan.style == Style::Minimal ? 0.3f : m_plan.style == Style::Chaotic ? 0.85f : 0.65f);
     // the path as planned: its objects and platform pieces (same objects, same order)
     m_base = pathLevel(m_path);
+    for (auto& c : m_path.clicks) if (c.act == Act::Release) m_releaseTicks.insert(c.tick);
     for (auto& sf : m_path.surfaces) m_platforms.fill(sf.cx0, sf.cy0, sf.cx1, sf.cy1);
     m_W = phys::World();
     m_W.setSettings(m_path.start);
@@ -806,6 +948,7 @@ StructureResult Structurer::run() {
     };
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
     buildEnvelope();
+    waveTriangles(); // before the necessity check: the triangles are what kills a skipped wave click
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     corridors();

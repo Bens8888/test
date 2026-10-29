@@ -8,3 +8,4 @@
 - A take that starts late in the song makes a level that starts shortly before the first click (song offset), not after a long empty run.
 - Gameplay modelled on reference layouts: block look by default (platforms too), floating block groups (hanging blocks with spikes, slabs, T shapes, steps, columns), spikes in groups of 1-3 facing the path, denser framing in flying stretches.
 - Harder and tighter, like real layouts: walls that follow the path (hanging and rising pillars with spike tips), timing windows per difficulty about 25% tighter, automatic difficulty around Insane to Easy Demon.
+- Wave rebuilt from presets like wave layouts: triangles under every peak and over every dip, spiked slabs for small zig-zags, nothing random inside; every music click turns the wave (press, then the next click releases) for long even strokes; wave prefers slower rhythms and 2x speed.

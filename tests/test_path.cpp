@@ -32,8 +32,11 @@ TEST(path_planner_uses_the_clicks_and_is_beatable) {
         level::Level L = pathLevel(path);
         phys::World W(L);
         CHECK_MSG(bot::isBeatable(W, path.inputs), "song %d: the designed inputs do not beat the path", i);
-        // every used click presses at its tick
-        for (auto& c : path.clicks) CHECK(path.inputs.heldAt(c.tick));
+        // every used click presses at its tick (a wave release click lets go of the press before it)
+        for (auto& c : path.clicks) {
+            if (c.act == Act::Release) CHECK(path.inputs.heldAt(c.tick - 1) && !path.inputs.heldAt(c.tick));
+            else CHECK(path.inputs.heldAt(c.tick));
+        }
         clicks += int(plan.clicks.size());
         used += int(path.clicks.size());
         ++levels;

@@ -25,6 +25,7 @@ enum class Act : uint8_t {
     Tap,         // flying modes: a short press
     Hold,        // flying modes / robot: a press held for a while
     Orb,         // a click on an orb (objId says which)
+    Release,     // wave: the click is the release of the press before it (every beat turns)
     // events without a click
     Land,        // a platform to land on
     Pad,

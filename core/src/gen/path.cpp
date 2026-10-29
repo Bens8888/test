@@ -22,6 +22,7 @@ const char* actName(Act a) {
         case Act::Tap: return "tap";
         case Act::Hold: return "hold";
         case Act::Orb: return "orb";
+        case Act::Release: return "release";
         case Act::Land: return "land";
         case Act::Pad: return "pad";
         case Act::GravityPortal: return "gravity";
@@ -106,6 +107,7 @@ struct Node {
     Act act = Act::None;
     int sub = 0;
     float endX = 0;
+    bool holdOn = false;            // the press is still held: the next click is its release
     std::vector<TraceSample> tail; // the last stretch of the path (new platforms must not cut it)
 };
 
@@ -211,6 +213,7 @@ struct Cand {
     PathClick info;
     double score = 0;
     int orbWindow = -1;             // ticks the player overlaps the orb around the press (orbs)
+    bool holdOn = false;            // wave: held through to the next click, which releases it
     // results of the last evaluation
     phys::GameState end;
     std::vector<TraceSample> trace; // from the node's tick + 1
@@ -322,8 +325,17 @@ void Planner::clickOptions(int k, int T, int Tn, std::vector<Cand>& out) {
         c.info.segment = m_segOf[size_t(k)];
     };
     auto holdsFor = [&](std::vector<int>& rels) {
-        if (ck.recorded) { rels.push_back(recordedRelease); return; }
         const int gap = Tn - T;
+        // wave: an even zig-zag (up for about half the gap, down for the rest), the long clean
+        // strokes wave parts are made of; a deliberate recorded hold keeps its length
+        if (m == Mode::Wave && !(ck.recorded && ck.hold)) {
+            for (double f : {0.5, 0.4, 0.6, 0.3, 0.7}) {
+                int r = T + std::max(3, int(gap * f));
+                if (std::find(rels.begin(), rels.end(), r) == rels.end() && r <= latest) rels.push_back(r);
+            }
+            if (!rels.empty()) return;
+        }
+        if (ck.recorded) { rels.push_back(recordedRelease); return; }
         for (double f : {0.0, 0.25, 0.5, 0.8}) {
             int r = f == 0.0 ? T + 4 : T + int(gap * f);
             if (std::find(rels.begin(), rels.end(), r) == rels.end() && r <= latest) rels.push_back(r);
@@ -419,6 +431,26 @@ void Planner::clickOptions(int k, int T, int Tn, std::vector<Cand>& out) {
         out.push_back(std::move(c));
         if (m == Mode::Ufo) orbOptions({oid::OrbYellow, oid::OrbBlue, oid::OrbGreen});
     } else { // ship, wave
+        // wave: the next click releases this press (both are on the beat, every beat turns the
+        // wave: the long strokes wave parts are made of); only between clicks from the music
+        if (m == Mode::Wave && !ck.recorded && k + 1 < int(m_plan.clicks.size()) && !m_plan.clicks[size_t(k + 1)].recorded &&
+            m_segOf[size_t(k + 1)] == m_segOf[size_t(k)] && Tn - T >= 12) {
+            Cand c;
+            c.inputs = {{T, true}};
+            c.used = true;
+            c.holdOn = true;
+            c.act = Act::Hold;
+            c.info.act = Act::Hold;
+            c.info.click = k;
+            c.info.tick = T;
+            c.info.releaseTick = Tn;
+            c.info.mode = m;
+            c.info.grounded = p.onGround;
+            c.info.x = p.x;
+            c.info.y = p.y;
+            c.info.segment = m_segOf[size_t(k)];
+            out.push_back(std::move(c));
+        }
         std::vector<int> rels;
         holdsFor(rels);
         for (int r : rels) {
@@ -643,6 +675,8 @@ void Planner::rescue(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
 double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const Click& ck = m_plan.clicks[size_t(k)];
     double s = c.used ? 1.0 : -3.0;
+    // wave: turning on every beat (held through to the next click) is the wave look
+    if (c.holdOn) s += 1.2;
     // action preferences (a hand-made style profile; replaced by the one learned from real levels)
     auto prior = [&](Act a, int sub) -> double {
         switch (a) {
@@ -704,9 +738,10 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {
         for (auto& q : c.trace) if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
-        s -= (e.mode == Mode::Wave ? 6.0 : isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
+        s -= (e.mode == Mode::Wave ? 14.0 : isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
         const float mid = (e.floorY + e.ceilY) * 0.5f;
-        s -= 0.4 * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
+        // the wave zig-zags through the middle (room for triangles above and below)
+        s -= (e.mode == Mode::Wave ? 2.5 : 0.4) * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
     }
     // long runs make wide platforms: prefer landing shortly before the next click
     if (!c.trace.empty()) {
@@ -734,6 +769,7 @@ NodePtr Planner::finish(const NodePtr& n, int k, Cand& c) {
     node->act = c.act;
     node->sub = c.sub;
     node->endX = c.end.p[0].x;
+    node->holdOn = c.holdOn;
     node->score = n->score + c.score;
     // tail: the path of this stretch and the end of the previous one, within 240 units
     for (auto& q : n->tail) if (q.x >= node->endX - 240) node->tail.push_back(q);
@@ -750,12 +786,29 @@ void Planner::expand(const NodePtr& n, int k, std::vector<NodePtr>& out) {
     const int T = std::max(m_start.tick + 1, tickOf(m_plan.clicks[size_t(k)].time));
     const int Tn = k + 1 < nClicks ? std::max(T + 4, tickOf(m_plan.clicks[size_t(k + 1)].time)) : tickOf(m_plan.duration) + 120;
     std::vector<Cand> opts;
-    clickOptions(k, T, Tn, opts);
-    // the click can also be left out (scored down; keeps the search alive)
-    Cand skip;
-    skip.used = false;
-    skip.info.click = k;
-    opts.push_back(skip);
+    if (n->holdOn && m_start.pressed) {
+        // this click releases the press held since the last one
+        Cand rel;
+        rel.inputs = {{T, false}};
+        rel.used = true;
+        rel.act = Act::Release;
+        rel.info.act = Act::Release;
+        rel.info.click = k;
+        rel.info.tick = T;
+        rel.info.releaseTick = T;
+        rel.info.mode = m_start.p[0].mode;
+        rel.info.x = m_start.p[0].x;
+        rel.info.y = m_start.p[0].y;
+        rel.info.segment = m_segOf[size_t(k)];
+        opts.push_back(rel);
+    } else {
+        clickOptions(k, T, Tn, opts);
+        // the click can also be left out (scored down; keeps the search alive)
+        Cand skip;
+        skip.used = false;
+        skip.info.click = k;
+        opts.push_back(skip);
+    }
     const size_t before = out.size();
     for (auto& base : opts) {
         std::vector<Cand> full;
@@ -811,7 +864,7 @@ NodePtr Planner::search(NodePtr start, int fromClick, PathPlan& out) {
                 const auto& a = c->s.p[0];
                 const auto& b2 = q->s.p[0];
                 if (a.mode == b2.mode && a.upsideDown == b2.upsideDown && a.onGround == b2.onGround && std::fabs(a.y - b2.y) < 4 &&
-                    std::fabs(a.v - b2.v) < 0.5 && c->act == q->act && c->sub == q->sub) { dup = true; break; }
+                    std::fabs(a.v - b2.v) < 0.5 && c->act == q->act && c->sub == q->sub && c->holdOn == q->holdOn) { dup = true; break; }
             }
             if (!dup) kept.push_back(c);
             if (int(kept.size()) >= B) break;
