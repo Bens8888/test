@@ -51,8 +51,9 @@ float resolveDifficulty(const audio::MusicAnalysis& A, const GenOptions& opt) {
     for (auto& s : A.sections) { energy += s.energy * s.duration(); dur += s.duration(); }
     energy = dur > 0 ? energy / dur : 0.5;
     double bpm = A.mainBpm();
-    double d = 3.4 + 2.0 * (energy - 0.5) + std::clamp((bpm - 130.0) / 40.0, -0.8, 1.0);
-    return float(std::clamp(d, 1.5, 6.0));
+    // layouts people make and share are mostly Insane to demon level
+    double d = 4.6 + 2.0 * (energy - 0.5) + std::clamp((bpm - 130.0) / 40.0, -0.8, 1.0);
+    return float(std::clamp(d, 2.5, 7.0));
 }
 
 Style resolveStyle(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng) {

@@ -34,6 +34,10 @@ switch on the drop and speed up). The mode is chosen for the click rhythm: fast 
 wave/ship/swing, spaced clicks cube/robot/ball/ufo, long notes holds.
 
 ## Structures (modelled on reference layouts)
+- walls that follow the path, the backbone of most layouts: pillars hanging from the top and
+  rising from the floor, broken into columns 1-3 wide with gaps. Each column ends right at the
+  reserved space, so the walls step along with the path, and has a spike tip pointing at the
+  player.
 - small block groups floating next to the path, above or below it: a hanging block with a spike
   under it, slabs of 2-4 with a spike at one or both ends, 2x2 blocks, T shapes, steps, short
   columns with a spike tip. Now and then there is a spike on the front, pointing at the player.
@@ -42,7 +46,8 @@ wave/ship/swing, spaced clicks cube/robot/ball/ufo, long notes holds.
   more densely.
 - hanging pillars (from the top) and rising pillars (from the floor) with spike tips, over jump
   apexes and under the path
-- saw clusters in the pockets next to the path
+- saw clusters in the pockets next to the path (a saw may cut into a wall, but it is never buried
+  in it)
 - wave/ship corridors: top and bottom walls following the path with 45° slopes (the wave's are
   sharp triangles)
 - spikes in groups of 1-3 with gaps, never long identical rows. Spikes only go on faces that

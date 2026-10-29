@@ -141,6 +141,7 @@ private:
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void frame();
     void clusters();
+    void walls();
     void edgeSpikes();
     // spikes along a run of free cells (same row, consecutive columns): groups of 1-3 with gaps,
     // as layouts place them (never a long identical row)
@@ -236,6 +237,8 @@ bool Structurer::hazardFree(const LevelObject& o) const {
     if (so.kind == level::Kind::Saw) hh = hw;
     Box b{so.x - hw, so.y - hh, so.x + hw, so.y + hh};
     if (m_env.hits(b, m_margin + 1)) return false;
+    // a saw may cut into a wall, but its centre stays in the open (not buried in the blocks)
+    if (so.kind == level::Kind::Saw && m_res.cells.filled(int(std::floor(so.x / kCell)), int(std::floor(so.y / kCell)))) return false;
     // keep the path's orbs, pads and portals readable
     for (auto& po : m_path.objects)
         if (std::fabs(po.o.x - o.x) < 36 && std::fabs(po.o.y - o.y) < 36) return false;
@@ -516,6 +519,70 @@ void Structurer::clusters() {
     }
 }
 
+// Walls that follow the path, the backbone of most layouts: pillars hanging from the top and
+// rising from the floor, broken into columns 1-3 wide with gaps, each column ending right at the
+// reserved space (so the walls step along with the path), spike tips pointing at the player.
+void Structurer::walls() {
+    if (m_nominal.empty()) return;
+    const int cFirst = int(std::floor(m_nominal.front().x / kCell)) + 4;
+    const int cLast = int(std::floor(m_nominal.back().x / kCell)) - 2;
+    size_t si = 0;
+    auto sampleAt = [&](int cx) -> const Sample& {
+        while (si + 1 < m_nominal.size() && m_nominal[si].x < (cx + 0.5f) * kCell) ++si;
+        return m_nominal[si];
+    };
+    // the reserved space around column x (with its neighbours: the wall keeps its distance)
+    auto band = [&](int x, float& lo, float& hi) {
+        lo = 1e9f;
+        hi = -1e9f;
+        bool any = false;
+        for (int c = x - 1; c <= x + 1; ++c) {
+            float a, b;
+            if (m_env.range(c, a, b)) { lo = std::min(lo, a); hi = std::max(hi, b); any = true; }
+        }
+        return any;
+    };
+    int cx = cFirst;
+    while (cx < cLast) {
+        const Sample& q = sampleAt(cx);
+        const double t = double(si + 1) / phys::kTPS;
+        const float dens = std::clamp(m_density * (0.6f + 0.8f * intensityAt(t)), 0.05f, 1.0f);
+        Rng r = at(cx, 0x3A11);
+        const int width = 1 + int(r.below(3));
+        const int gapAfter = 1 + int(r.below(dens > 0.7f ? 2 : 3));
+        if (!r.chance(0.35 + 0.6 * double(dens))) { cx += width + gapAfter; continue; }
+        const int floorRow = q.bounded ? int(std::lround(q.floorY / kCell)) : 0;
+        const int ceilRow = q.bounded ? int(std::lround(q.ceilY / kCell)) - 1 : kTopRow;
+        float lo0, hi0;
+        if (!band(cx, lo0, hi0)) { cx += 1; continue; }
+        // the top of a ground stretch: the walls hang from a few rows over the path (off screen)
+        const int topRow = q.bounded ? ceilRow : std::min(kTopRow, int(std::ceil(hi0 / kCell)) + 5 + int(r.below(4)));
+        const bool top = r.chance(0.55 + 0.35 * double(dens));
+        const bool bottom = r.chance(0.45 + 0.4 * double(dens));
+        const bool spikes = r.chance(0.6 + 0.35 * double(dens));
+        bool placed = false;
+        for (int x = cx; x < cx + width; ++x) {
+            float lo, hi;
+            if (!band(x, lo, hi)) continue;
+            if (top) {
+                // from the top down to the reserved space (one row left for the spike tip)
+                const int nearRow = int(std::ceil((hi + m_margin) / kCell)) + (spikes ? 1 : 0);
+                int y = topRow, last = -1;
+                for (; y >= nearRow && cellFree(x, y); --y) { addCell(x, y); last = y; placed = true; }
+                if (last >= 0 && last == nearRow && spikes) spikeAt(x, last - 1, 180, 0);
+            }
+            if (bottom) {
+                const int nearRow = int(std::floor((lo - m_margin) / kCell)) - 1 - (spikes ? 1 : 0);
+                int y = floorRow, last = -1;
+                for (; y <= nearRow && cellFree(x, y); ++y) { addCell(x, y); last = y; placed = true; }
+                if (last >= 0 && last == nearRow && spikes) spikeAt(x, last + 1, 0, 0);
+            }
+        }
+        if (placed) ++m_res.pillars;
+        cx += width + gapAfter;
+    }
+}
+
 bool Structurer::spikeAt(int cx, int cy, double rot, double near) {
     if (cy < 0 || cy > kTopRow || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return false;
     if (m_hazardCells.count({cx, cy})) return false;
@@ -742,6 +809,7 @@ StructureResult Structurer::run() {
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     corridors();
+    walls();
     frame();
     clusters();
     edgeSpikes();

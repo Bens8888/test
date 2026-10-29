@@ -10,8 +10,8 @@ white (green while the button is held). Each image is the whole level, wrapped i
 `alcli generate demo --variant-seed 7 --difficulty 4`
 
 ```
-BEATABLE (bot verified) | 309 clicks (252 forced, 4 dropped) | windows: min 100 ms, mean 207 ms
-longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty follows music: r = 0.67
+BEATABLE (bot verified) | 309 clicks (271 forced, 4 dropped) | windows: min 96 ms, mean 163 ms
+longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty follows music: r = 0.64
 ```
 
 ![demo_auto](gallery/demo_auto.png)
@@ -21,8 +21,8 @@ longest gap without input: 2.34 s at 43.4 s | music alignment 94% | difficulty f
 `alcli generate demo --variant-seed 3 --difficulty 0`
 
 ```
-BEATABLE (bot verified) | 141 clicks (98 forced, 3 dropped) | windows: min 138 ms, mean 398 ms
-longest gap without input: 6.08 s at 74.8 s | music alignment 98% | difficulty follows music: r = 0.57
+BEATABLE (bot verified) | 141 clicks (110 forced, 3 dropped) | windows: min 50 ms, mean 320 ms
+longest gap without input: 6.08 s at 74.8 s | music alignment 98% | difficulty follows music: r = 0.60
 ```
 
 ![demo_easy](gallery/demo_easy.png)
@@ -32,7 +32,7 @@ longest gap without input: 6.08 s at 74.8 s | music alignment 98% | difficulty f
 `alcli generate demo --variant-seed 5 --difficulty 9`
 
 ```
-BEATABLE (bot verified) | 477 clicks (467 forced, 3 dropped) | windows: min 50 ms, mean 97 ms
+BEATABLE (bot verified) | 477 clicks (467 forced, 3 dropped) | windows: min 46 ms, mean 69 ms
 longest gap without input: 1.41 s at 139.5 s | music alignment 82% | difficulty follows music: r = 0.79
 ```
 
@@ -43,8 +43,8 @@ longest gap without input: 1.41 s at 139.5 s | music alignment 82% | difficulty 
 `alcli generate demo --variant-seed 11 --difficulty 3 --style 5 --modes 0`
 
 ```
-BEATABLE (bot verified) | 219 clicks (191 forced, 0 dropped) | windows: min 108 ms, mean 201 ms
-longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty follows music: r = 0.74
+BEATABLE (bot verified) | 219 clicks (207 forced, 0 dropped) | windows: min 79 ms, mean 164 ms
+longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty follows music: r = 0.72
 ```
 
 ![demo_retro_cube](gallery/demo_retro_cube.png)
@@ -54,7 +54,7 @@ longest gap without input: 2.34 s at 43.8 s | music alignment 96% | difficulty f
 `alcli generate demo --variant-seed 2 --difficulty 4 --style 1`
 
 ```
-BEATABLE (bot verified) | 297 clicks (252 forced, 1 dropped) | windows: min 88 ms, mean 206 ms
+BEATABLE (bot verified) | 297 clicks (271 forced, 2 dropped) | windows: min 88 ms, mean 160 ms
 longest gap without input: 2.34 s at 43.4 s | music alignment 95% | difficulty follows music: r = 0.70
 ```
 
@@ -65,8 +65,8 @@ longest gap without input: 2.34 s at 43.4 s | music alignment 95% | difficulty f
 `alcli generate demo --variant-seed 7 --difficulty 4 --engine 1`
 
 ```
-BEATABLE (bot verified) | 307 clicks (256 forced, 6 dropped) | windows: min 117 ms, mean 233 ms
-longest gap without input: 2.80 s at 74.3 s | music alignment 92% | difficulty follows music: r = 0.63
+BEATABLE (bot verified) | 307 clicks (276 forced, 5 dropped) | windows: min 88 ms, mean 202 ms
+longest gap without input: 2.80 s at 74.3 s | music alignment 92% | difficulty follows music: r = 0.58
 ```
 
 ![demo_classic](gallery/demo_classic.png)
@@ -76,7 +76,7 @@ longest gap without input: 2.80 s at 74.3 s | music alignment 92% | difficulty f
 `alcli generate demo --variant-seed 9 --difficulty 5 --switch 0.15`
 
 ```
-BEATABLE (bot verified) | 351 clicks (298 forced, 1 dropped) | windows: min 50 ms, mean 184 ms
+BEATABLE (bot verified) | 351 clicks (317 forced, 1 dropped) | windows: min 46 ms, mean 139 ms
 longest gap without input: 2.34 s at 88.4 s | music alignment 92% | difficulty follows music: r = 0.78
 ```
 
@@ -88,8 +88,8 @@ longest gap without input: 2.34 s at 88.4 s | music alignment 92% | difficulty f
 
 ```
 recording: 276 clicks: 100% on the music (mean offset 9 ms, your latency +23 ms removed), 8 holds, 15 doubles, 2 streams, 3 motifs
-BEATABLE (bot verified) | 276 clicks (184 forced, 1 dropped) | windows: min 88 ms, mean 210 ms
-longest gap without input: 2.48 s at 0.0 s | music alignment 78% | difficulty follows music: r = 0.57
+BEATABLE (bot verified) | 276 clicks (209 forced, 2 dropped) | windows: min 88 ms, mean 162 ms
+longest gap without input: 2.48 s at 0.0 s | music alignment 78% | difficulty follows music: r = 0.54
 ```
 
 ![demo_recording](gallery/demo_recording.png)
@@ -99,7 +99,7 @@ longest gap without input: 2.48 s at 0.0 s | music alignment 78% | difficulty fo
 `alcli generate random:17 --variant-seed 17 --difficulty 6`
 
 ```
-BEATABLE (bot verified) | 260 clicks (194 forced, 0 dropped) | windows: min 62 ms, mean 163 ms
+BEATABLE (bot verified) | 260 clicks (221 forced, 0 dropped) | windows: min 62 ms, mean 113 ms
 longest gap without input: 1.71 s at 48.1 s | music alignment 92% | difficulty follows music: r = 0.80
 ```
 
@@ -110,8 +110,8 @@ longest gap without input: 1.71 s at 48.1 s | music alignment 92% | difficulty f
 `alcli generate random:23 --variant-seed 23 --difficulty 2 --modes 1,3,4,7`
 
 ```
-BEATABLE (bot verified) | 380 clicks (276 forced, 0 dropped) | windows: min 158 ms, mean 288 ms
-longest gap without input: 3.19 s at 7.8 s | music alignment 100% | difficulty follows music: r = 0.71
+BEATABLE (bot verified) | 380 clicks (301 forced, 0 dropped) | windows: min 133 ms, mean 228 ms
+longest gap without input: 3.19 s at 7.8 s | music alignment 100% | difficulty follows music: r = 0.72
 ```
 
 ![random_song_23](gallery/random_song_23.png)
@@ -121,8 +121,8 @@ longest gap without input: 3.19 s at 7.8 s | music alignment 100% | difficulty f
 `alcli generate demo --variant-seed 3 --modes 0,5 --crop 1800:4200`
 
 ```
-BEATABLE (bot verified) | 282 clicks (241 forced, 0 dropped) | windows: min 92 ms, mean 205 ms
-longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty follows music: r = 0.69
+BEATABLE (bot verified) | 342 clicks (310 forced, 0 dropped) | windows: min 79 ms, mean 136 ms
+longest gap without input: 2.33 s at 74.8 s | music alignment 92% | difficulty follows music: r = 0.76
 ```
 
 ![closeup_cube_robot](gallery/closeup_cube_robot.png)
@@ -132,8 +132,8 @@ longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty f
 `alcli generate demo --variant-seed 3 --modes 1 --crop 3000:5400`
 
 ```
-BEATABLE (bot verified) | 282 clicks (203 forced, 0 dropped) | windows: min 121 ms, mean 227 ms
-longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty follows music: r = 0.69
+BEATABLE (bot verified) | 342 clicks (260 forced, 0 dropped) | windows: min 96 ms, mean 143 ms
+longest gap without input: 2.33 s at 74.8 s | music alignment 92% | difficulty follows music: r = 0.76
 ```
 
 ![closeup_ship](gallery/closeup_ship.png)
@@ -143,8 +143,8 @@ longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty f
 `alcli generate demo --variant-seed 3 --modes 4 --crop 3000:5400`
 
 ```
-BEATABLE (bot verified) | 282 clicks (230 forced, 0 dropped) | windows: min 112 ms, mean 195 ms
-longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty follows music: r = 0.70
+BEATABLE (bot verified) | 342 clicks (329 forced, 0 dropped) | windows: min 88 ms, mean 135 ms
+longest gap without input: 2.33 s at 74.8 s | music alignment 92% | difficulty follows music: r = 0.74
 ```
 
 ![closeup_wave](gallery/closeup_wave.png)
@@ -154,8 +154,8 @@ longest gap without input: 2.35 s at 95.9 s | music alignment 95% | difficulty f
 `alcli generate random:7 --variant-seed 11 --crop 9000:11400`
 
 ```
-BEATABLE (bot verified) | 155 clicks (124 forced, 1 dropped) | windows: min 108 ms, mean 210 ms
-longest gap without input: 2.54 s at 32.7 s | music alignment 96% | difficulty follows music: r = 0.80
+BEATABLE (bot verified) | 188 clicks (179 forced, 0 dropped) | windows: min 79 ms, mean 122 ms
+longest gap without input: 2.11 s at 33.1 s | music alignment 92% | difficulty follows music: r = 0.79
 ```
 
 ![closeup_ball_orbs](gallery/closeup_ball_orbs.png)

@@ -38,16 +38,17 @@ const char* styleName(Style s) {
 
 static const DifficultyProfile kProfiles[10] = {
     //  calm  intense  window  clear  gap   spikes orbs  triple speed
-    {0.55f, 1.10f, 230.f, 48.f, 0.44f, 1, false, false, 0.0f},  // Easy
-    {0.70f, 1.45f, 200.f, 40.f, 0.40f, 2, true, false, 0.1f},   // Normal
-    {0.85f, 1.85f, 170.f, 34.f, 0.32f, 2, true, false, 0.2f},   // Hard
-    {1.00f, 2.30f, 145.f, 28.f, 0.26f, 3, true, true, 0.35f},   // Harder
-    {1.20f, 2.90f, 125.f, 23.f, 0.21f, 3, true, true, 0.5f},    // Insane
-    {1.45f, 3.40f, 108.f, 19.f, 0.18f, 3, true, true, 0.6f},    // Easy demon
-    {1.70f, 4.00f, 93.f, 15.f, 0.15f, 3, true, true, 0.7f},     // Medium demon
-    {2.00f, 4.70f, 78.f, 12.f, 0.13f, 3, true, true, 0.8f},     // Hard demon
-    {2.30f, 5.60f, 63.f, 9.f, 0.11f, 3, true, true, 0.9f},      // Insane demon
-    {2.70f, 6.80f, 48.f, 6.f, 0.09f, 3, true, true, 1.0f},      // Extreme demon
+    // timing windows as in real levels of each rating (structures right up to the path)
+    {0.55f, 1.10f, 180.f, 40.f, 0.44f, 1, false, false, 0.0f},  // Easy
+    {0.70f, 1.45f, 150.f, 32.f, 0.40f, 2, true, false, 0.1f},   // Normal
+    {0.85f, 1.85f, 125.f, 26.f, 0.32f, 2, true, false, 0.2f},   // Hard
+    {1.00f, 2.30f, 105.f, 20.f, 0.26f, 3, true, true, 0.35f},   // Harder
+    {1.20f, 2.90f, 88.f, 16.f, 0.21f, 3, true, true, 0.5f},     // Insane
+    {1.45f, 3.40f, 74.f, 13.f, 0.18f, 3, true, true, 0.6f},     // Easy demon
+    {1.70f, 4.00f, 62.f, 10.f, 0.15f, 3, true, true, 0.7f},     // Medium demon
+    {2.00f, 4.70f, 52.f, 8.f, 0.13f, 3, true, true, 0.8f},      // Hard demon
+    {2.30f, 5.60f, 42.f, 6.f, 0.11f, 3, true, true, 0.9f},      // Insane demon
+    {2.70f, 6.80f, 33.f, 4.f, 0.09f, 3, true, true, 1.0f},      // Extreme demon
 };
 
 const DifficultyProfile& profile(Difficulty d) {
