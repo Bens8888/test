@@ -9,11 +9,13 @@
 - Every stretch has a connected band above and below the path with hazards lining its faces, so
   structures read as a corridor (about twice the objects per screen)
 - Fixed: hard mini wave parts lost almost all their walls
+- Fixed: wave walls had holes around portals, and spikes piled up on each other and on saws
+- Fixed: a portal right after another portal could sit at the edge of the path and be missed
 - Gamemode stretches last a few seconds instead of 1-3 clicks
 - New menu rows: Structures, Speed (slow / normal / fast); outline look by default
 - Physics fixed against runs logged in GD: a blue pad facing the other way stays armed, the spider's
   area is 270 units high, a pad gives the robot no held boost, yellow, pink and blue pads are 25
-  wide
+  wide, a landing counts before a mode portal, a flipped cube dies a tenth of a unit into the floor
 - Recorder: ticks were doubled (the game counts two per physics step)
 - In-game self test: selftest.txt in the save folder plays a level with its designed clicks and logs
   every step
