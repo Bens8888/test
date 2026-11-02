@@ -3,19 +3,22 @@
 Stated plainly, with what each one means in practice.
 
 ## Not verified inside the game yet
-- **Generated levels were played in GD by the self test, the menus were not.** The mod builds against
-  Geode 5.10.1 / GD 2.2081 and loads on Geode 5.11.2. Nobody has clicked through the menus in GD yet:
-  UI layout, menu feel and the recorder need a first round of real use.
+- **Tested by the self test in GD, not yet by a person.** The mod builds against Geode 5.10.1 / GD 2.2081
+  and loads on Geode 5.11.2. The self test presses the editor button, opens every tab, generates,
+  applies, undoes, opens Tap Along, and checks the recorder (every click caught at the right tick).
+  It cannot judge how levels feel to play. macOS builds on CI but has not been run.
+- **Structures are lighter than top levels.** 50-80 hitbox objects per screen, about Bidal Wave's 80;
+  Tidal Wave has 194 and Grief 284 (`training/corpus/compare.py`).
 - **Simulator vs the real game.** Checked against the real game with the in-game self test (a
   `selftest.txt` in the mod's save folder plays a generated level with its designed clicks and logs
   every physics step) and `simtrace`. Horizontal error is about 0.001 units over whole levels. Fixed
-  from those runs: blue pads facing away, pad sizes, spider area height and teleport, robot boost after
-  pads and orbs, dash through portals, portal bounds on a row boundary, flipped cubes touching the
-  ground. Generated levels keep 5 units of extra distance from hazards to absorb what is left, mostly
-  one-tick pad timing.
-  - Of the last 10 runs on new levels, 5 reached 100% with their designed clicks in GD 2.2081; the others
-    died at 29%, 29%, 57%, 29% and 99%. "Beatable" means beaten in the simulator, so play a level
-    before trusting it.
+  from those runs: blue pads facing away, pad sizes, spider area height and teleports (a hazard on the
+  way kills), robot boost after pads and orbs, dash through portals, portal bounds on a row boundary,
+  flying modes leaving a bound, swing portal width, saw hits and the small saw's radius, flipped cubes
+  touching the ground. Generated levels keep 3 units of extra distance from hazards to absorb what is
+  left, mostly one-tick pad timing.
+  - On the last round, 7 of 8 new levels reached 100% with their designed clicks in GD 2.2081 (the
+    other died at 60%). "Beatable" means beaten in the simulator, so play a level before trusting it.
   - Still not exact: riding along slopes, rotated portals (the generator avoids both), and some spider
     teleports.
 - **Editor coordinates.** The ghost overlay and recorded positions assume GD's object layer is 90

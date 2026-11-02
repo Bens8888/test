@@ -225,8 +225,19 @@ bool Structurer::runFrom(const phys::GameState& from, const std::vector<bot::Inp
 }
 
 void Structurer::buildEnvelope() {
+    // a teleport reserves everything it passes: a hazard on the way kills
+    auto reserve = [this](const std::vector<Sample>& run) {
+        for (size_t k = 0; k < run.size(); ++k) {
+            const Sample& q = run[k];
+            m_env.add(q.x, q.y, q.half);
+            if (k > 0 && std::fabs(q.y - run[k - 1].y) > 40) {
+                const float lo = std::min(q.y, run[k - 1].y), hi = std::max(q.y, run[k - 1].y);
+                m_env.addBox({q.x - q.half, lo - q.half, q.x + q.half, hi + q.half});
+            }
+        }
+    };
     // the designed run
-    for (auto& q : m_nominal) m_env.add(q.x, q.y, q.half);
+    reserve(m_nominal);
     // every click pressed early and late (within the window); a variant only counts while it does
     // what the click is meant to do (the orb is taken, the jump happens)
     const uint32_t kClickEvents = phys::EvJump | phys::EvOrb | phys::EvUfoJump | phys::EvSwingFlip | phys::EvTeleport;
@@ -255,7 +266,7 @@ void Structurer::buildEnvelope() {
                 }
                 if (!(got & want)) continue; // pressed too early/late to do anything: outside the window
             }
-            for (auto& q : tr) m_env.add(q.x, q.y, q.half);
+            reserve(tr);
         }
     }
 }
@@ -523,11 +534,14 @@ bool Structurer::nearPathObject(float x, float y) const {
 // Whether the planned path comes within a few units of the solid side of a wall piece.
 bool Structurer::pieceBlocksPath(float x, float y, float slope, bool solidBelow) const {
     const float x0 = x - 15, x1 = x + 15;
-    auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x0 - 8.f, [](const Sample& q, float v) { return q.x < v; });
+    const float half = std::fabs(slope) * 15.0f; // half the piece's height
+    auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x0 - 14.f, [](const Sample& q, float v) { return q.x < v; });
     const float clear = m_waveMargin * 0.4f;
-    for (; it != m_nominal.end() && it->x <= x1 + 8.f; ++it) {
+    for (; it != m_nominal.end() && it->x <= x1 + 14.f; ++it) {
+        // the sloped edge, and past the ends of the piece the tip of it
         const float edge = y + slope * (std::clamp(it->x, x0, x1) - x);
         if (solidBelow ? it->y - it->half < edge + clear : it->y + it->half > edge - clear) return true;
+        if (half > 0 && it->x >= x0 && it->x <= x1 && std::fabs(it->y - y) < half + it->half && (it->x < x0 + 6 || it->x > x1 - 6)) return true;
     }
     return false;
 }

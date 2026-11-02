@@ -227,6 +227,7 @@ static void hitGround(PlayerState& p) {
 
 // ---------------------------------------------------------------- spider teleport (§3.9, estimated model)
 
+static void die(PlayerState& p, DeathCause c, int obj);
 static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
     flipGravity(p, !p.upsideDown, gs.time);
     const float h = p.height();
@@ -245,6 +246,13 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
             if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.maxY() <= feet + 1.0f && o.maxY() > target) target = o.maxY();
         }
+        // a hazard on the way stops the teleport for good (seen on runs logged in GD)
+        for (int i : cand) {
+            const auto& o = objs[size_t(i)];
+            if (o.kind != Kind::Hazard && o.kind != Kind::Saw) continue;
+            if (o.maxX() < p.x - halfW || o.minX() > p.x + halfW) continue;
+            if (o.y < feet && o.y > target) { p.y = o.y; die(p, o.kind == Kind::Saw ? DeathCause::Saw : DeathCause::Hazard, i); return; }
+        }
         p.y = target + h * 0.5f;
     } else {
         float head = p.y + h * 0.5f;
@@ -254,6 +262,12 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
             if (o.kind != Kind::Solid && o.kind != Kind::Breakable) continue;
             if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.minY() >= head - 1.0f && o.minY() < target) target = o.minY();
+        }
+        for (int i : cand) {
+            const auto& o = objs[size_t(i)];
+            if (o.kind != Kind::Hazard && o.kind != Kind::Saw) continue;
+            if (o.maxX() < p.x - halfW || o.minX() > p.x + halfW) continue;
+            if (o.y > head && o.y < target) { p.y = o.y; die(p, o.kind == Kind::Saw ? DeathCause::Saw : DeathCause::Hazard, i); return; }
         }
         p.y = target - h * 0.5f;
     }
@@ -424,9 +438,9 @@ static void switchMode(const World& W, GameState& gs, PlayerState& p, Mode m, fl
     const bool cfgSim = W.config().waveExitSimStyle;
     if (p.mode != m) {
         Mode old = p.mode;
-        // a wave sliding along a bound leaves with no speed (seen on runs logged in GD)
-        if (old == Mode::Wave && p.bounded) {
-            const float h = p.height();
+        // touching a bound, a flying mode leaves with no speed (seen on runs logged in GD)
+        if (modeIsFlying(old) && p.bounded) {
+            const float h = old == Mode::Wave ? p.height() : p.height() * 0.5f;
             if (p.y <= p.floorY + h + 0.01f) { p.y = p.floorY + h; p.v = 0; }
             else if (p.y >= p.ceilY - h - 0.01f) { p.y = p.ceilY - h; p.v = 0; }
         }
