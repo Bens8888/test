@@ -236,13 +236,18 @@ class $modify(ALTestBase, GJBaseGameLayer) {
         auto& t = test();
         if (t.active) {
             // the game counts two per physics step, and takes a button in the step after this one
-            const int step = int(m_gameState.m_currentProgress / 2) + 1;
+            // (a spider or a swing on the ground reacts at once)
+            const bool atOnce = m_player1 && (m_player1->m_isSpider || m_player1->m_isSwing) && m_player1->m_isOnGround;
+            const int step = int(m_gameState.m_currentProgress / 2) + (atOnce ? 0 : 1);
             while (!t.inputs.empty() && t.inputs.begin()->first <= step) {
                 handleButton(t.inputs.begin()->second, 1, true);
                 t.inputs.erase(t.inputs.begin());
             }
         }
         GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
+        // a look at the level as it plays, every five seconds
+        if (t.active && !t.ui && int(m_gameState.m_currentProgress) % 2400 == 0 && m_gameState.m_currentProgress > 0 && m_gameState.m_currentProgress <= 96000)
+            screenshot(fmt::format("play-{}", int(m_gameState.m_currentProgress) / 2400));
         if (t.active && m_player1 && m_gameState.m_currentProgress >= 4) {
             t.trace << int(m_gameState.m_currentProgress / 2 - 1) << "\t0\t" << m_player1->getPositionX() << '\t' << m_player1->getPositionY() << '\t'
                     << m_player1->m_yVelocity << '\n';

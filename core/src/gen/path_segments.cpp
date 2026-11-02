@@ -161,6 +161,9 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         // size: mini for fast streams in flying modes
         const double miniChance = opt.sizeChanges == Tri::Off ? 0.0 : opt.sizeChanges == Tri::On ? 0.4 : (D >= 3 && med < 0.25 ? 0.3 : 0.08);
         sg.mini = ((sg.mode == Mode::Wave && opt.sizeChanges == Tri::On) || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && own.chance(miniChance);
+        // hard wave parts are mini: steep strokes in tight corridors
+        // (only for fast clicks: at half a second a stroke would run from the floor to the ceiling)
+        if (sg.mode == Mode::Wave && opt.sizeChanges == Tri::Auto && D >= 4 && med < 0.26) sg.mini = own.chance(0.7);
         // gravity: some ground segments run upside down
         const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 3 ? 0.18 : 0.0);
         sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && own.chance(flipChance);

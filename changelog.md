@@ -4,7 +4,8 @@
 - Structures come from real levels now: a trained library of modules from Bidal Wave and shapes
   shared between top levels, with Rail, Slope, Compact and Spiky styles
 - Each gamemode stretch repeats a few shapes in a rhythm, hugging the player's path
-- Wave parts are thin 45-degree line slope chains built around the zig-zag
+- Wave parts are an outline on both sides that follows every stroke; tight corridors set by the
+  difficulty, steep mini wave on fast parts
 - Gamemode stretches last a few seconds instead of 1-3 clicks
 - New menu rows: Structures, Speed (slow / normal / fast); outline look by default
 - Physics fixed against runs logged in GD: a blue pad facing the other way stays armed, the spider's

@@ -617,13 +617,9 @@ static bool sawHits(const World& W, const PlayerState& p, const Rect& r, const S
         float lim = rad + p.width() * 0.5f;
         return dx * dx + dy * dy <= lim * lim;
     }
-    if (o.x >= r.x0 && o.x <= r.x1 && o.y >= r.y0 && o.y <= r.y1) return true;
-    const float cx[2] = {r.x0, r.x1}, cy[2] = {r.y0, r.y1};
-    for (float px : cx) for (float py : cy) {
-        float dx = px - o.x, dy = py - o.y;
-        if (dx * dx + dy * dy < rad * rad) return true;
-    }
-    return false;
+    // the point of the player's box nearest to the saw (a saw can touch its flat side)
+    const float dx = o.x - std::clamp(o.x, r.x0, r.x1), dy = o.y - std::clamp(o.y, r.y0, r.y1);
+    return dx * dx + dy * dy < rad * rad;
 }
 
 static void die(PlayerState& p, DeathCause c, int obj) {

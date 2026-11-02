@@ -159,8 +159,8 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     m_setupView = CCNode::create();
     m_setupView->setContentSize(m_contentSize);
     page->addChild(m_setupView);
-    auto form = ui::Form::create({W, H - 50.f}, 150.f, 23.f);
-    form->setPosition({0.f, 50.f});
+    auto form = ui::Form::create({W, H - 36.f}, 150.f, 21.f);
+    form->setPosition({0.f, 36.f});
     m_setupView->addChild(form);
 
     // song
@@ -297,11 +297,11 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     m_generateMenu->ignoreAnchorPointForPosition(false);
     m_generateMenu->setAnchorPoint({0.5f, 0.f});
     m_generateMenu->setPosition({W / 2.f, 4.f});
-    auto gen = ui::button("Generate", [this] { startGenerate(); }, 0.9f, "GJ_button_01.png");
-    gen->setPosition({W / 2.f - 50.f, 20.f});
+    auto gen = ui::button("Generate", [this] { startGenerate(); }, 0.7f, "GJ_button_01.png");
+    gen->setPosition({W / 2.f - 50.f, 14.f});
     m_generateMenu->addChild(gen);
     auto results = ui::button("Results", [this] { if (S().current()) showResults(true); }, 0.55f, "GJ_button_02.png");
-    results->setPosition({W / 2.f + 70.f, 20.f});
+    results->setPosition({W / 2.f + 70.f, 14.f});
     m_generateMenu->addChild(results);
     m_setupView->addChild(m_generateMenu);
 
@@ -351,31 +351,31 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     rmenu->setContentSize(m_contentSize);
     rmenu->setPosition({0.f, 0.f});
     m_resultView->addChild(rmenu);
-    m_variantCycle = ui::CycleControl::create({"-"}, 0, 150.f, [this](int i) {
+    m_variantCycle = ui::CycleControl::create({"-"}, 0, 122.f, [this](int i) {
         S().select(i);
         defer([this] { refreshResults(); });
     });
     m_variantCycle->setPosition({4.f, H - 136.f});
     m_resultView->addChild(m_variantCycle);
-    m_sectionCycle = ui::CycleControl::create({"-"}, 0, 170.f, [this](int i) {
+    m_sectionCycle = ui::CycleControl::create({"-"}, 0, 112.f, [this](int i) {
         m_rerollPart = i;
         if (m_timeline) m_timeline->setHighlightedPart(i);
     });
-    m_sectionCycle->setPosition({160.f, H - 136.f});
+    m_sectionCycle->setPosition({130.f, H - 136.f});
     m_resultView->addChild(m_sectionCycle);
     auto reroll = ui::button("Re-roll section", [this] {
         if (S().busy()) return;
         m_watching = S().startReroll(m_rerollPart);
         setStatus("Re-rolling...");
     }, 0.4f, "GJ_button_04.png");
-    reroll->setPosition({W - 90.f, H - 136.f});
+    reroll->setPosition({W - 122.f, H - 136.f});
     rmenu->addChild(reroll);
     auto rerollAll = ui::button("Re-roll all", [this] {
         if (S().busy()) return;
         m_watching = S().startReroll(-1);
         setStatus("Re-rolling the whole layout with a new seed...");
     }, 0.4f, "GJ_button_04.png");
-    rerollAll->setPosition({W - 30.f, H - 136.f});
+    rerollAll->setPosition({W - 36.f, H - 136.f});
     rmenu->addChild(rerollAll);
 
     m_reportLabel = CCLabelBMFont::create("", "chatFont.fnt", (W - 10.f) / 0.5f, kCCTextAlignmentLeft);
@@ -385,10 +385,10 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
     m_resultView->addChild(m_reportLabel);
 
     auto apply = ui::button("Apply to level", [this] { applySelected(); }, 0.6f, "GJ_button_01.png");
-    apply->setPosition({W / 2.f - 120.f, 14.f});
+    apply->setPosition({W / 2.f - 160.f, 14.f});
     rmenu->addChild(apply);
     auto undo = ui::button("Undo", [this] { undoLast(); }, 0.55f, "GJ_button_06.png");
-    undo->setPosition({W / 2.f - 20.f, 14.f});
+    undo->setPosition({W / 2.f - 66.f, 14.f});
     rmenu->addChild(undo);
     auto ghost = ui::button("Ghost", [this] {
         auto cur = S().current();
@@ -396,7 +396,7 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
         if (ui::ghostVisible(m_editor)) ui::hideGhost(m_editor);
         else if (ui::showGhost(m_editor, cur->level, cur->inputs)) ui::playGhost(m_editor);
     }, 0.55f, "GJ_button_02.png");
-    ghost->setPosition({W / 2.f + 55.f, 14.f});
+    ghost->setPosition({W / 2.f - 8.f, 14.f});
     rmenu->addChild(ghost);
     auto watch = ui::button("Watch it build", [this] {
         auto cur = S().current();
@@ -406,10 +406,10 @@ CCNode* AutoLayoutPopup::buildGenerateTab() {
             this->onClose(nullptr);
         }
     }, 0.45f, "GJ_button_02.png");
-    watch->setPosition({W / 2.f + 55.f, 40.f});
+    watch->setPosition({W / 2.f + 86.f, 14.f});
     rmenu->addChild(watch);
     auto back = ui::button("Setup", [this] { showResults(false); }, 0.55f, "GJ_button_05.png");
-    back->setPosition({W / 2.f + 130.f, 14.f});
+    back->setPosition({W / 2.f + 180.f, 14.f});
     rmenu->addChild(back);
 
     m_status = ui::label("", 0.28f);
@@ -651,7 +651,7 @@ CCNode* AutoLayoutPopup::buildGamemodesTab() {
     auto page = CCNode::create();
     page->setContentSize(m_contentSize);
     const float half = m_contentSize.width / 2.f;
-    auto left = ui::Form::create({half, m_contentSize.height}, 64.f, 22.f);
+    auto left = ui::Form::create({half, m_contentSize.height}, 64.f, 20.f);
     page->addChild(left);
     left->heading("Gamemode weights (auto = AI)");
     for (int m = 0; m < 8; ++m) {
@@ -667,11 +667,11 @@ CCNode* AutoLayoutPopup::buildGamemodesTab() {
         save();
         defer([this] { rebuildTab(Tab::Gamemodes); });
     }, 0.4f, "GJ_button_04.png");
-    reset->setPosition({half / 2.f, 12.f});
+    reset->setPosition({half / 2.f, 11.f});
     resetMenu->addChild(reset);
     left->addChild(resetMenu);
 
-    auto right = ui::Form::create({half, m_contentSize.height}, 110.f, 22.f);
+    auto right = ui::Form::create({half, m_contentSize.height}, 100.f, 20.f);
     right->setPosition({half, 0.f});
     page->addChild(right);
     right->heading("Changes");
@@ -679,14 +679,14 @@ CCNode* AutoLayoutPopup::buildGamemodesTab() {
                                                          [](int i) { O().speedChanges = gen::SpeedChanges(i); save(); }));
     right->row("Start speed", ui::CycleControl::create({"Auto", "0.5x", "1x", "2x", "3x", "4x"}, O().startSpeed + 1, 110.f,
                                                        [](int i) { O().startSpeed = i - 1; save(); }));
-    right->row("Portal frequency", ui::SliderControl::create(O().portalFrequency < 0 ? 0.5f : O().portalFrequency, 120.f,
+    right->row("Portal frequency", ui::SliderControl::create(O().portalFrequency < 0 ? 0.5f : O().portalFrequency, 62.f,
         [](float v) { return O().portalFrequency < 0 ? std::string("auto") : pct(v); },
         [](float v) { O().portalFrequency = v; save(); }));
     std::vector<std::string> tri{"Auto", "Off", "On"};
     right->row("Gravity flips", ui::CycleControl::create(tri, int(O().gravityFlips), 110.f, [](int i) { O().gravityFlips = gen::Tri(i); save(); }));
     right->row("Mini / big", ui::CycleControl::create(tri, int(O().sizeChanges), 110.f, [](int i) { O().sizeChanges = gen::Tri(i); save(); }));
     right->row("Dual", ui::CycleControl::create(tri, int(O().dual), 110.f, [](int i) { O().dual = gen::Tri(i); save(); }));
-    right->row("Hold vs tap", ui::SliderControl::create((O().holdBias + 1.f) / 2.f, 120.f,
+    right->row("Hold vs tap", ui::SliderControl::create((O().holdBias + 1.f) / 2.f, 62.f,
         [](float v) { return v < 0.45f ? std::string("taps") : v > 0.55f ? std::string("holds") : std::string("balanced"); },
         [](float v) { O().holdBias = v * 2.f - 1.f; save(); }));
     return page;
@@ -695,7 +695,7 @@ CCNode* AutoLayoutPopup::buildGamemodesTab() {
 // ============================================================== Sections
 
 CCNode* AutoLayoutPopup::buildSectionsTab() {
-    auto form = ui::Form::create(m_contentSize, 90.f, 24.f);
+    auto form = ui::Form::create(m_contentSize, 90.f, 23.f);
     form->heading("Per section: difficulty and gamemode (auto = AI)");
     auto find = [](int type) -> gen::SectionOverride& {
         for (auto& o : O().sectionOverrides) if (o.sectionType == type) return o;
@@ -718,8 +718,7 @@ CCNode* AutoLayoutPopup::buildSectionsTab() {
         row->addChild(mc);
         form->row(kSectionNames[t], row);
     }
-    form->text("Sections are found in the song automatically (intro, verse, chorus, build-up, drop, break, outro). "
-               "\"+2\" on Drop makes every drop two levels harder than the rest.");
+    form->text("Sections are found in the song automatically.\n\"+2\" on Drop makes every drop two levels harder than the rest.", 0.5f);
     return form;
 }
 
@@ -806,7 +805,7 @@ CCNode* AutoLayoutPopup::buildPlaytestTab() {
 // ============================================================== Training
 
 CCNode* AutoLayoutPopup::buildTrainingTab() {
-    auto form = ui::Form::create(m_contentSize, 150.f, 22.f);
+    auto form = ui::Form::create(m_contentSize, 150.f, 18.5f);
     form->heading("Models");
     form->text(S().modelSummary());
     auto modelMenu = CCMenu::create();
@@ -896,8 +895,6 @@ CCNode* AutoLayoutPopup::buildTrainingTab() {
     forget->setPosition({80.f, 10.f});
     forgetMenu->addChild(forget);
     form->row("Reset", forgetMenu);
-    form->text("Only the layout is read: decoration, colours and triggers are ignored. The classic (v1) pattern model "
-               "is retrained on a computer instead (training/RETRAINING.md).", 0.45f);
     return form;
 }
 
@@ -947,7 +944,7 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
             defer([this] { for (int t = 0; t < int(Tab::Count); ++t) rebuildTab(Tab(t)); });
         }
     }, 0.4f, "GJ_button_01.png");
-    loadBtn->setPosition({170.f, 10.f});
+    loadBtn->setPosition({172.f, 12.f});
     lm->addChild(loadBtn);
     loadRow->addChild(lm);
     form->row("Load a preset", loadRow);
@@ -975,7 +972,7 @@ CCNode* AutoLayoutPopup::buildSettingsTab() {
         if (r.isErr()) Notification::create(r.unwrapErr(), NotificationIcon::Error)->show();
         else setStatus("Piece test placed after the last object (Undo removes it).");
     }, 0.4f, "GJ_button_04.png");
-    pieceBtn->setPosition({70.f, 10.f});
+    pieceBtn->setPosition({60.f, 10.f});
     pieces->addChild(pieceBtn);
     form->row("Check outline pieces", pieces);
     form->text("Backups, recordings, presets, the dataset and retrained models live in the save folder.");

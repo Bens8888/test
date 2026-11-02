@@ -77,6 +77,9 @@ GenResult generateVariantV2(const audio::MusicAnalysis& A, const GenOptions& opt
         Rng stRng = rng.fork(hashStr("structures"));
         st = buildStructures(path, plan, opt, stRng, sp);
         if (st.beatable) break;
+        phys::World failed(st.level);
+        const bot::Failure why = bot::firstFailure(failed, path.inputs);
+        res.notes.push_back("the check died at x " + std::to_string(int(why.x)) + " y " + std::to_string(int(why.y)) + ": " + phys::deathCauseName(why.cause));
         res.notes.push_back(attempt == 0 ? "structures simplified: the full version failed the final check"
                                          : "necessity hazards removed: the simplified version failed the final check");
     }

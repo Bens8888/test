@@ -49,9 +49,11 @@ style's spacing, repeat rate and saw rate.
 - A lane runs over the path and one under it, offset from each other. Each structure sits as close
   to the reserved space as it fits, and modules are mirrored to stand under the path. Thin rails
   running out of a flying stretch's bounds are cut off.
-- Wave parts are built to the click pattern: every turn of the zig-zag gets a chevron of 45-degree
-  line slopes outside the turn and one inside, so the player flies through a corridor of thin chains
-  with breaks in the strokes. The gap comes from the difficulty's margin.
+- Wave parts are built to the click pattern, modelled on Grief: both walls follow every stroke of the
+  zig-zag at one distance, the whole way, with slope pieces placed freely along the strokes (objects
+  need no grid, so clicks can fall anywhere). Only the outline is built, nothing behind it. The gap comes from the difficulty, 60 units at Easy down to 20 at the top, and that gap
+  is the timing. Harder wave parts are mini, with steep 2:1 slopes. Every piece is checked against the
+  planned path before it is placed.
 - What the structures do not force yet gets a spike on the running surface or a saw.
 - Rules from the physics check against real runs: the player never rides a slope, and portals are
   never rotated (the simulator is not reliable there).
