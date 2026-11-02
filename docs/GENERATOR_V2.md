@@ -49,11 +49,16 @@ style's spacing, repeat rate and saw rate.
 - A lane runs over the path and one under it, offset from each other. Each structure sits as close
   to the reserved space as it fits, and modules are mirrored to stand under the path. Thin rails
   running out of a flying stretch's bounds are cut off.
+- Behind those lanes each stretch gets one connected band above and below the path, stepped in a
+  rhythm, with the modules joined to it. This is what makes a corridor of solid shapes instead of
+  separate shapes in the air. Each structure style has its own band thickness. Spikes, half spikes,
+  turned thorns and saws line the band's faces, more of them with the difficulty and the music; a
+  rotated hazard keeps its distance by the circle around it.
 - Wave parts are built to the click pattern, modelled on Grief: both walls follow every stroke of the
   zig-zag at one distance, the whole way, with slope pieces placed freely along the strokes (objects
   need no grid, so clicks can fall anywhere). Only the outline is built, nothing behind it. The gap comes from the difficulty, 60 units at Easy down to 20 at the top, and that gap
-  is the timing. Harder wave parts are mini, with steep 2:1 slopes. Every piece is checked against the
-  planned path before it is placed.
+  is the timing. Harder wave parts are mini, with steep 2:1 slopes and 1.6 times the gap, since a late
+  press costs twice the height there. Every piece is checked against the planned path before it is placed.
 - What the structures do not force yet gets a spike on the running surface or a saw.
 - Rules from the physics check against real runs: the player never rides a slope, and portals are
   never rotated (the simulator is not reliable there).
@@ -86,4 +91,4 @@ and triggers are ignored. The planner, the segments and the structures use these
 ## Not verified yet
 - How GD draws each outline piece at rotation 0 (Settings → Place piece test checks it in a
   minute). The physics of the pieces is the same as solid blocks in the simulator either way.
-- A generated level played in the real game. See LIMITATIONS for the check against real runs.
+- How the levels feel to a person. See LIMITATIONS for the check against real runs.

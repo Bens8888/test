@@ -133,10 +133,10 @@ struct Table {
         set(1594, Kind::Orb, 36, 36, uint8_t(OrbType::Toggle));
 
         // ---- pads (measured on runs logged in GD: they fire with the player up to 29.4 units away)
-        set(35, Kind::Pad, 29, 4, uint8_t(PadType::Yellow));
-        set(140, Kind::Pad, 29, 5, uint8_t(PadType::Pink));
+        set(35, Kind::Pad, 25, 4, uint8_t(PadType::Yellow));
+        set(140, Kind::Pad, 25, 5, uint8_t(PadType::Pink));
         set(1332, Kind::Pad, 29, 7, uint8_t(PadType::Red));
-        set(67, Kind::Pad, 29, 6, uint8_t(PadType::Blue));
+        set(67, Kind::Pad, 25, 6, uint8_t(PadType::Blue));
         set(3005, Kind::Pad, 29, 6, uint8_t(PadType::Spider));
 
         // ---- portals

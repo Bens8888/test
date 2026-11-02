@@ -6,7 +6,9 @@
 #include <al/physics/sim.hpp>
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
+#include <map>
 #include <set>
 
 namespace al::gen {
@@ -122,6 +124,7 @@ private:
     Envelope m_built;                 // everything placed so far
     std::vector<std::pair<float, float>> m_waveSpans; // x ranges of the wave parts
     std::vector<LevelObject> m_objects; // the modules' pieces
+    std::map<int, float> m_reachOver, m_reachUnder; // per column, how far the modules on that side reach
     uint64_t m_seed = 0;
     // random choices tied to a place in the level (re-rolling one stretch leaves the others)
     Rng at(int cx, uint64_t what) const { return Rng(combineSeed(m_seed ^ what, uint64_t(int64_t(cx)))); }
@@ -150,7 +153,11 @@ private:
     void addHazard(const LevelObject& o);
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
-    void placeModules();
+    void placeModules(int firstLane, int lastLane);
+    void bands();
+    bool bandCell(int cx, int cy);
+    void lineFace(float x, float faceY, int toward, int kind, Rng& r);
+    void faceSaw(float x, float y);
     bool placeModule(const Module& m, bool mirrorX, bool under, int cx, int row, int floorRow, int ceilRow);
     bool objectFits(const LevelObject& o, Box* out) const;
     void placeObject(const LevelObject& o);
@@ -424,7 +431,16 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         objs.push_back(o);
     }
     if (objs.empty()) return false;
-    for (auto& o : objs) placeObject(o);
+    for (auto& o : objs) {
+        placeObject(o);
+        Box b{};
+        objectFits(o, &b);
+        for (int c = int(std::floor(b.x0 / kCell)); c <= int(std::floor((b.x1 - 0.01f) / kCell)); ++c) {
+            auto& reach = under ? m_reachUnder : m_reachOver;
+            auto it = reach.find(c);
+            reach[c] = it == reach.end() ? (under ? b.y0 : b.y1) : under ? std::min(it->second, b.y0) : std::max(it->second, b.y1);
+        }
+    }
     ++m_res.pillars;
     return true;
 }
@@ -432,7 +448,7 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
 // Every gamemode stretch uses a small set of shapes and repeats them, as real layouts do: that
 // repetition is what makes a stretch look designed. A lane runs over the path and one under it,
 // each structure as close to the reserved space as it fits.
-void Structurer::placeModules() {
+void Structurer::placeModules(int firstLane, int lastLane) {
     if (m_density <= 0.01f || m_nominal.empty()) return;
     size_t moduleCount = 0;
     const Module* table = moduleTable(moduleCount);
@@ -462,7 +478,7 @@ void Structurer::placeModules() {
         size_t si = size_t(i);
         // the front lanes hug the path; the back lanes fill the space behind them, so the player
         // flies through structures instead of past a few shapes
-        for (int lane = 0; lane < 4; ++lane) {
+        for (int lane = firstLane; lane <= lastLane; ++lane) {
             const bool under = lane % 2 == 1, back = lane >= 2;
             si = size_t(i);
             int cx = c0 + (under ? 1 + int(r.below(3)) : 0) + (back ? 2 : 0);
@@ -508,6 +524,151 @@ void Structurer::placeModules() {
     }
 }
 
+bool Structurer::bandCell(int cx, int cy) {
+    if (cy < 0 || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return false;
+    const Box b = cellBox(cx, cy);
+    for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+    if (m_env.hits(b, m_margin) || m_built.hits(b, -1)) return false;
+    for (auto& po : m_path.objects)
+        if (std::fabs(float(po.o.x) - (b.x0 + 15)) < 55 && std::fabs(float(po.o.y) - (b.y0 + 15)) < 55) return false;
+    addCell(cx, cy);
+    m_built.addBox(b);
+    return true;
+}
+
+// A hazard on a face of the mass, pointing `toward` the open side (+1 up, -1 down). The check uses
+// the circle around the object, so a rotated thorn keeps its distance too.
+void Structurer::lineFace(float x, float faceY, int toward, int kind, Rng& r) {
+    LevelObject o;
+    if (kind == 0) o = make(oid::Spike, x, faceY + float(toward) * 15.f, toward > 0 ? 0 : 180);
+    else if (kind == 1) o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
+    else o = make(r.chance(0.5) ? oid::Spike : oid::HalfSpike, x, faceY + float(toward) * float(r.below(12)), double(r.below(24)) * 15.0); // a thorn: any turn
+    phys::SimObject so;
+    if (!phys::World::makeSimObject(o, 0, so)) return;
+    const float rad = std::sqrt(so.hw * so.hw + so.hh * so.hh);
+    const Box b{so.x - rad, so.y - rad, so.x + rad, so.y + rad};
+    for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return;
+    if (m_env.hits(b, m_margin + 2)) return;
+    for (auto& po : m_path.objects)
+        if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return;
+    addHazard(o);
+}
+
+// A saw biting out of a face.
+void Structurer::faceSaw(float x, float y) {
+    LevelObject sw = make(oid::SawMedium, x, y);
+    phys::SimObject so;
+    if (!phys::World::makeSimObject(sw, 0, so)) return;
+    const Box b{so.x - so.hw, so.y - so.hw, so.x + so.hw, so.y + so.hw};
+    if (m_env.hits(b, m_margin + 2)) return;
+    for (auto& po : m_path.objects)
+        if (std::fabs(float(po.o.x) - so.x) < 60 && std::fabs(float(po.o.y) - so.y) < 60) return;
+    addHazard(sw);
+    ++m_res.saws;
+}
+
+// The mass of a stretch: above and below the path one connected band, stepped in a rhythm, that the
+// modules hang from. Real layouts are a corridor of solid shapes with hazards lining its faces, not
+// separate shapes in the air.
+void Structurer::bands() {
+    if (m_density <= 0.31f || m_nominal.empty()) return;
+    const int n = int(m_nominal.size());
+    const float D = m_plan.baseDifficulty;
+    static const int kThick[kStructureStyles][2] = {{1, 2}, {2, 3}, {3, 5}, {1, 3}};
+    const double hazardRate = std::clamp(0.25 + 0.09 * double(D), 0.25, 1.0);
+    for (int i = 0; i < n;) {
+        const Sample& q = m_nominal[size_t(i)];
+        int j = i;
+        while (j < n && m_nominal[size_t(j)].mode == q.mode) ++j;
+        const int c0 = int(std::floor(q.x / kCell)), c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell));
+        const int first = i;
+        i = j;
+        if (q.mode == Mode::Wave || c1 - c0 < 3) continue;
+        Rng r = at(c0, 0xBA4D);
+        const float heat = intensityAt(double(first + 1) / phys::kTPS);
+        if (heat < 0.3f && r.chance(0.5)) continue; // a quiet stretch stays open
+        const int widths[3] = {2 + int(r.below(3)), 3 + int(r.below(4)), 2 + int(r.below(2))};
+        const int depths[3] = {0, 1 + int(r.below(2)), int(r.below(2))};
+        const int cols = c1 - c0 + 1;
+        const size_t ncol = size_t(cols);
+        for (int dir : {1, -1}) {
+            const auto& reach = dir > 0 ? m_reachOver : m_reachUnder;
+            auto further = [dir](int a, int b) { return dir > 0 ? std::max(a, b) : std::min(a, b); };
+            // the first free row of each column on this side of the reserved space
+            std::vector<int> inner(ncol, INT_MIN);
+            for (int c = 0; c < cols; ++c)
+                for (int x = c0 + c - 1; x <= c0 + c + 1; ++x) {
+                    float a, b;
+                    if (!m_env.range(x, a, b)) continue;
+                    const int row = dir > 0 ? int(std::ceil((b + m_margin) / kCell)) : int(std::floor((a - m_margin) / kCell)) - 1;
+                    inner[size_t(c)] = inner[size_t(c)] == INT_MIN ? row : further(inner[size_t(c)], row);
+                }
+            // straight runs in a rhythm
+            std::vector<int> start(ncol, INT_MIN), stop(ncol, INT_MIN), seg(ncol, 0);
+            for (int c = 0, k = 0; c < cols; ++k) {
+                const int w = std::min(widths[k % 3], cols - c);
+                int row = INT_MIN;
+                for (int x = c; x < c + w; ++x)
+                    if (inner[size_t(x)] != INT_MIN) row = row == INT_MIN ? inner[size_t(x)] : further(row, inner[size_t(x)]);
+                const int thick = kThick[m_style][0] + int(r.below(uint32_t(kThick[m_style][1] - kThick[m_style][0] + 1)));
+                for (int x = c; x < c + w; ++x) {
+                    seg[size_t(x)] = k;
+                    if (row == INT_MIN) continue;
+                    start[size_t(x)] = row + dir * depths[k % 3];
+                    stop[size_t(x)] = start[size_t(x)] + dir * thick;
+                }
+                c += w;
+            }
+            // neighbours overlap, so the band is one piece; a very large step leaves an opening
+            std::vector<int> stop2 = stop;
+            for (int c = 0; c < cols; ++c) {
+                if (start[size_t(c)] == INT_MIN) continue;
+                for (int nb : {c - 1, c + 1})
+                    if (nb >= 0 && nb < cols && start[size_t(nb)] != INT_MIN && std::abs(start[size_t(nb)] - start[size_t(c)]) <= 8)
+                        stop2[size_t(c)] = further(stop2[size_t(c)], start[size_t(nb)]);
+            }
+            for (int c = 0; c < cols; ++c) {
+                int a = start[size_t(c)], b = stop2[size_t(c)];
+                if (a == INT_MIN) continue;
+                const float xc = (float(c0 + c) + 0.5f) * kCell;
+                auto it = std::lower_bound(m_nominal.begin() + first, m_nominal.begin() + j, xc, [](const Sample& s, float v) { return s.x < v; });
+                if (it == m_nominal.begin() + j) --it;
+                const int floorRow = it->bounded ? int(std::lround(it->floorY / kCell)) : 0;
+                const int ceilRow = it->bounded ? int(std::lround(it->ceilY / kCell)) - 1 : 90;
+                // down to the ground or up to the bound when it is close: the mass stands on something
+                if (dir < 0 && b - floorRow <= 3) b = floorRow;
+                if (dir > 0 && it->bounded && ceilRow - b <= 3) b = ceilRow;
+                // a module on this side sits between the path and the band: join it
+                bool joined = false;
+                if (auto m = reach.find(c0 + c); m != reach.end()) {
+                    const int row = int(std::floor((m->second - float(dir)) / kCell));
+                    if (dir > 0 ? row < a : row > a) { a = row; joined = true; }
+                }
+                int face = INT_MIN;
+                for (int row = a; dir > 0 ? row <= b : row >= b; row += dir) {
+                    if (row < floorRow || row > ceilRow) continue;
+                    if (bandCell(c0 + c, row)) ++m_res.corridorCells;
+                    if (face == INT_MIN && m_res.cells.filled(c0 + c, row)) face = row;
+                }
+                if (face == INT_MIN || joined) continue; // the modules bring their own spikes
+                const float faceY = float(dir > 0 ? face : face + 1) * kCell;
+                Rng h = at(c0 + c, dir > 0 ? 0xFACE1 : 0xFACE2);
+                if (m_style == 3 || (heat > 0.65f && D >= 4)) {
+                    for (int t = 1 + int(h.below(3)); t > 0; --t)
+                        if (h.chance(hazardRate)) lineFace((float(c0 + c) + float(h.below(30)) / 30.f) * kCell, faceY, -dir, 2, h);
+                } else if (seg[size_t(c)] % 3 == 0 && h.chance(hazardRate)) {
+                    lineFace(xc, faceY, -dir, 0, h);
+                } else if (seg[size_t(c)] % 3 == 1 && h.chance(hazardRate)) {
+                    lineFace(xc - 7.5f, faceY, -dir, 1, h);
+                    lineFace(xc + 7.5f, faceY, -dir, 1, h);
+                }
+                if (h.chance(0.03 + 0.25 * double(structureStyle(m_style).saws) + (heat > 0.65f ? 0.04 : 0.0)))
+                    faceSaw(xc, faceY - float(dir) * 8.f);
+            }
+        }
+    }
+}
+
 // One slope of a wave wall, its long edge through (x, y). solid: the player can reach it.
 void Structurer::wallPiece(float x, float y, bool up, bool solidBelow, bool steep, bool solid) {
     LevelObject o = make(steep ? 1339 : 1338, x, y, steep ? 90 : 0);
@@ -535,13 +696,16 @@ bool Structurer::nearPathObject(float x, float y) const {
 bool Structurer::pieceBlocksPath(float x, float y, float slope, bool solidBelow) const {
     const float x0 = x - 15, x1 = x + 15;
     const float half = std::fabs(slope) * 15.0f; // half the piece's height
-    auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x0 - 14.f, [](const Sample& q, float v) { return q.x < v; });
-    const float clear = m_waveMargin * 0.4f;
-    for (; it != m_nominal.end() && it->x <= x1 + 14.f; ++it) {
+    auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x0 - 12.f, [](const Sample& q, float v) { return q.x < v; });
+    const float clear = m_waveMargin * 0.3f;
+    for (; it != m_nominal.end() && it->x <= x1 + 12.f; ++it) {
+        if (it->x + it->half + 4 < x0 || it->x - it->half - 4 > x1) continue; // a turn beyond the tip
         // the sloped edge, and past the ends of the piece the tip of it
         const float edge = y + slope * (std::clamp(it->x, x0, x1) - x);
         if (solidBelow ? it->y - it->half < edge + clear : it->y + it->half > edge - clear) return true;
-        if (half > 0 && it->x >= x0 && it->x <= x1 && std::fabs(it->y - y) < half + it->half && (it->x < x0 + 6 || it->x > x1 - 6)) return true;
+        // the straight side of the piece, at one end only
+        const bool atRight = (slope < 0) != solidBelow;
+        if (half > 0 && it->x >= x0 && it->x <= x1 && std::fabs(it->y - y) < half + it->half && (atRight ? it->x > x1 - 6 : it->x < x0 + 6)) return true;
     }
     return false;
 }
@@ -571,7 +735,8 @@ void Structurer::waveWalls() {
             const float width = p1.x - p0.x;
             a = b;
             if (width < 8) continue;
-            const float gap0 = m_waveMargin + p0.half;
+            // a 2:1 stroke moves twice as fast up and down, so a late press costs twice the room
+            const float gap0 = m_waveMargin * (p0.half < 4 ? 1.6f : 1.0f) + p0.half;
             const float ceilEdge = p0.bounded ? p0.ceilY : 2700.f, floorEdge = p0.bounded ? p0.floorY : 0.f;
             if (dir == 0) {
                 // a slide: a straight stretch of wall joins the strokes on both sides
@@ -677,7 +842,9 @@ StructureResult Structurer::run() {
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
     buildEnvelope();
     waveWalls();
-    placeModules();
+    placeModules(0, 1);
+    bands();
+    placeModules(2, 3);
     // what the structures do not force yet gets a hazard of its own
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});

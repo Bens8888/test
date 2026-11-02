@@ -8,6 +8,8 @@
 #include <al/gen/modules.hpp>
 #include <al/physics/sim.hpp>
 
+#include <algorithm>
+
 using namespace al;
 using namespace al::gen;
 
@@ -105,6 +107,50 @@ TEST(wave_parts_are_line_slopes) {
     phys::World W(res.level);
     CHECK(bot::isBeatable(W, res.inputs));
     CHECK_MSG(count(res.level, 1338) > 100, "%d line slopes", count(res.level, 1338));
+}
+
+TEST(mini_wave_parts_keep_their_walls) {
+    const auto& A = demoAnalysis();
+    GenOptions opt;
+    opt.engine = 2;
+    opt.seed = 7;
+    opt.difficulty = Difficulty::ExtremeDemon;
+    opt.variants = 1;
+    opt.modeWeights.fill(0.0f);
+    opt.modeWeights[size_t(Mode::Wave)] = 1.0f;
+    auto res = generateVariant(A, opt, opt.seed, nullptr);
+    phys::World W(res.level);
+    CHECK(bot::isBeatable(W, res.inputs));
+    CHECK_MSG(count(res.level, 1339) > 100, "%d steep line slopes", count(res.level, 1339));
+}
+
+TEST(structures_are_a_mass_with_lined_faces) {
+    const auto& A = demoAnalysis();
+    GenOptions opt;
+    opt.engine = 2;
+    opt.seed = 9;
+    opt.difficulty = Difficulty::Insane;
+    opt.variants = 1;
+    auto res = generateVariant(A, opt, opt.seed, nullptr);
+    phys::World W(res.level);
+    CHECK(bot::isBeatable(W, res.inputs));
+    double last = 1;
+    int hazards = 0;
+    for (const auto& o : res.level.objects) {
+        last = std::max(last, o.x);
+        const auto kind = o.info().kind;
+        hazards += kind == level::Kind::Hazard || kind == level::Kind::Saw;
+    }
+    const double screens = last / 570.0;
+    CHECK_MSG(double(res.level.objects.size()) / screens > 40, "%.0f objects per screen", double(res.level.objects.size()) / screens);
+    CHECK_MSG(double(hazards) / screens > 15, "%.0f hazards per screen", double(hazards) / screens);
+}
+
+TEST(pads_have_their_real_width) {
+    CHECK(object(35, 0, 0).info().w == 25);
+    CHECK(object(140, 0, 0).info().w == 25);
+    CHECK(object(67, 0, 0).info().w == 25);
+    CHECK(object(1332, 0, 0).info().w == 29);
 }
 
 TEST(speed_style_steers_the_speed) {
