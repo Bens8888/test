@@ -34,35 +34,27 @@ style (modern layouts change every 1-4 clicks, classic ones every section) and t
 switch on the drop and speed up). The mode is chosen for the click rhythm: fast streams suit
 wave/ship/swing, spaced clicks cube/robot/ball/ufo, long notes holds.
 
-## Structures (modelled on reference layouts)
-- walls that follow the path, the backbone of most layouts: pillars hanging from the top and
-  rising from the floor, broken into columns 1-3 wide with gaps. Each column ends right at the
-  reserved space, so the walls step along with the path, and has a spike tip pointing at the
-  player.
-- small block groups floating next to the path, above or below it: a hanging block with a spike
-  under it, slabs of 2-4 with a spike at one or both ends, 2x2 blocks, T shapes, steps, short
-  columns with a spike tip. Now and then there is a spike on the front, pointing at the player.
-  Groups keep a free cell between them, so they stay separate shapes instead of one blob. In
-  flying stretches they also stand on, or hang from, the floor and ceiling, and they are placed
-  more densely.
-- hanging pillars (from the top) and rising pillars (from the floor) with spike tips, over jump
-  apexes and under the path
-- saw clusters in the pockets next to the path (a saw may cut into a wall, but it is never buried
-  in it)
-- wave parts, built from presets the way wave layouts are:
-  - a 45° triangle rises from the floor under every peak of the zig-zag and hangs from the ceiling
-    over every dip, as big as the reserved space allows. Neighbouring triangles merge into a W.
-  - where the zig-zag is too small for a triangle, a block slab sits under or over it with a few
-    spikes on its face;
-  - an occasional saw in the open space beyond a turn.
+## Structures (real pieces, trained on real levels)
+The shapes are not invented. `training/corpus` cuts structures out of real levels (only objects
+with a hitbox are read) and `train.py` writes `core/src/gen/module_library.inc`: every module's
+pieces, which way it faces, the gamemodes it appears in and how often each style uses it, plus each
+style's spacing, repeat rate and saw rate.
 
-  Nothing else is placed in wave parts: no corridor filling, no extra spikes or blocks. Wave runs
-  at 2x speed or faster, through the middle of its bounds, for strokes long enough for the
-  triangles.
-- ship corridors: top and bottom walls following the path with 45° and 2-wide slopes
-- spikes in groups of 1-3 with gaps, never long identical rows. Spikes only go on faces that
-  point at the path (never on the far side of a wall), and only one side spike per wall, at the
-  height the player passes. A spike never stands on another spike.
+- What ships: structures from Ben's own Bidal Wave levels, and from other levels only shapes that
+  two or more different levels use. No creator's signature geometry is included.
+- Styles: Rail (thin rails on slabs, Bidal Wave), Slope, Compact, Spiky. Auto gives each variant one.
+- Every gamemode stretch picks 2-4 modules and repeats them in a rhythm (A B A C A B A D). That
+  repetition is what makes a part look designed, and random variety is what made the old output
+  look like slop.
+- A lane runs over the path and one under it, offset from each other. Each structure sits as close
+  to the reserved space as it fits, and modules are mirrored to stand under the path. Thin rails
+  running out of a flying stretch's bounds are cut off.
+- Wave parts are built to the click pattern: every turn of the zig-zag gets a chevron of 45-degree
+  line slopes outside the turn and one inside, so the player flies through a corridor of thin chains
+  with breaks in the strokes. The gap comes from the difficulty's margin.
+- What the structures do not force yet gets a spike on the running surface or a saw.
+- Rules from the physics check against real runs: the player never rides a slope, and portals are
+  never rotated (the simulator is not reliable there).
 
 ## What is learned from real levels (gen/profile, done)
 - per gamemode: how often each click action is used (jump, each orb colour, tap, hold), pads and
@@ -73,8 +65,8 @@ Counted on a run the bot finds through each level, so only the layout is read: d
 and triggers are ignored. The planner, the segments and the structures use these as preferences.
 
 ## Planned next (roadmap)
-- structure pieces cut out of real levels around the player's path, as a library the framing
-  step draws from (so the shapes themselves come from the levels you like);
+- modules tagged with the player's real distance from them (the library has no paths yet: only
+  Bloodbath has a logged run), so the spacing to the path is learned too;
 - a sequence model over click actions once enough levels are collected.
 
 ## Status and numbers (development machine, demo and synthetic songs)
@@ -92,4 +84,4 @@ and triggers are ignored. The planner, the segments and the structures use these
 ## Not verified yet
 - How GD draws each outline piece at rotation 0 (Settings → Place piece test checks it in a
   minute). The physics of the pieces is the same as solid blocks in the simulator either way.
-- The simulator against the real game (as for v1: `alcli validate` on recorded runs).
+- A generated level played in the real game. See LIMITATIONS for the check against real runs.

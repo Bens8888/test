@@ -9,3 +9,4 @@ training/runs/
 training/data/raw/
 training/data/cache/
 .DS_Store
+training/corpus/levels/

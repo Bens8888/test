@@ -517,6 +517,8 @@ int main(int argc, char** argv) {
                         if (auto p = gen::StyleProfile::fromJson(*j)) opt.profile = std::make_shared<gen::StyleProfile>(*p);
                 if (!opt.profile) { std::fprintf(stderr, "cannot read the profile %s\n", v.c_str()); return 1; }
             }
+            else if (k == "--structure") opt.structureStyle = std::stoi(v);
+            else if (k == "--speed-style") opt.speedStyle = std::stoi(v);
             else if (k == "--out") out = v;
             else if (k == "--report") reportPath = v;
             else if (k == "--inputs") inputsPath = v;

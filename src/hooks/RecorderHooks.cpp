@@ -86,13 +86,13 @@ class $modify(ALRecPlayLayer, PlayLayer) {
     void loadFromCheckpoint(CheckpointObject* cp) {
         PlayLayer::loadFromCheckpoint(cp);
         m_fields->loadingCheckpoint = true;
-        int32_t tick = cp ? int32_t(cp->m_gameState.m_currentProgress) : LiveRecorder::tickOf(this);
+        int32_t tick = cp ? int32_t(cp->m_gameState.m_currentProgress / 2) : LiveRecorder::tickOf(this);
         LiveRecorder::get().onRespawn(this, tick);
     }
 
     void storeCheckpoint(CheckpointObject* cp) {
         PlayLayer::storeCheckpoint(cp);
-        if (cp) LiveRecorder::get().onCheckpoint(int32_t(cp->m_gameState.m_currentProgress));
+        if (cp) LiveRecorder::get().onCheckpoint(int32_t(cp->m_gameState.m_currentProgress / 2));
     }
 
     void removeCheckpoint(bool first) {

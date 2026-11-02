@@ -3,20 +3,21 @@
 Stated plainly, with what each one means in practice.
 
 ## Not verified inside the game yet
-- **Built and unit-tested, not play-tested.** The mod compiles on CI for Windows and macOS against
-  Geode 5.11.2 / GD 2.2081, and the core passes ~50 test groups on every push. Nobody has played
-  it inside GD during development yet: UI layout, menu feel and in-game edge cases need a first
-  round of real use.
-- **Simulator vs the real game.** The physics is a re-implementation from published reverse
-  engineering (see DECISIONS D3). It reproduces the documented numbers (jump heights, airtimes,
-  caps, orb and pad strengths). It has not been compared against runs recorded in the actual game.
-  `alcli validate <level.gmd> <recording.alrec>` does exactly that comparison (a recording made with
-  the mod stores the player's position at every click). **Please run it on a few levels and
-  report the error.** The target tolerance is under 1 unit of position per input event over a
-  whole level; anything above 2 units points at a physics difference. Known approximations:
-  - slopes;
-  - the spider's teleport distance in unusual geometry;
-  - collisions at extreme speed with very small blocks.
+- **Generated levels were played in GD by the self test, the menus were not.** The mod builds against
+  Geode 5.10.1 / GD 2.2081 and loads on Geode 5.11.2. Nobody has clicked through the menus in GD yet:
+  UI layout, menu feel and the recorder need a first round of real use.
+- **Simulator vs the real game.** Checked against the real game with the in-game self test (a
+  `selftest.txt` in the mod's save folder plays a generated level with its designed clicks and logs
+  every physics step) and `simtrace`. Horizontal error is about 0.001 units over whole levels. Fixed
+  from those runs: blue pads facing away, pad sizes, spider area height and teleport, robot boost after
+  pads and orbs, dash through portals, portal bounds on a row boundary, flipped cubes touching the
+  ground. Generated levels keep 5 units of extra distance from hazards to absorb what is left, mostly
+  one-tick pad timing.
+  - Of the last 10 runs on new levels, 5 reached 100% with their designed clicks in GD 2.2081; the others
+    died at 29%, 29%, 57%, 29% and 99%. "Beatable" means beaten in the simulator, so play a level
+    before trusting it.
+  - Still not exact: riding along slopes, rotated portals (the generator avoids both), and some spider
+    teleports.
 - **Editor coordinates.** The ghost overlay and recorded positions assume GD's object layer is 90
   units above level-string coordinates. If the ghost path appears shifted, that constant
   (`kEditorYOffset`) is the one to change.
@@ -25,13 +26,11 @@ Stated plainly, with what each one means in practice.
 - **Outline pieces unverified in GD.** The outline look (Style → Look) relies on how GD draws its
   outline pieces by default; Settings → Place piece test shows it in a minute (see the user
   guide). The default block look does not depend on it.
-- **Not every click is strictly necessary.** 83-88% are (skipping them kills); ship and wave taps
+- **Not every click is strictly necessary.** Skipping a click often kills, but ship and wave taps
   often only nudge the path, and some jumps have no spot for a hazard that would not also touch a
   fair early or late press. Timing windows are always kept.
-- **Learning is statistics, not shapes yet.** The style profile learns which actions, how long
-  gamemode stretches last and how dense the structures are. The shapes of the structures still come
-  from the built-in kinds (pillars, spike tips, saws, slope corridors); cutting structure pieces
-  out of your levels is on the roadmap.
+- **The library has no player paths.** Modules come from level geometry, so their distance from
+  the path is decided by the corridor, not learned.
 - **Platforms after long gaps** can still be wide boxes (the player has to run somewhere until the
   next click).
 - **Recording mode** keeps your clicks and hold lengths; the gamemodes are chosen from your click

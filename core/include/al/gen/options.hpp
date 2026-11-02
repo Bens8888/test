@@ -57,7 +57,9 @@ struct GenOptions {
     int maxRetriesPerSection = 24;
     int engine = 2;                             // 2 = path first, structures around it; 1 = classic (pattern per click)
     float switchRate = -1;                      // v2: how often the gamemode changes, 0..1 (<0 = AI decides)
-    int look = 1;                               // v2: 0 = outline silhouettes, 1 = default blocks
+    int look = 0;                               // v2: 0 = outline silhouettes, 1 = default blocks
+    int structureStyle = 0;                     // v2: 0 = auto, 1 rail, 2 slope, 3 compact, 4 spiky (modules.hpp)
+    int speedStyle = 0;                         // 0 = auto, 1 slow, 2 normal, 3 fast
     std::shared_ptr<const StyleProfile> profile; // v2: learned from real levels (not saved with the options)
 
     GenOptions() { modeWeights.fill(-1.0f); }

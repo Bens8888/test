@@ -132,12 +132,12 @@ struct Table {
         set(3027, Kind::Orb, 36, 36, uint8_t(OrbType::Teleport));
         set(1594, Kind::Orb, 36, 36, uint8_t(OrbType::Toggle));
 
-        // ---- pads
-        set(35, Kind::Pad, 25, 4, uint8_t(PadType::Yellow));
-        set(140, Kind::Pad, 25, 5, uint8_t(PadType::Pink));
-        set(1332, Kind::Pad, 25, 6, uint8_t(PadType::Red));
-        set(67, Kind::Pad, 25, 6, uint8_t(PadType::Blue));
-        set(3005, Kind::Pad, 25, 6, uint8_t(PadType::Spider));
+        // ---- pads (measured on runs logged in GD: they fire with the player up to 29.4 units away)
+        set(35, Kind::Pad, 30, 4, uint8_t(PadType::Yellow));
+        set(140, Kind::Pad, 30, 5, uint8_t(PadType::Pink));
+        set(1332, Kind::Pad, 30, 7, uint8_t(PadType::Red));
+        set(67, Kind::Pad, 30, 6, uint8_t(PadType::Blue));
+        set(3005, Kind::Pad, 30, 6, uint8_t(PadType::Spider));
 
         // ---- portals
         set(12, Kind::ModePortal, 34, 86, uint8_t(Mode::Cube));
@@ -147,7 +147,7 @@ struct Table {
         set(660, Kind::ModePortal, 34, 86, uint8_t(Mode::Wave));
         set(745, Kind::ModePortal, 34, 86, uint8_t(Mode::Robot));
         set(1331, Kind::ModePortal, 34, 86, uint8_t(Mode::Spider));
-        set(1933, Kind::ModePortal, 34, 86, uint8_t(Mode::Swing));
+        set(1933, Kind::ModePortal, 33.4f, 86, uint8_t(Mode::Swing));
         set(10, Kind::GravityPortal, 25, 75, uint8_t(GravityPortalType::Normal));
         set(11, Kind::GravityPortal, 25, 75, uint8_t(GravityPortalType::Flip));
         set(2926, Kind::GravityPortal, 25, 75, uint8_t(GravityPortalType::Toggle));

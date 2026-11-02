@@ -242,7 +242,7 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
         for (int i : cand) {
             const auto& o = objs[size_t(i)];
             if (o.kind != Kind::Solid && o.kind != Kind::Breakable) continue;
-            if (o.maxX() < p.x - halfW + 1 || o.minX() > p.x + halfW - 1) continue;
+            if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.maxY() <= feet + 1.0f && o.maxY() > target) target = o.maxY();
         }
         p.y = target + h * 0.5f;
@@ -252,7 +252,7 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
         for (int i : cand) {
             const auto& o = objs[size_t(i)];
             if (o.kind != Kind::Solid && o.kind != Kind::Breakable) continue;
-            if (o.maxX() < p.x - halfW + 1 || o.minX() > p.x + halfW - 1) continue;
+            if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.minY() >= head - 1.0f && o.minY() < target) target = o.minY();
         }
         p.y = target - h * 0.5f;
@@ -406,13 +406,15 @@ static bool modeIsFlying(Mode m) { return m == Mode::Ship || m == Mode::Ufo || m
 static float modeBoundsHeight(Mode m) {
     switch (m) {
         case Mode::Ship: case Mode::Ufo: case Mode::Wave: case Mode::Swing: return 300;
-        case Mode::Ball: case Mode::Spider: return 240;
+        case Mode::Ball: return 240;
+        case Mode::Spider: return 270; // measured on a run logged in GD (bounds 90..360 for a portal at 248)
         default: return 0;
     }
 }
 
 static void setBoundsFromPortal(PlayerState& p, float portalY, float H) {
-    float floor = std::max(0.0f, 30.0f * std::ceil((portalY - (H / 2 + 30)) / 30.0f));
+    // floor + 1, not ceil: a portal exactly on a row boundary goes a row higher (runs logged in GD)
+    float floor = std::max(0.0f, 30.0f * (std::floor((portalY - (H / 2 + 30)) / 30.0f) + 1.0f));
     p.floorY = floor;
     p.ceilY = floor + H;
     p.bounded = true;
@@ -422,6 +424,12 @@ static void switchMode(const World& W, GameState& gs, PlayerState& p, Mode m, fl
     const bool cfgSim = W.config().waveExitSimStyle;
     if (p.mode != m) {
         Mode old = p.mode;
+        // a wave sliding along a bound leaves with no speed (seen on runs logged in GD)
+        if (old == Mode::Wave && p.bounded) {
+            const float h = p.height();
+            if (p.y <= p.floorY + h + 0.01f) { p.y = p.floorY + h; p.v = 0; }
+            else if (p.y >= p.ceilY - h - 0.01f) { p.y = p.ceilY - h; p.v = 0; }
+        }
         if (cfgSim && old == Mode::Wave) {
             double div = (m == Mode::Cube || m == Mode::Ship) ? 4.0 : (m == Mode::Ufo ? 2.0 : 1.0);
             p.v = p.v * 0.9 / div;
@@ -432,8 +440,7 @@ static void switchMode(const World& W, GameState& gs, PlayerState& p, Mode m, fl
         p.mode = m;
         p.onGround = false;
         p.canJump = false;
-        p.isJumping = false;
-        p.dashing = false;
+        p.isJumping = false; // a dash goes on through the portal (seen on runs logged in GD)
         if (m == Mode::Robot || m == Mode::Spider) p.robotCharge = 1.5f;
         p.lastModeTime = gs.time;
         p.onSlope = false;
@@ -531,6 +538,7 @@ static void ringJump(const World& W, GameState& gs, PlayerState& p, const SimObj
         p.isJumping = true;
         p.canJump = false;
         p.onGround = false;
+        if (m == Mode::Robot) p.robotInvalid = true; // an orb gives no held boost (seen on a run logged in GD)
         if (m == Mode::Ball || m == Mode::Spider || m == Mode::Swing) p.holding = false;
     }
     if (m == Mode::Wave && t != OrbType::Blue && t != OrbType::Green && t != OrbType::DashGreen && t != OrbType::DashPink) {
@@ -571,7 +579,7 @@ static void bumpPlayer(const World& W, GameState& gs, PlayerState& p, const SimO
     p.onGround = false;
     p.canJump = false;
     p.onSlope = p.wasOnSlope = false;
-    if (m == Mode::Robot && (!W.settings().fixRobotJump)) p.robotInvalid = true;
+    if (m == Mode::Robot) p.robotInvalid = true; // a pad gives no held boost (seen on a run logged in GD)
     p.events |= EvPad;
 }
 
@@ -844,6 +852,8 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
             }
             case Kind::Pad: {
                 if (p.wasActivated(i) && !o.multiActivate) break;
+                // a blue pad facing the other way stays armed for when the gravity flips
+                if (PadType(o.sub) == PadType::Blue && o.facingDown != p.upsideDown) break;
                 p.markActivated(i);
                 bumpPlayer(W, gs, p, o);
                 p.eventObj = i;
@@ -1008,7 +1018,7 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
         }
         if (hasCeil && p.y + half >= ceilY) {
             if (groundMode) {
-                if (p.y + 4.5f >= ceilY) { die(p, DeathCause::Ceiling, -1); return; }
+                if (p.y + half >= ceilY + 1.0f) { die(p, DeathCause::Ceiling, -1); return; } // a unit in kills (runs logged in GD)
             } else {
                 p.y = ceilY - half;
                 if (p.v > 0) p.v = 0;
@@ -1025,7 +1035,7 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
         }
         if (p.y - half <= floorY) {
             if (groundMode) {
-                if (p.y - 4.5f <= floorY) { die(p, DeathCause::Floor, -1); return; }
+                if (p.y - half <= floorY - 1.0f) { die(p, DeathCause::Floor, -1); return; }
             } else {
                 p.y = floorY + half;
                 if (p.v < 0) p.v = 0;

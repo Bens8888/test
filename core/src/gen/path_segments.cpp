@@ -46,8 +46,8 @@ float styleSwitchRate(Style s) {
         case Style::Flow: return 0.45f;
         case Style::Memory: return 0.55f;
         case Style::Tight: return 0.6f;
-        case Style::Chaotic: return 0.9f;
-        default: return 0.7f; // modern layouts switch often
+        case Style::Chaotic: return 0.75f;
+        default: return 0.55f; // a mode portal every few seconds, as in real layouts
     }
 }
 
@@ -68,7 +68,11 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         const float rate = std::clamp(switchRate * (0.6f + 0.8f * intensity), 0.0f, 1.0f);
         const double meanLen = 20.0 + (1.6 - 20.0) * rate;
         const int L = std::max(1, int(std::lround(meanLen * rng.uniform(0.6, 1.4))));
-        const int lo = std::min(n - 1, i + std::max(0, L / 2 - 1)), hi = std::min(n - 1, i + L + L / 2);
+        // a stretch needs a few seconds: structures repeat over it, and it reads as a part
+        const double minLen = switchRate >= 1.0f ? 0.0 : 2.5 * (1.0 - switchRate) + 1.2;
+        int lo = std::min(n - 1, i + std::max(0, L / 2 - 1));
+        while (lo + 1 < n && C[size_t(lo)].time - C[size_t(i)].time < minLen) ++lo;
+        const int hi = std::min(n - 1, std::max(lo, i + L + L / 2));
         int best = hi;
         double bestScore = -1e9;
         for (int e = lo; e <= hi; ++e) {
@@ -148,6 +152,8 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
             else if (intent == Intent::Breather) sp -= 1;
         }
         if (opt.startSpeed >= 0 && sc == SpeedChanges::Off) sp = opt.startSpeed;
+        if (opt.speedStyle == 1) sp -= 1;
+        else if (opt.speedStyle == 3) sp += 1;
         int cap = D >= 6 ? 3 : (D >= 3 ? 3 : 2);
         if ((sg.mode == Mode::Wave || sg.mode == Mode::Swing || sg.mode == Mode::Spider) && D < 6) cap = 2;
         sg.speed = std::clamp(sp, 1, cap);

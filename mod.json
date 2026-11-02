@@ -1,12 +1,12 @@
 {
-	"geode": "5.11.2",
+	"geode": "5.10.1",
 	"gd": {
 		"win": "2.2081",
 		"mac": "2.2081"
 	},
 	"id": "bens8888.autolayout",
 	"name": "AutoLayout",
-	"version": "v0.1.0",
+	"version": "v0.2.0",
 	"developer": "bens8888",
 	"description": "Generates complete, playable layouts from a song, verified by a physics bot.",
 	"tags": [

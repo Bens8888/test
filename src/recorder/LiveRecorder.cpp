@@ -29,7 +29,7 @@ void LiveRecorder::toggle() { setArmed(!m_armed); }
 
 int32_t LiveRecorder::tickOf(GJBaseGameLayer* layer) {
     if (!layer) return 0;
-    return int32_t(layer->m_gameState.m_currentProgress);
+    return int32_t(layer->m_gameState.m_currentProgress / 2); // the game counts two per physics step
 }
 
 rec::PlayerSnap LiveRecorder::snap(PlayerObject* p) {

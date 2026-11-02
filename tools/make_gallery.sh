@@ -33,19 +33,9 @@ run() { # name, source, extra args, description
     echo
   } >> "$MD"
 }
-run demo_auto demo "--variant-seed 7 --difficulty 4" "Demo song, Insane, automatic (all gamemodes)"
-run demo_easy demo "--variant-seed 3 --difficulty 0" "Demo song, Easy"
-run demo_extreme demo "--variant-seed 5 --difficulty 9" "Demo song, Extreme Demon"
-run demo_retro_cube demo "--variant-seed 11 --difficulty 3 --style 5 --modes 0" "Demo song, Harder, Retro style, cube only"
-run demo_flow demo "--variant-seed 2 --difficulty 4 --style 1" "Demo song, Insane, Flow style"
-run demo_classic demo "--variant-seed 7 --difficulty 4 --engine 1" "Demo song, Insane, classic builder (v1) for comparison"
-run demo_few_switches demo "--variant-seed 9 --difficulty 5 --switch 0.15" "Demo song, Easy Demon, few gamemode switches"
-run demo_recording demo "--variant-seed 4 --difficulty 4 --recording demo --faith 0.9" "Demo song, built around the demo click recording (faithfulness 0.9)"
-run random_song_17 random:17 "--variant-seed 17 --difficulty 6" "Random synthetic song #17, Medium Demon"
-run random_song_23 random:23 "--variant-seed 23 --difficulty 2 --modes 1,3,4,7" "Random synthetic song #23, Hard, flying modes only"
+run style_rail demo "--seed 9 --difficulty 4 --structure 1 --crop 0:4000" "Demo song, Insane, Rail structures"
+run style_slope demo "--seed 9 --difficulty 4 --structure 2 --crop 0:4000" "Demo song, Insane, Slope structures"
+run style_compact demo "--seed 9 --difficulty 4 --structure 3 --crop 0:4000" "Demo song, Insane, Compact structures"
+run style_spiky demo "--seed 9 --difficulty 4 --structure 4 --crop 0:4000" "Demo song, Insane, Spiky structures"
 # close-ups at editor scale (one screen of the level, with the bot's path)
-run closeup_cube_robot demo "--variant-seed 3 --modes 0,5 --crop 1800:4200" "Close-up: cube and robot"
-run closeup_ship demo "--variant-seed 3 --modes 1 --crop 3000:5400" "Close-up: ship"
-run closeup_wave demo "--variant-seed 3 --modes 4 --crop 3000:5400" "Close-up: wave"
-run closeup_ball_orbs random:7 "--variant-seed 11 --crop 9000:11400" "Close-up: ball, orbs and gamemode switches"
 echo "wrote $MD"

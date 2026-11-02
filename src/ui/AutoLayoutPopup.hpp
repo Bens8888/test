@@ -25,6 +25,14 @@ public:
     static AutoLayoutPopup* current();
     void onPicked(std::filesystem::path const& p, int what); // file picker results (main thread)
 
+    // driven by the in-game self test (hooks/SelfTest.cpp)
+    static constexpr int kTabCount = 7;
+    void testTab(int i) { selectTab(Tab(i)); }
+    void testGenerate() { startGenerate(); }
+    void testApply() { applySelected(); }
+    void testUndo() { undoLast(); }
+    bool testBusy() const { return m_watching != nullptr; }
+
 protected:
     enum class Tab { Generate = 0, Style, Gamemodes, Sections, Playtest, Training, Settings, Count };
 

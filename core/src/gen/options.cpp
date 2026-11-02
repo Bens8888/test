@@ -85,6 +85,8 @@ Json GenOptions::toJson() const {
     j["modeWeights"] = mw;
     j["speedChanges"] = int(speedChanges);
     j["startSpeed"] = startSpeed;
+    j["structureStyle"] = structureStyle;
+    j["speedStyle"] = speedStyle;
     j["portalFrequency"] = portalFrequency;
     j["gravityFlips"] = int(gravityFlips);
     j["sizeChanges"] = int(sizeChanges);
@@ -106,7 +108,7 @@ Json GenOptions::toJson() const {
     j["engine"] = engine;
     j["switchRate"] = switchRate;
     j["look"] = look;
-    j["optionsVersion"] = 2;
+    j["optionsVersion"] = 3;
     return j;
 }
 
@@ -120,6 +122,8 @@ GenOptions GenOptions::fromJson(const Json& j) {
     for (size_t i = 0; i < o.modeWeights.size() && i < mw.size(); ++i) o.modeWeights[i] = float(mw[i].asNumber(-1));
     o.speedChanges = SpeedChanges(std::clamp(j.get("speedChanges", 0), 0, 3));
     o.startSpeed = std::clamp(j.get("startSpeed", -1), -1, 4);
+    o.structureStyle = std::clamp(j.get("structureStyle", 0), 0, 4);
+    o.speedStyle = std::clamp(j.get("speedStyle", 0), 0, 3);
     o.portalFrequency = float(j.get("portalFrequency", -1.0));
     o.gravityFlips = Tri(std::clamp(j.get("gravityFlips", 0), 0, 2));
     o.sizeChanges = Tri(std::clamp(j.get("sizeChanges", 0), 0, 2));
@@ -141,7 +145,7 @@ GenOptions GenOptions::fromJson(const Json& j) {
     o.look = std::clamp(j.get("look", o.look), 0, 1);
     // options saved before version 2 carry the old defaults (outline look, 80% faithfulness):
     // they move to the new ones
-    if (j.get("optionsVersion", 1) < 2) {
+    if (j.get("optionsVersion", 1) < 3) {
         o.look = GenOptions{}.look;
         o.faithfulness = GenOptions{}.faithfulness;
     }

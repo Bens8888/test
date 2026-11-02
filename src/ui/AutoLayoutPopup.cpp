@@ -636,6 +636,9 @@ CCNode* AutoLayoutPopup::buildStyleTab() {
             save();
         }));
     }
+    form->row("Structures", ui::CycleControl::create({"Auto", "Rail", "Slope", "Compact", "Spiky"}, O().structureStyle, 150.f, [](int i) { O().structureStyle = i; save(); }),
+              "learned from real levels");
+    form->row("Speed", ui::CycleControl::create({"AI decides", "Slow", "Normal", "Fast"}, O().speedStyle, 150.f, [](int i) { O().speedStyle = i; save(); }));
     form->row("Look", ui::CycleControl::create({"Outline (layout)", "Default blocks"}, O().look, 150.f, [](int i) { O().look = i; save(); }));
     form->row("Use the trained model (v1)", ui::ToggleControl::create(S().useModel(), [](bool on) { S().setUseModel(on); save(); }),
               S().models().empty() ? "no model found: rules" : "off = rule-based");

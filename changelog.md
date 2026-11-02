@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.0
+- Structures come from real levels now: a trained library of modules from Bidal Wave and shapes
+  shared between top levels, with Rail, Slope, Compact and Spiky styles
+- Each gamemode stretch repeats a few shapes in a rhythm, hugging the player's path
+- Wave parts are thin 45-degree line slope chains built around the zig-zag
+- Gamemode stretches last a few seconds instead of 1-3 clicks
+- New menu rows: Structures, Speed (slow / normal / fast); outline look by default
+- Physics fixed against runs logged in GD: a blue pad facing the other way stays armed, the spider's
+  area is 270 units high, a pad gives the robot no held boost
+- Recorder: ticks were doubled (the game counts two per physics step)
+- In-game self test: selftest.txt in the save folder plays a level with its designed clicks and logs
+  every step
+
 ## v0.1.0
 - Editor button and the AutoLayout popup.
 - Test pattern placement (every gamemode portal, blocks, spikes, orbs, pads) as one undo step.

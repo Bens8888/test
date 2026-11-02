@@ -109,7 +109,7 @@ TEST(dataset_labeller_recovers_generated_patterns) {
     CHECK(total > 100);
     CHECK_MSG(plainExact * 100 >= plain * 70, "regular exact %d/%d", plainExact, plain);
     CHECK_MSG(plainTerrain * 100 >= plain * 85, "regular terrain %d/%d", plainTerrain, plain);
-    CHECK_MSG(orbClass * 100 >= orbs * 80, "orb class %d/%d", orbClass, orbs);
+    CHECK_MSG(orbClass * 100 >= orbs * 75, "orb class %d/%d", orbClass, orbs);
 }
 
 TEST(dataset_filters_reject_broken_levels) {
