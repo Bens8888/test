@@ -558,8 +558,10 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
         if (P < until && Tn - T >= int(0.2 * phys::kTPS)) {
             Cand c = base;
             const TraceSample& q = at(base, P);
+            // each portal goes where the player is after the ones before it
             auto portalY = [&](float px) {
-                for (auto& r : base.trace) if (r.x >= px) return std::round(r.y);
+                if (c.objs.size() != base.objs.size()) evaluate(c, until);
+                for (auto& r : c.trace) if (r.x >= px) return std::round(r.y);
                 return std::round(q.y);
             };
             // speed, gamemode, size, gravity: one after the other, all ahead of the player

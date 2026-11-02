@@ -9,6 +9,8 @@
 #include <al/physics/sim.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <vector>
 
 using namespace al;
 using namespace al::gen;
@@ -74,6 +76,41 @@ TEST(blue_pad_facing_away_stays_armed) {
     }
     CHECK_MSG(flips == 2, "%d gravity flips", flips);
     CHECK(!s.p[0].upsideDown);
+}
+
+// Run 82 of the real-game check: a spider standing on a floor hits a ship portal. Its step's fall is
+// undone first, so the ship starts level, not 0.03 units and half a step of speed lower.
+TEST(ground_mode_enters_a_flying_portal_level) {
+    level::Level L;
+    L.settings.startMode = Mode::Spider;
+    L.objects.push_back(object(13, 60, 30));
+    phys::World W(L);
+    W.setEndX(1e9f);
+    auto s = phys::initialState(W);
+    while (s.p[0].mode == Mode::Spider && s.tick < 60) {
+        phys::step(W, s, false);
+        if (s.p[0].mode != Mode::Spider) break;
+        CHECK(s.p[0].onGround);
+    }
+    REQUIRE(s.p[0].mode == Mode::Ship);
+    CHECK(s.p[0].v == 0);
+}
+
+// Run 84: a swing resting on the floor flips with the press and only moves on the step after.
+TEST(swing_press_on_the_floor_holds_for_a_step) {
+    level::Level L;
+    L.settings.startMode = Mode::Swing;
+    phys::World W(L);
+    W.setEndX(1e9f);
+    auto s = phys::initialState(W);
+    for (int t = 0; t < 10; ++t) phys::step(W, s, false);
+    REQUIRE(s.p[0].onGround);
+    const float y = s.p[0].y;
+    phys::step(W, s, true);
+    CHECK(s.p[0].upsideDown);
+    CHECK(s.p[0].y == y);
+    phys::step(W, s, true);
+    CHECK(s.p[0].y > y);
 }
 
 TEST(structure_styles_beatable_and_built_from_the_library) {
@@ -144,6 +181,69 @@ TEST(structures_are_a_mass_with_lined_faces) {
     const double screens = last / 570.0;
     CHECK_MSG(double(res.level.objects.size()) / screens > 40, "%.0f objects per screen", double(res.level.objects.size()) / screens);
     CHECK_MSG(double(hazards) / screens > 15, "%.0f hazards per screen", double(hazards) / screens);
+}
+
+// Run 83 in the real game: turned spikes in piles on top of each other and of saws.
+TEST(face_hazards_do_not_pile_up) {
+    const auto& A = demoAnalysis();
+    for (int style = 1; style <= kStructureStyles; ++style) {
+        GenOptions opt;
+        opt.engine = 2;
+        opt.seed = uint64_t(80 + style);
+        opt.difficulty = Difficulty::Insane;
+        opt.structureStyle = style;
+        opt.variants = 1;
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        std::vector<const level::LevelObject*> turned;
+        for (const auto& o : res.level.objects)
+            if (o.info().kind == level::Kind::Hazard && std::fmod(std::abs(o.rotation), 90.0) != 0) turned.push_back(&o);
+        std::sort(turned.begin(), turned.end(), [](auto* a, auto* b) { return a->x < b->x; });
+        for (size_t i = 0; i < turned.size(); ++i)
+            for (size_t j = i + 1; j < turned.size() && turned[j]->x - turned[i]->x < 20; ++j)
+                CHECK_MSG(std::abs(turned[j]->y - turned[i]->y) >= 20, "style %d: thorns at (%.0f, %.0f) and (%.0f, %.0f)", style, turned[i]->x, turned[i]->y, turned[j]->x, turned[j]->y);
+    }
+}
+
+// A portal only touched at the edge of the player is missed by anyone a little off the path.
+TEST(portals_are_passed_through_not_grazed) {
+    const auto& A = demoAnalysis();
+    for (int style = 1; style <= kStructureStyles; ++style) {
+        GenOptions opt;
+        opt.engine = 2;
+        opt.seed = uint64_t(60 + style);
+        opt.difficulty = Difficulty::Insane;
+        opt.structureStyle = style;
+        opt.variants = 1;
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        phys::World W(res.level);
+        std::vector<size_t> portals;
+        for (size_t i = 0; i < res.level.objects.size(); ++i) {
+            const auto kind = res.level.objects[i].info().kind;
+            if (kind == level::Kind::ModePortal || kind == level::Kind::GravityPortal || kind == level::Kind::SizePortal || kind == level::Kind::SpeedPortal)
+                portals.push_back(i);
+        }
+        std::vector<double> depth(portals.size(), -1e9);
+        auto s = phys::initialState(W);
+        size_t next = 0;
+        bool held = false;
+        while (!s.dead && !s.won) {
+            while (next < res.inputs.events.size() && res.inputs.events[next].tick <= s.tick + 1) held = res.inputs.events[next++].press;
+            phys::step(W, s, held);
+            for (size_t k = 0; k < portals.size(); ++k) {
+                const auto& o = res.level.objects[portals[k]];
+                if (std::abs(o.x - s.p[0].x) > (o.info().w + s.p[0].width()) * 0.5) continue;
+                // the path the player was on as it came in: the portal itself turns it away
+                const auto& q = s.p[0];
+                const double reach = (o.info().h + q.height()) * 0.5, inside = reach - std::abs(o.y - q.y);
+                if (inside <= 0 || depth[k] > 0) { depth[k] = std::max(depth[k], inside); continue; }
+                const double slope = q.x > q.lastX ? (q.y - q.lastY) / (q.x - q.lastX) : 0;
+                depth[k] = std::max(inside, reach - std::abs(o.y - (q.y + slope * (o.x - q.x))));
+            }
+        }
+        CHECK(s.won);
+        for (size_t k = 0; k < portals.size(); ++k)
+            if (depth[k] > -1e8) CHECK_MSG(depth[k] >= 12, "style %d: portal %d at (%.0f, %.0f) touched by only %.1f units", style, res.level.objects[portals[k]].id, res.level.objects[portals[k]].x, res.level.objects[portals[k]].y, depth[k]);
+    }
 }
 
 TEST(pads_have_their_real_width) {

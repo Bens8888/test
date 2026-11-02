@@ -116,6 +116,8 @@ private:
     std::vector<phys::GameState> m_pre; // state before each used click (index = PathClick index)
     std::vector<LevelObject> m_hazards;
     std::set<std::pair<int, int>> m_hazardCells;
+    struct HazardSpot { float x, y, rad; };
+    std::map<int, std::vector<HazardSpot>> m_hazardSpots; // by 60 unit column
     float m_margin = 4;               // extra distance kept from the reserved space
     float m_waveMargin = 30;          // from the wave's path to its walls
     int m_halfWin = 12;               // ticks each press may move either way
@@ -151,6 +153,8 @@ private:
     size_t mark() const { return m_W.size(); }
     void addCell(int cx, int cy, CellKind k = CellKind::Solid);
     void addHazard(const LevelObject& o);
+    void noteHazard(const LevelObject& o);
+    bool hazardRoom(float x, float y, float rad) const;
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void placeModules(int firstLane, int lastLane);
@@ -323,6 +327,27 @@ void Structurer::addHazard(const LevelObject& o) {
     m_hazards.push_back(o);
     m_W.addObject(o, -1);
     m_hazardCells.insert({int(std::floor(o.x / kCell)), int(std::floor(o.y / kCell))});
+    noteHazard(o);
+}
+
+void Structurer::noteHazard(const LevelObject& o) {
+    const auto& info = o.info();
+    const float rad = info.kind == level::Kind::Saw ? info.w * 0.5f : (o.id == oid::HalfSpike ? 5.f : 9.f);
+    m_hazardSpots[int(std::floor(o.x / 60.f))].push_back({float(o.x), float(o.y), rad});
+}
+
+// Hazards stand side by side, never in a pile.
+bool Structurer::hazardRoom(float x, float y, float rad) const {
+    const int c = int(std::floor(x / 60.f));
+    for (int k = c - 2; k <= c + 2; ++k) {
+        auto it = m_hazardSpots.find(k);
+        if (it == m_hazardSpots.end()) continue;
+        for (auto& h : it->second) {
+            const float d = rad + h.rad, dx = h.x - x, dy = h.y - y;
+            if (dx * dx + dy * dy < d * d) return false;
+        }
+    }
+    return true;
 }
 
 bool Structurer::tryKill(size_t i, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon) {
@@ -401,6 +426,7 @@ void Structurer::placeObject(const LevelObject& o) {
     m_W.addObject(o, -1);
     phys::SimObject so;
     if (!phys::World::makeSimObject(o, 0, so)) return;
+    if (so.kind == level::Kind::Hazard || so.kind == level::Kind::Saw) noteHazard(o);
     const float hh = so.kind == level::Kind::Saw ? so.hw : so.hh;
     m_built.addBox({so.x - so.hw, so.y - hh, so.x + so.hw, so.y + hh});
 }
@@ -542,13 +568,14 @@ void Structurer::lineFace(float x, float faceY, int toward, int kind, Rng& r) {
     LevelObject o;
     if (kind == 0) o = make(oid::Spike, x, faceY + float(toward) * 15.f, toward > 0 ? 0 : 180);
     else if (kind == 1) o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
-    else o = make(r.chance(0.5) ? oid::Spike : oid::HalfSpike, x, faceY + float(toward) * float(r.below(12)), double(r.below(24)) * 15.0); // a thorn: any turn
+    else o = make(r.chance(0.5) ? oid::Spike : oid::HalfSpike, x, faceY + float(toward) * 10.f, (toward > 0 ? 0 : 180) + double(int(r.below(7)) - 3) * 15.0); // a thorn: leaning off the face
     phys::SimObject so;
     if (!phys::World::makeSimObject(o, 0, so)) return;
     const float rad = std::sqrt(so.hw * so.hw + so.hh * so.hh);
     const Box b{so.x - rad, so.y - rad, so.x + rad, so.y + rad};
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return;
     if (m_env.hits(b, m_margin + 2)) return;
+    if (!hazardRoom(so.x, so.y, kind == 1 ? 5.f : (kind == 2 ? 12.f : 9.f))) return;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return;
     addHazard(o);
@@ -561,6 +588,7 @@ void Structurer::faceSaw(float x, float y) {
     if (!phys::World::makeSimObject(sw, 0, so)) return;
     const Box b{so.x - so.hw, so.y - so.hw, so.x + so.hw, so.y + so.hw};
     if (m_env.hits(b, m_margin + 2)) return;
+    if (!hazardRoom(so.x, so.y, so.hw)) return;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 60 && std::fabs(float(po.o.y) - so.y) < 60) return;
     addHazard(sw);
@@ -653,17 +681,16 @@ void Structurer::bands() {
                 if (face == INT_MIN || joined) continue; // the modules bring their own spikes
                 const float faceY = float(dir > 0 ? face : face + 1) * kCell;
                 Rng h = at(c0 + c, dir > 0 ? 0xFACE1 : 0xFACE2);
+                if (h.chance(0.05 + 0.25 * double(structureStyle(m_style).saws) + (heat > 0.65f ? 0.04 : 0.0)))
+                    faceSaw(xc, faceY - float(dir) * 8.f);
                 if (m_style == 3 || (heat > 0.65f && D >= 4)) {
-                    for (int t = 1 + int(h.below(3)); t > 0; --t)
-                        if (h.chance(hazardRate)) lineFace((float(c0 + c) + float(h.below(30)) / 30.f) * kCell, faceY, -dir, 2, h);
+                    if (h.chance(hazardRate)) lineFace(xc, faceY, -dir, 2, h);
                 } else if (seg[size_t(c)] % 3 == 0 && h.chance(hazardRate)) {
                     lineFace(xc, faceY, -dir, 0, h);
                 } else if (seg[size_t(c)] % 3 == 1 && h.chance(hazardRate)) {
                     lineFace(xc - 7.5f, faceY, -dir, 1, h);
                     lineFace(xc + 7.5f, faceY, -dir, 1, h);
                 }
-                if (h.chance(0.03 + 0.25 * double(structureStyle(m_style).saws) + (heat > 0.65f ? 0.04 : 0.0)))
-                    faceSaw(xc, faceY - float(dir) * 8.f);
             }
         }
     }
@@ -687,8 +714,12 @@ void Structurer::wallPiece(float x, float y, bool up, bool solidBelow, bool stee
 }
 
 bool Structurer::nearPathObject(float x, float y) const {
-    for (auto& po : m_path.objects)
+    for (auto& po : m_path.objects) {
+        const auto kind = po.o.info().kind;
+        // a wall line runs past a portal: leaving it out would open a hole in the corridor
+        if (kind == level::Kind::ModePortal || kind == level::Kind::GravityPortal || kind == level::Kind::SizePortal || kind == level::Kind::SpeedPortal) continue;
         if (std::fabs(float(po.o.x) - x) < 55 && std::fabs(float(po.o.y) - y) < 70) return true;
+    }
     return false;
 }
 

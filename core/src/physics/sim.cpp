@@ -335,9 +335,16 @@ static void updateJump(const World& W, GameState& gs, PlayerState& p, float dt) 
                 if (p.jumpUnused && p.holding) {
                     p.jumpUnused = false;
                     double pre = p.v;
+                    const bool rest = p.onGround;
                     flipGravity(p, !p.upsideDown, gs.time);
                     setV(p, pre * 0.8);
                     p.events |= EvSwingFlip;
+                    p.onGround = rest;
+                }
+                // pressing on a floor it holds still for that step (runs logged in GD)
+                if (p.onGround && (p.events & EvSwingFlip)) {
+                    if (dt > 0) p.onGround = false;
+                    break;
                 }
                 const int f2 = p.flip();
                 addV(p, -((p.mini ? 0.6 : 0.4) * double(kG) * dt * f2));
@@ -837,6 +844,7 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
     std::array<int32_t, 4> touchingNow{};
     uint8_t touchingNowCount = 0;
     Rect r = rectOf(p.x, p.y, hw, h * 0.5f);
+    int landFirstPortal = -1;
 
     // pass 1: interactive objects in level order
     for (int i : tl_cand) {
@@ -872,6 +880,8 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
             case Kind::ModePortal: {
                 if (p.wasActivated(i)) break;
                 p.markActivated(i);
+                // out of a ground mode the landing of this step counts first (runs logged in GD)
+                if (!gs.dual && !modeIsFlying(p.mode) && p.mode != Mode(o.sub)) { landFirstPortal = i; p.events |= EvPortal; p.eventObj = i; break; }
                 switchMode(W, gs, p, Mode(o.sub), o.y, true);
                 p.events |= EvPortal;
                 p.eventObj = i;
@@ -1045,7 +1055,7 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
         }
         if (p.y - half <= floorY) {
             if (groundMode) {
-                if (p.y - half <= floorY - 1.0f) { die(p, DeathCause::Floor, -1); return; }
+                if (p.y - half <= floorY - 0.1f) { die(p, DeathCause::Floor, -1); return; } // a tenth in kills (runs logged in GD)
             } else {
                 p.y = floorY + half;
                 if (p.v < 0) p.v = 0;
@@ -1054,6 +1064,11 @@ static void collidePlayer(const World& W, GameState& gs, PlayerState& p) {
         }
     }
     if (p.y > kKillY) { die(p, DeathCause::KillHeight, -1); return; }
+    if (landFirstPortal >= 0) {
+        const bool landed = p.onGround;
+        switchMode(W, gs, p, Mode(objs[size_t(landFirstPortal)].sub), objs[size_t(landFirstPortal)].y, true);
+        if (landed && !modeIsFlying(p.mode)) p.onGround = p.canJump = true;
+    }
 
     // leaving a slope: launch / fall velocities
     if (p.wasOnSlope && !p.onSlope && p.slopeObj >= 0 && !(p.events & (EvJump | EvOrb | EvPad))) {
@@ -1159,7 +1174,7 @@ GameState initialState(const World& W) {
     float H = modeBoundsHeight(p.mode);
     if (H > 0) { p.bounded = true; p.floorY = 0; p.ceilY = H; }
     float h = p.height();
-    p.y = p.upsideDown && p.bounded ? p.ceilY - h * 0.5f : (p.mode == Mode::Wave ? h : h * 0.5f);
+    p.y = p.upsideDown && p.bounded ? p.ceilY - h * 0.5f : (modeIsFlying(p.mode) ? 15.f : h * 0.5f); // flying modes start a cube's height up and drop (runs logged in GD)
     if (p.mode == Mode::Wave && p.upsideDown && p.bounded) p.y = p.ceilY - h;
     p.lastX = p.x;
     p.lastY = p.y;

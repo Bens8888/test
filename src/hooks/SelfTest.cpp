@@ -236,8 +236,9 @@ class $modify(ALTestBase, GJBaseGameLayer) {
         auto& t = test();
         if (t.active) {
             // the game counts two per physics step, and takes a button in the step after this one
-            // (a spider or a swing on the ground reacts at once)
-            const bool atOnce = m_player1 && (m_player1->m_isSpider || m_player1->m_isSwing) && m_player1->m_isOnGround;
+            // (a spider or a swing on the ground reacts at once; a swing keeps the flag for a while
+            // after it touched a bound, so only one standing still counts)
+            const bool atOnce = m_player1 && m_player1->m_isOnGround && (m_player1->m_isSpider || (m_player1->m_isSwing && m_player1->m_yVelocity == 0));
             const int step = int(m_gameState.m_currentProgress / 2) + (atOnce ? 0 : 1);
             while (!t.inputs.empty() && t.inputs.begin()->first <= step) {
                 handleButton(t.inputs.begin()->second, 1, true);
