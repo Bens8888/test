@@ -446,7 +446,12 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         bool fx = p.fx != 0, fy = p.fy != 0;
         if (under) { y = float(m.h) * kCell - y; rot = -rot; fy = !fy; }
         if (mirrorX) { x = float(m.w) * kCell - x; rot = -rot; fx = !fx; }
-        LevelObject o = make(p.id, double(cx) * kCell + x, double(row) * kCell + y, rot);
+        // the thorn and wavy spikes some source levels use look bent: the plain spike has their hitbox
+        int id = p.id;
+        if (id == 216 || id == 177) id = oid::Spike;
+        else if (id == 217) id = oid::HalfSpike;
+        else if (id == 218) id = 103;
+        LevelObject o = make(id, double(cx) * kCell + x, double(row) * kCell + y, rot);
         o.flipX = fx;
         o.flipY = fy;
         Box b{};

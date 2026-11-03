@@ -195,8 +195,11 @@ TEST(spikes_stand_straight) {
         opt.variants = 1;
         auto res = generateVariant(A, opt, opt.seed, nullptr);
         for (const auto& o : res.level.objects)
-            if (o.info().kind == level::Kind::Hazard)
+            if (o.info().kind == level::Kind::Hazard) {
                 CHECK_MSG(std::fmod(std::abs(o.rotation), 90.0) == 0, "style %d: hazard %d turned %.0f at (%.0f, %.0f)", style, o.id, o.rotation, o.x, o.y);
+                // thorn and wavy spikes are drawn bent
+                CHECK_MSG(o.id != 177 && o.id != 216 && o.id != 217 && o.id != 218, "style %d: bent spike %d at (%.0f, %.0f)", style, o.id, o.x, o.y);
+            }
     }
 }
 
