@@ -183,6 +183,9 @@ private:
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void placeModules(int firstLane, int lastLane);
+    struct PillarEnd { LevelObject piece; float dir, target; };
+    std::vector<PillarEnd> m_pillarEnds;
+    void extendPillars();
     void bands();
     bool bandCell(int cx, int cy);
     void lineFace(float x, float faceY, int toward, int kind);
@@ -500,10 +503,29 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         }
         objs.push_back(o);
     }
+    // a hazard of the source sunk into one of its own blocks stays out
+    {
+        std::vector<Box> solids;
+        for (auto& o : objs) {
+            phys::SimObject so;
+            if (phys::World::makeSimObject(o, 0, so) && so.kind == level::Kind::Solid) solids.push_back({so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh});
+        }
+        std::vector<LevelObject> kept;
+        for (auto& h : objs) {
+            Box d{};
+            bool sunk = false;
+            if (drawnBox(h, d)) {
+                const Box in = shrunk(d, h.info().kind == level::Kind::Saw ? (d.x1 - d.x0) * 0.25f : 3.f);
+                for (auto& b : solids) sunk = sunk || overlap(in, b, 0);
+            }
+            if (!sunk) kept.push_back(h);
+        }
+        objs = std::move(kept);
+    }
     if (objs.empty()) return false;
     // A pillar's far end was cut off from the source level, where it ran on into the ground or the
-    // ceiling: its side lines go on to the floor (under the path) or the bound, else it would end
-    // open in the air. Over a cube or robot nothing is above: a few cells take it out of view.
+    // ceiling: its side lines go on later (extendPillars, once the bands are built).
+    std::vector<PillarEnd> ends;
     {
         float lo = 1e9f, hi = -1e9f;
         std::vector<Box> boxes(objs.size());
@@ -515,22 +537,11 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         }
         const bool bounded = ceilRow < 90;
         const float target = under ? float(floorRow) * kCell : bounded ? float(ceilRow + 1) * kCell : hi + 4 * kCell;
-        const size_t count = objs.size();
-        for (size_t k = 0; k < count; ++k) {
+        for (size_t k = 0; k < objs.size(); ++k) {
             const LevelObject& o = objs[k];
             const bool upright = std::fmod(std::fabs(o.rotation), 180.0) == 90;
             const bool side = (o.id == oid::OutlineTop && upright) || (o.id == oid::OutlinePillar && !upright);
-            if (!side || (under ? boxes[k].y0 > lo + 1 : boxes[k].y1 < hi - 1)) continue;
-            const float dir = under ? -1.f : 1.f;
-            for (int step = 1;; ++step) {
-                LevelObject e = o;
-                e.y = o.y + double(dir * kCell * float(step));
-                // the ground is drawn over what reaches into it
-                const float sink = under && target <= 0 ? 29.f : 0.5f;
-                if (under ? e.y - 15 < target - sink : e.y + 15 > target + 0.5f) break;
-                if (step > 8 || !objectFits(e, nullptr)) return false;
-                objs.push_back(e);
-            }
+            if (side && (under ? boxes[k].y0 <= lo + 1 : boxes[k].y1 >= hi - 1)) ends.push_back({o, under ? -1.f : 1.f, target});
         }
     }
     for (auto& o : objs) {
@@ -543,8 +554,58 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
             reach[c] = it == reach.end() ? (under ? b.y0 : b.y1) : under ? std::min(it->second, b.y0) : std::max(it->second, b.y1);
         }
     }
+    for (auto& e : ends) m_pillarEnds.push_back(e);
     ++m_res.pillars;
     return true;
+}
+
+// The side lines of the pillars go on to the floor or the bound, so they do not end open in the
+// air, and stop at the first face on the way (a band, another structure): a line through a block
+// would show inside it. The last piece moves up to the face, overlapping the one before.
+void Structurer::extendPillars() {
+    for (const PillarEnd& pe : m_pillarEnds) {
+        const LevelObject& o = pe.piece;
+        const float d = pe.dir;
+        auto fits = [&](const LevelObject& e) {
+            const Box b{float(e.x) - 2, float(e.y) - 15, float(e.x) + 2, float(e.y) + 15};
+            for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+            if (m_env.hits(b, m_margin) || m_drawn.hits(b, -1)) return false;
+            if (m_built.hits({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, 0.5f)) return false;
+            const int cy = int(std::floor(float(e.y) / kCell));
+            for (int cx = int(std::floor(b.x0 / kCell)); cx <= int(std::floor(b.x1 / kCell)); ++cx)
+                for (int y = cy - 1; y <= cy + 1; ++y) {
+                    const Box cb = cellBox(cx, y);
+                    if ((m_res.cells.filled(cx, y) || m_platforms.filled(cx, y)) && overlap({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, cb, 0)) return false;
+                }
+            return true;
+        };
+        // the ground is drawn over what reaches into it
+        const float sink = d < 0 && pe.target <= 0 ? 29.f : 0.5f;
+        double y = o.y;
+        for (int step = 0; step < 10; ++step) {
+            LevelObject e = o;
+            e.y = y + double(d * kCell);
+            if (d < 0 ? e.y - 15 < pe.target - sink : e.y + 15 > pe.target + 0.5f) {
+                // the last bit up to the bound
+                const double rest = d < 0 ? (y - 15) - pe.target : pe.target - (y + 15);
+                if (rest > 2 && rest < kCell && sink < 1) {
+                    e.y = y + d * rest;
+                    if (fits(e)) placeObject(e);
+                }
+                break;
+            }
+            if (fits(e)) {
+                placeObject(e);
+                y = e.y;
+                continue;
+            }
+            for (float part : {25.f, 20.f, 15.f, 10.f, 5.f}) {
+                e.y = y + double(d * part);
+                if (fits(e)) { placeObject(e); break; }
+            }
+            break;
+        }
+    }
 }
 
 // Every gamemode stretch uses a small set of shapes and repeats them, as real layouts do: that
@@ -1006,6 +1067,7 @@ StructureResult Structurer::run() {
     placeModules(0, 1);
     bands();
     placeModules(2, 3);
+    extendPillars();
     // what the structures do not force yet gets a hazard of its own
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
