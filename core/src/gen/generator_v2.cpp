@@ -70,18 +70,40 @@ GenResult generateVariantV2(const audio::MusicAnalysis& A, const GenOptions& opt
     sp.look = opt.look == 1 ? TileLook::Blocks : TileLook::Outline;
     StructureResult st;
     const float learned = opt.profile ? opt.profile->density() : -1.0f;
-    const float densities[3] = {opt.density >= 0 ? opt.density : learned, 0.0f, 0.0f};
-    for (int attempt = 0; attempt < 3; ++attempt) {
+    // a failed check is retried with fewer structures before going without them
+    const float first = opt.density >= 0 ? opt.density : learned;
+    const float densities[4] = {first, first >= 0 ? first * 0.5f : 0.3f, 0.0f, 0.0f};
+    for (int attempt = 0; attempt < 4; ++attempt) {
         sp.density = densities[attempt];
-        sp.necessity = attempt < 2;
+        sp.necessity = attempt < 3;
         Rng stRng = rng.fork(hashStr("structures"));
         st = buildStructures(path, plan, opt, stRng, sp);
         if (st.beatable) break;
+        // usually one hazard is in the way: take out the ones the run dies on, keep the rest
+        int removed = 0;
+        for (; removed < 12; ++removed) {
+            phys::World W(st.level);
+            const bot::Failure f = bot::firstFailure(W, path.inputs);
+            if (!f.failed) break;
+            if (f.levelObject < 0 || size_t(f.levelObject) >= st.level.objects.size()) break;
+            const auto kind = st.level.objects[size_t(f.levelObject)].info().kind;
+            if (kind != level::Kind::Hazard && kind != level::Kind::Saw) break;
+            st.level.objects.erase(st.level.objects.begin() + f.levelObject);
+        }
+        if (removed > 0) {
+            phys::World W(st.level);
+            st.beatable = bot::isBeatable(W, path.inputs);
+            if (st.beatable) {
+                res.notes.push_back(std::to_string(removed) + " hazard(s) the final check died on were taken out");
+                break;
+            }
+        }
         phys::World failed(st.level);
         const bot::Failure why = bot::firstFailure(failed, path.inputs);
         res.notes.push_back("the check died at x " + std::to_string(int(why.x)) + " y " + std::to_string(int(why.y)) + ": " + phys::deathCauseName(why.cause));
-        res.notes.push_back(attempt == 0 ? "structures simplified: the full version failed the final check"
-                                         : "necessity hazards removed: the simplified version failed the final check");
+        res.notes.push_back(attempt == 0 ? "structures thinned out: the full version failed the final check"
+                            : attempt == 1 ? "structures simplified: the thinned version failed the final check"
+                                           : "necessity hazards removed: the simplified version failed the final check");
     }
     res.level = st.level;
     res.level.settings.songOffset = plan.songStart;

@@ -71,9 +71,12 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         const float intensity = P ? P->intensity : 0.5f;
         const float rate = std::clamp(switchRate * (0.6f + 0.8f * intensity), 0.0f, 1.0f);
         const double meanLen = 20.0 + (1.6 - 20.0) * rate;
-        const int L = std::max(1, int(std::lround(meanLen * rng.uniform(0.6, 1.4))));
+        const double easierL = 1.0 + 0.3 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        const int L = std::max(1, int(std::lround(meanLen * easierL * rng.uniform(0.6, 1.4))));
         // a stretch needs a few seconds: structures repeat over it, and it reads as a part
-        const double minLen = switchRate >= 1.0f ? 0.0 : 2.5 * (1.0 - switchRate) + 1.2;
+        // (longer below demon ratings: fewer portals to react to)
+        const double easier = 1.0 + 0.35 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        const double minLen = switchRate >= 1.0f ? 0.0 : (2.5 * (1.0 - switchRate) + 1.2) * easier;
         int lo = std::min(n - 1, i + std::max(0, L / 2 - 1));
         while (lo + 1 < n && C[size_t(lo)].time - C[size_t(i)].time < minLen) ++lo;
         const int hi = std::min(n - 1, std::max(lo, i + L + L / 2));
@@ -136,6 +139,8 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
             if (D < 2 && (Mode(m) == Mode::Wave || Mode(m) == Mode::Swing || Mode(m) == Mode::Spider)) x *= 0.3f;
             // a wave with nothing to click slides along the floor, a swing falls onto it
             if (longest > 0.75 && (Mode(m) == Mode::Wave || Mode(m) == Mode::Swing)) x *= Mode(m) == Mode::Wave ? 0.1f : 0.4f;
+            // below demon ratings a wave turns no faster than about four times a second
+            if (Mode(m) == Mode::Wave && D < 5 && (med < 0.24 || shortest < 0.16)) x *= 0.2f;
             w[m] = x * x * kModeShare[m];
             total += w[m];
         }
@@ -172,7 +177,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         sg.mini = ((sg.mode == Mode::Wave && opt.sizeChanges == Tri::On) || sg.mode == Mode::Ship || sg.mode == Mode::Ufo || sg.mode == Mode::Cube || sg.mode == Mode::Ball) && own.chance(miniChance);
         // hard wave parts are mini: steep strokes in tight corridors
         // (only for fast clicks: at half a second a stroke would run from the floor to the ceiling)
-        if (sg.mode == Mode::Wave && opt.sizeChanges == Tri::Auto && D >= 4 && med < 0.26) sg.mini = own.chance(0.7);
+        if (sg.mode == Mode::Wave && opt.sizeChanges == Tri::Auto && D >= 6 && med < 0.26) sg.mini = own.chance(0.7);
         // gravity: some ground segments run upside down
         const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 3 ? 0.18 : 0.0);
         sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && own.chance(flipChance);

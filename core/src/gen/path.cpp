@@ -743,15 +743,20 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const auto& e = c.end.p[0];
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {
-        int edge = 0;
+        int edge = 0, waveEdge = 0;
+        // a wave's walls need their whole distance from the path (as in the structurer) plus a piece
+        const float wallRoom = std::clamp(76.0f - 6.0f * m_plan.baseDifficulty, 24.0f, 70.0f) + 18.0f;
         for (auto& q : c.trace) {
             if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
             else if (q.y - q.half <= e.floorY + 25 || q.y + q.half >= e.ceilY - 25) ++edge;
+            if (q.mode == Mode::Wave && (q.y - q.half <= e.floorY + wallRoom || q.y + q.half >= e.ceilY - wallRoom)) ++waveEdge;
         }
         s -= (e.mode == Mode::Wave ? 14.0 : isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
         // flying along the edge of the screen: the structures on that side have no room and the
         // player is half under the progress bar
         if (isFlying(e.mode)) s -= 2.0 * double(edge) / double(c.trace.size());
+        // a wave there leaves its wall broken where it would cross the bound
+        s -= 4.0 * double(waveEdge) / double(c.trace.size());
         const float mid = (e.floorY + e.ceilY) * 0.5f;
         // the wave zig-zags through the middle (room for triangles above and below)
         const double pull = e.mode == Mode::Wave ? 2.5 : e.mode == Mode::Swing ? 1.5 : isFlying(e.mode) ? 0.8 : 0.4;

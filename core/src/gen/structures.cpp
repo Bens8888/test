@@ -290,8 +290,8 @@ void Structurer::buildEnvelope() {
         const int horizon = std::min(m_path.endTick, nextPressAfter(T) + 15);
         int lo, hi;
         moveRange(i, lo, hi);
-        // a wave corridor is as tight as the walls in hard wave parts: half the window of a jump
-        const int win = c.mode == Mode::Wave ? std::max(3, m_halfWin / 2) : m_halfWin;
+        // a wave corridor is as tight as the walls in hard demon wave parts: half the window of a jump
+        const int win = c.mode == Mode::Wave && m_plan.baseDifficulty >= 6 ? std::max(3, m_halfWin / 2) : m_halfWin;
         for (int s = -win; s <= win; s += (std::abs(s) <= 2 ? 1 : 2)) {
             if (s == 0 || T + s <= lo + 1) continue;
             if (s > 0 && T + s >= hi - 1) continue;
@@ -1023,7 +1023,8 @@ StructureResult Structurer::run() {
     m_halfWin = std::clamp(int(std::lround(prof.minWindowMs * 0.5 / 1000.0 * phys::kTPS)), 4, 30);
     // 3 units on top: on runs logged in GD the simulator's path is off by a few units after some pads
     m_margin = std::clamp(prof.clearance * 0.3f + 2.0f, 2.0f, 16.0f) + 3.0f;
-    m_waveMargin = std::clamp(60.0f - 5.0f * m_plan.baseDifficulty, 20.0f, 60.0f); // Grief's corridors are about 25
+    // about a block and a half to each wall at Insane, Grief's 25 at the top
+    m_waveMargin = std::clamp(76.0f - 6.0f * m_plan.baseDifficulty, 24.0f, 70.0f);
     m_seed = m_rng.next();
     if (m_opt.structureStyle > 0) {
         m_style = std::clamp(m_opt.structureStyle - 1, 0, kStructureStyles - 1);

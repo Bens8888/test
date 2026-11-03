@@ -28,7 +28,7 @@ It has one page:
 |---|---|
 | **Song** | The level's song, or any audio file with **Change**. **Level song** goes back to the level's own. |
 | **Clicks** | Where the clicks come from: *Follow the music*, *My tap-along* (with **Tap along**, below) or *A recording / macro* (with **Load**, below). |
-| **Difficulty** | Auto, or Easy to Extreme Demon. Sets the timing windows, the corridors and how many hazards there are. |
+| **Difficulty** | Auto (Harder to Insane, from the song's energy and tempo), or Easy to Extreme Demon. Sets how often you click, the timing windows, the wave corridors and how often the gamemode changes. |
 | **Speed** | Auto, Slow, Normal or Fast: the speed the portals keep to. |
 | **Structures** | Auto, Rails, Slopes, Compact or Spiky: the style of the structures, learned from real levels. |
 

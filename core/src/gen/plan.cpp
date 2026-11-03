@@ -51,9 +51,10 @@ float resolveDifficulty(const audio::MusicAnalysis& A, const GenOptions& opt) {
     for (auto& s : A.sections) { energy += s.energy * s.duration(); dur += s.duration(); }
     energy = dur > 0 ? energy / dur : 0.5;
     double bpm = A.mainBpm();
-    // layouts people make and share are mostly Insane to demon level
-    double d = 4.6 + 2.0 * (energy - 0.5) + std::clamp((bpm - 130.0) / 40.0, -0.8, 1.0);
-    return float(std::clamp(d, 2.5, 7.0));
+    // Harder to Insane: hard enough to be fun, easy enough to play through (pick a demon rating
+    // to get one)
+    double d = 3.5 + 1.0 * (energy - 0.5) + std::clamp((bpm - 130.0) / 60.0, -0.5, 0.5);
+    return float(std::clamp(d, 2.8, 4.3));
 }
 
 Style resolveStyle(const audio::MusicAnalysis& A, const GenOptions& opt, Rng& rng) {
@@ -173,7 +174,8 @@ std::vector<Part> planParts(const audio::MusicAnalysis& A, const GenOptions& opt
         p.intensity = std::clamp(norm(r.energy), 0.0f, 1.0f);
         int forced = -1;
         int delta = sectionOverrideDelta(opt, int(r.type), &forced);
-        p.difficulty = std::clamp(Dbase + (p.intensity - 0.5f) * 1.6f + float(delta), std::max(0.0f, Dbase - 2.0f), std::min(9.0f, Dbase + 1.2f + std::max(0, delta)));
+        // the loudest parts are a little harder than the rating, never a whole rating above it
+        p.difficulty = std::clamp(Dbase + (p.intensity - 0.5f) * 1.2f + float(delta), std::max(0.0f, Dbase - 1.5f), std::min(9.0f, Dbase + 0.7f + std::max(0, delta)));
         // mode weights
         float w[kModeCount];
         for (int m = 0; m < kModeCount; ++m) {
@@ -315,6 +317,9 @@ std::vector<Click> selectClicks(const audio::MusicAnalysis& A, const Part& part,
     float densityMul = opt.density < 0 ? 1.0f : 0.45f + 1.1f * opt.density;
     static const float modeMul[8] = {1.0f, 0.75f, 0.9f, 1.0f, 1.25f, 0.85f, 0.9f, 0.9f};
     float styleMul = style == Style::Minimal ? 0.7f : style == Style::Tight ? 1.15f : style == Style::Chaotic ? 1.25f : style == Style::Flow ? 0.95f : style == Style::Retro ? 0.85f : 1.0f;
+    if (part.difficulty < 5.0f) styleMul = std::min(styleMul, 1.0f); // busy styles only make demons busier
+    // a wave clicks less often than the others: every click is a turn in a narrow corridor
+    if (part.mode == Mode::Wave && part.difficulty < 6.0f) styleMul *= 0.8f;
     rate *= densityMul * modeMul[int(part.mode)] * styleMul;
     int target = std::max(1, int(std::lround(rate * (t1 - t0))));
     double gap = minGapFor(part.mode, part.speed, part.mini, prof);

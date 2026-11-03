@@ -1,6 +1,14 @@
 # Changelog
 
 ## v0.2.0
+- Difficulty matches real ratings: Auto picks Harder to Insane (it used to land near Easy demon),
+  Insane clicks about twice a second at its busiest (Extreme about five times), with wider timing
+  windows and fewer gamemode changes below demon ratings
+- Wave below demon ratings: no mini, the full timing window, corridors about a block and a half
+  to each wall, turns no faster than about four a second, and the path keeps its walls clear of
+  the floor and ceiling so they are never cut off
+- A layout that fails its final check loses only the hazards the run dies on, after a lighter
+  retry, instead of all its structures
 - One-page menu: song, clicks (music, tap-along or a recording), difficulty, speed and structure
   style, then Generate, Place in level, New layout or Remove. The old tabs (style, gamemodes,
   sections, playtest, training, settings), the ghost, variants, seed and re-roll are gone, and

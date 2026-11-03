@@ -69,5 +69,7 @@ TEST(profile_steers_the_generator) {
                 count(plain, level::id::OrbYellow), count(styled, level::id::OrbYellow));
     CHECK(styled.report.beatable && styled.report.intendedInputs);
     CHECK(count(styled, level::id::OrbRed) > count(plain, level::id::OrbRed));
-    CHECK(count(styled, level::id::OrbYellow) < count(plain, level::id::OrbYellow));
+    // (a Harder level may need no yellow orb at all)
+    CHECK(count(styled, level::id::OrbYellow) <= count(plain, level::id::OrbYellow));
+    CHECK(count(styled, level::id::OrbYellow) * 10 <= count(styled, level::id::OrbRed));
 }
