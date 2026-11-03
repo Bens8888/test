@@ -74,7 +74,7 @@ geode::Result<size_t> EditorBridge::apply(LevelEditorLayer* lel, std::vector<lev
     if (objects.empty()) return Err("Nothing to place");
     AppliedBatch batch;
     batch.label = label;
-    if (Mod::get()->getSettingValue<bool>("backup-before-apply")) batch.backup = backupLevel(lel);
+    batch.backup = backupLevel(lel);
     batch.editorLayer = freeEditorLayer(lel);
     std::string str;
     str.reserve(objects.size() * 40);

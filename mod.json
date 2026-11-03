@@ -38,20 +38,6 @@
 				"win": "Ctrl+Alt+R",
 				"mac": "Cmd+Alt+R"
 			}
-		},
-		"backup-before-apply": {
-			"type": "bool",
-			"name": "Back up before applying",
-			"description": "Saves the current level string to the mod's save folder before AutoLayout changes the level.",
-			"default": true
-		},
-		"analysis-threads": {
-			"type": "int",
-			"name": "Worker threads",
-			"description": "Threads used for generating variants in parallel (0 = automatic).",
-			"default": 0,
-			"min": 0,
-			"max": 16
 		}
 	},
 	"resources": {

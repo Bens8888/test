@@ -158,23 +158,14 @@ void uiStep(EditorUI* editor) {
         t.ui = false;
         return;
     }
-    if (s <= AutoLayoutPopup::kTabCount) {
-        // a tab is drawn the step after it is selected
-        if (s > 1) screenshot(fmt::format("tab-{}", s - 2));
-        if (s < AutoLayoutPopup::kTabCount + 1) popup->testTab(s - 1);
-        say(fmt::format("tab {}", s - 1));
-        return;
-    }
-    if (s == AutoLayoutPopup::kTabCount + 1) {
-        screenshot(fmt::format("tab-{}", AutoLayoutPopup::kTabCount - 1));
-        popup->testTab(0);
+    if (s == 1) {
+        screenshot("menu");
         session.setCustomSong(t.song);
-        session.options().variants = 2;
         popup->testGenerate();
         say(fmt::format("generating from {}", t.song));
         return;
     }
-    if (s == AutoLayoutPopup::kTabCount + 2) {
+    if (s == 2) {
         if (popup->testBusy() && ++t.wait < 240) { t.step = s; return; }
         auto cur = session.current();
         say(fmt::format("generated: {} variants, waited {} steps, beatable {}, objects {}", session.variants().size(), t.wait,
@@ -182,25 +173,25 @@ void uiStep(EditorUI* editor) {
         screenshot("results");
         return;
     }
-    if (s == AutoLayoutPopup::kTabCount + 3) {
+    if (s == 3) {
         t.before = bridge.gameplayObjectCount(editor->m_editorLayer);
         popup->testApply();
         say(fmt::format("apply: {} gameplay objects before", t.before));
         return;
     }
-    if (s == AutoLayoutPopup::kTabCount + 4) {
+    if (s == 4) {
         const int after = bridge.gameplayObjectCount(editor->m_editorLayer);
         say(fmt::format("applied: {} gameplay objects, level string {} bytes", after, bridge.levelString(editor->m_editorLayer).size()));
         screenshot("applied");
         popup->testUndo();
         return;
     }
-    if (s == AutoLayoutPopup::kTabCount + 5) {
+    if (s == 5) {
         say(fmt::format("undone: {} gameplay objects", bridge.gameplayObjectCount(editor->m_editorLayer)));
         if (auto tap = al::mod::TapAlongPopup::create(editor->m_editorLayer, [] {})) tap->show();
         return;
     }
-    if (s == AutoLayoutPopup::kTabCount + 6) {
+    if (s == 6) {
         screenshot("tap-along");
         say("tap along opened");
         t.ui = false;

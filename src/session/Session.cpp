@@ -54,11 +54,21 @@ void Session::saveOptions() {
 
 void Session::loadOptions() {
     auto text = Mod::get()->getSavedValue<std::string>("options", "");
+    // only what the menu shows is kept: anything an older version saved (the classic builder, a
+    // trained model, a learned style, densities...) falls back to the generator's own choices
+    m_opt = gen::GenOptions();
     if (!text.empty()) {
-        if (auto j = Json::parse(text)) m_opt = gen::GenOptions::fromJson(*j);
+        if (auto j = Json::parse(text)) {
+            const auto saved = gen::GenOptions::fromJson(*j);
+            m_opt.input = saved.input;
+            m_opt.difficulty = saved.difficulty;
+            m_opt.speedStyle = saved.speedStyle;
+            m_opt.structureStyle = saved.structureStyle;
+            m_opt.seed = saved.seed;
+        }
     }
-    m_useModel = Mod::get()->getSavedValue<bool>("use-model", true);
-    m_useProfile = Mod::get()->getSavedValue<bool>("use-profile", true);
+    m_useModel = false;
+    m_useProfile = false;
 }
 
 std::filesystem::path Session::presetDir() const {
@@ -205,7 +215,7 @@ std::shared_ptr<Job> Session::startGenerate(GJGameLevel* level) {
         }
     }
     const model::ModelSet* models = useModel() ? &m_models : nullptr;
-    int threads = std::max<int>(0, int(Mod::get()->getSettingValue<int64_t>("analysis-threads")));
+    const int threads = 0; // automatic
     std::string key = cacheKey(sc.path);
     auto cached = cachedAnalysis(sc.path);
     std::thread([job, sc, opt, recording, models, threads, key, cached]() {
