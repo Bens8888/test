@@ -52,8 +52,8 @@ style's spacing, repeat rate and saw rate.
 - Behind those lanes each stretch gets one connected band above and below the path, stepped in a
   rhythm, with the modules joined to it. This is what makes a corridor of solid shapes instead of
   separate shapes in the air. Each structure style has its own band thickness. Spikes, half spikes,
-  thorns leaning off the face and saws line the band's faces, more of them with the difficulty and the
-  music, never in a pile; a rotated hazard keeps its distance by the circle around it.
+  and saws line the band's faces, floors and ceilings, more of them with the difficulty and the
+  music, standing straight and never in a pile.
 - Wave parts are built to the click pattern, modelled on Grief: both walls follow every stroke of the
   zig-zag at one distance, the whole way, with slope pieces placed freely along the strokes (objects
   need no grid, so clicks can fall anywhere). Only the outline is built, nothing behind it. The gap comes from the difficulty, 60 units at Easy down to 20 at the top, and that gap

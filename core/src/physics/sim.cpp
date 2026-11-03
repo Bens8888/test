@@ -243,7 +243,7 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
         for (int i : cand) {
             const auto& o = objs[size_t(i)];
             if (o.kind != Kind::Solid && o.kind != Kind::Breakable) continue;
-            if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
+            if (o.maxX() < p.x - 2.5f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.maxY() <= feet + 1.0f && o.maxY() > target) target = o.maxY();
         }
         // a hazard on the way stops the teleport for good (seen on runs logged in GD)
@@ -260,7 +260,7 @@ static void spiderTeleport(const World& W, GameState& gs, PlayerState& p) {
         for (int i : cand) {
             const auto& o = objs[size_t(i)];
             if (o.kind != Kind::Solid && o.kind != Kind::Breakable) continue;
-            if (o.maxX() < p.x - 4.05f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
+            if (o.maxX() < p.x - 2.5f || o.minX() > p.x + 4.05f) continue; // only what is right over the player stops it
             if (o.minY() >= head - 1.0f && o.minY() < target) target = o.minY();
         }
         for (int i : cand) {
@@ -448,8 +448,9 @@ static void switchMode(const World& W, GameState& gs, PlayerState& p, Mode m, fl
         // touching a bound, a flying mode leaves with no speed (seen on runs logged in GD)
         if (modeIsFlying(old) && p.bounded) {
             const float h = old == Mode::Wave ? p.height() : p.height() * 0.5f;
-            if (p.y <= p.floorY + h + 0.01f) { p.y = p.floorY + h; p.v = 0; }
-            else if (p.y >= p.ceilY - h - 0.01f) { p.y = p.ceilY - h; p.v = 0; }
+            // (arriving there on this very step does not count)
+            if (p.y <= p.floorY + h + 0.01f && p.lastY <= p.floorY + h + 0.01f) { p.y = p.floorY + h; p.v = 0; }
+            else if (p.y >= p.ceilY - h - 0.01f && p.lastY >= p.ceilY - h - 0.01f) { p.y = p.ceilY - h; p.v = 0; }
         }
         if (cfgSim && old == Mode::Wave) {
             double div = (m == Mode::Cube || m == Mode::Ship) ? 4.0 : (m == Mode::Ufo ? 2.0 : 1.0);

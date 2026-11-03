@@ -731,11 +731,15 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     // height: stay on the screen, use the vertical space
     float hi = 0, lo = 1e9f;
     int ground = 0, boundContact = 0;
+    bool skimsFloor = false;
     for (auto& q : c.trace) {
         hi = std::max(hi, q.y);
         lo = std::min(lo, q.y);
         if (q.onGround && groundMode(q.mode)) ++ground; // running on the floor or a platform
+        // upside down the floor kills: a path just over it dies on the smallest timing error
+        if (groundMode(q.mode) && q.g < 0 && q.y - q.half < 24.0f) skimsFloor = true;
     }
+    if (skimsFloor) s -= 8.0;
     const auto& e = c.end.p[0];
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {

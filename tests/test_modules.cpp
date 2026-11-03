@@ -183,8 +183,8 @@ TEST(structures_are_a_mass_with_lined_faces) {
     CHECK_MSG(double(hazards) / screens > 15, "%.0f hazards per screen", double(hazards) / screens);
 }
 
-// Run 83 in the real game: turned spikes in piles on top of each other and of saws.
-TEST(face_hazards_do_not_pile_up) {
+// Spikes stand straight on their block or wall, at quarter turns only.
+TEST(spikes_stand_straight) {
     const auto& A = demoAnalysis();
     for (int style = 1; style <= kStructureStyles; ++style) {
         GenOptions opt;
@@ -194,13 +194,9 @@ TEST(face_hazards_do_not_pile_up) {
         opt.structureStyle = style;
         opt.variants = 1;
         auto res = generateVariant(A, opt, opt.seed, nullptr);
-        std::vector<const level::LevelObject*> turned;
         for (const auto& o : res.level.objects)
-            if (o.info().kind == level::Kind::Hazard && std::fmod(std::abs(o.rotation), 90.0) != 0) turned.push_back(&o);
-        std::sort(turned.begin(), turned.end(), [](auto* a, auto* b) { return a->x < b->x; });
-        for (size_t i = 0; i < turned.size(); ++i)
-            for (size_t j = i + 1; j < turned.size() && turned[j]->x - turned[i]->x < 20; ++j)
-                CHECK_MSG(std::abs(turned[j]->y - turned[i]->y) >= 20, "style %d: thorns at (%.0f, %.0f) and (%.0f, %.0f)", style, turned[i]->x, turned[i]->y, turned[j]->x, turned[j]->y);
+            if (o.info().kind == level::Kind::Hazard)
+                CHECK_MSG(std::fmod(std::abs(o.rotation), 90.0) == 0, "style %d: hazard %d turned %.0f at (%.0f, %.0f)", style, o.id, o.rotation, o.x, o.y);
     }
 }
 

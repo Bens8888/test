@@ -10,6 +10,8 @@
   structures read as a corridor (about twice the objects per screen)
 - Fixed: hard mini wave parts lost almost all their walls
 - Fixed: wave walls had holes around portals, and spikes piled up on each other and on saws
+- Spikes all stand straight; floors, ceilings and the sides of steps are lined with them too
+- Fixed: paths skimming the floor upside down, where the smallest timing error killed
 - Fixed: a portal right after another portal could sit at the edge of the path and be missed
 - Gamemode stretches last a few seconds instead of 1-3 clicks
 - New menu rows: Structures, Speed (slow / normal / fast); outline look by default

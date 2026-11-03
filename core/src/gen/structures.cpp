@@ -160,7 +160,9 @@ private:
     void placeModules(int firstLane, int lastLane);
     void bands();
     bool bandCell(int cx, int cy);
-    void lineFace(float x, float faceY, int toward, int kind, Rng& r);
+    void lineFace(float x, float faceY, int toward, int kind);
+    void lineWall(float wallX, float y, int side);
+    bool hazardFits(const LevelObject& o, float rad);
     void faceSaw(float x, float y);
     bool placeModule(const Module& m, bool mirrorX, bool under, int cx, int row, int floorRow, int ceilRow);
     bool objectFits(const LevelObject& o, Box* out) const;
@@ -563,22 +565,31 @@ bool Structurer::bandCell(int cx, int cy) {
 }
 
 // A hazard on a face of the mass, pointing `toward` the open side (+1 up, -1 down). The check uses
-// the circle around the object, so a rotated thorn keeps its distance too.
-void Structurer::lineFace(float x, float faceY, int toward, int kind, Rng& r) {
+// the circle around the object.
+void Structurer::lineFace(float x, float faceY, int toward, int kind) {
     LevelObject o;
     if (kind == 0) o = make(oid::Spike, x, faceY + float(toward) * 15.f, toward > 0 ? 0 : 180);
-    else if (kind == 1) o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
-    else o = make(r.chance(0.5) ? oid::Spike : oid::HalfSpike, x, faceY + float(toward) * 10.f, (toward > 0 ? 0 : 180) + double(int(r.below(7)) - 3) * 15.0); // a thorn: leaning off the face
+    else o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
+    if (hazardFits(o, kind == 1 ? 5.f : 7.f)) addHazard(o);
+}
+
+bool Structurer::hazardFits(const LevelObject& o, float room) {
     phys::SimObject so;
-    if (!phys::World::makeSimObject(o, 0, so)) return;
+    if (!phys::World::makeSimObject(o, 0, so)) return false;
     const float rad = std::sqrt(so.hw * so.hw + so.hh * so.hh);
     const Box b{so.x - rad, so.y - rad, so.x + rad, so.y + rad};
-    for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return;
-    if (m_env.hits(b, m_margin + 2)) return;
-    if (!hazardRoom(so.x, so.y, kind == 1 ? 5.f : (kind == 2 ? 12.f : 9.f))) return;
+    for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+    if (m_env.hits(b, m_margin + 5)) return false;
+    if (!hazardRoom(so.x, so.y, room)) return false;
     for (auto& po : m_path.objects)
-        if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return;
-    addHazard(o);
+        if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return false;
+    return true;
+}
+
+// A spike on the side of a step, pointing away from the wall.
+void Structurer::lineWall(float wallX, float y, int side) {
+    LevelObject o = make(oid::Spike, wallX + float(side) * 15.f, y, side > 0 ? 90 : 270);
+    if (hazardFits(o, 9.f)) addHazard(o);
 }
 
 // A saw biting out of a face.
@@ -603,7 +614,7 @@ void Structurer::bands() {
     const int n = int(m_nominal.size());
     const float D = m_plan.baseDifficulty;
     static const int kThick[kStructureStyles][2] = {{1, 2}, {2, 3}, {3, 5}, {1, 3}};
-    const double hazardRate = std::clamp(0.25 + 0.09 * double(D), 0.25, 1.0);
+    const double hazardRate = std::clamp(0.45 + 0.13 * double(D), 0.45, 1.0);
     for (int i = 0; i < n;) {
         const Sample& q = m_nominal[size_t(i)];
         int j = i;
@@ -614,7 +625,7 @@ void Structurer::bands() {
         if (q.mode == Mode::Wave || c1 - c0 < 3) continue;
         Rng r = at(c0, 0xBA4D);
         const float heat = intensityAt(double(first + 1) / phys::kTPS);
-        if (heat < 0.3f && r.chance(0.5)) continue; // a quiet stretch stays open
+        if (heat < 0.3f && r.chance(0.2)) continue; // some quiet stretches stay open
         const int widths[3] = {2 + int(r.below(3)), 3 + int(r.below(4)), 2 + int(r.below(2))};
         const int depths[3] = {0, 1 + int(r.below(2)), int(r.below(2))};
         const int cols = c1 - c0 + 1;
@@ -655,9 +666,10 @@ void Structurer::bands() {
                     if (nb >= 0 && nb < cols && start[size_t(nb)] != INT_MIN && std::abs(start[size_t(nb)] - start[size_t(c)]) <= 8)
                         stop2[size_t(c)] = further(stop2[size_t(c)], start[size_t(nb)]);
             }
+            int lastFace = INT_MIN;
             for (int c = 0; c < cols; ++c) {
                 int a = start[size_t(c)], b = stop2[size_t(c)];
-                if (a == INT_MIN) continue;
+                if (a == INT_MIN) { lastFace = INT_MIN; continue; }
                 const float xc = (float(c0 + c) + 0.5f) * kCell;
                 auto it = std::lower_bound(m_nominal.begin() + first, m_nominal.begin() + j, xc, [](const Sample& s, float v) { return s.x < v; });
                 if (it == m_nominal.begin() + j) --it;
@@ -678,18 +690,31 @@ void Structurer::bands() {
                     if (bandCell(c0 + c, row)) ++m_res.corridorCells;
                     if (face == INT_MIN && m_res.cells.filled(c0 + c, row)) face = row;
                 }
-                if (face == INT_MIN || joined) continue; // the modules bring their own spikes
+                // no room for the mass: the floor or the ceiling itself is the face
+                if (face == INT_MIN && !joined && (dir > 0 ? a > ceilRow : a < floorRow)) face = dir > 0 ? ceilRow + 1 : floorRow - 1;
+                if (face == INT_MIN || joined) { lastFace = INT_MIN; continue; } // the modules bring their own spikes
+                // the side of a step: the one further in faces back along the band
+                if (lastFace != INT_MIN && lastFace != face) {
+                    const bool thisIn = dir > 0 ? face < lastFace : face > lastFace;
+                    const int low = std::min(face, lastFace), high = std::max(face, lastFace);
+                    Rng w = at(c0 + c, 0xFACE3 + dir);
+                    for (int row = low; row < high && row < low + 3; ++row)
+                        if (w.chance(hazardRate)) lineWall(float(c0 + c) * kCell, (float(row + (dir > 0 ? 0 : 1)) + 0.5f) * kCell, thisIn ? -1 : 1);
+                }
+                lastFace = face;
                 const float faceY = float(dir > 0 ? face : face + 1) * kCell;
                 Rng h = at(c0 + c, dir > 0 ? 0xFACE1 : 0xFACE2);
-                if (h.chance(0.05 + 0.25 * double(structureStyle(m_style).saws) + (heat > 0.65f ? 0.04 : 0.0)))
+                if (h.chance(std::clamp(double(D) * 0.04, 0.03, 0.2) + 0.5 * double(structureStyle(m_style).saws) + (heat > 0.65f ? 0.08 : 0.0)))
                     faceSaw(xc, faceY - float(dir) * 8.f);
                 if (m_style == 3 || (heat > 0.65f && D >= 4)) {
-                    if (h.chance(hazardRate)) lineFace(xc, faceY, -dir, 2, h);
+                    if (h.chance(hazardRate)) lineFace(xc, faceY, -dir, 0);
                 } else if (seg[size_t(c)] % 3 == 0 && h.chance(hazardRate)) {
-                    lineFace(xc, faceY, -dir, 0, h);
+                    lineFace(xc, faceY, -dir, 0);
                 } else if (seg[size_t(c)] % 3 == 1 && h.chance(hazardRate)) {
-                    lineFace(xc - 7.5f, faceY, -dir, 1, h);
-                    lineFace(xc + 7.5f, faceY, -dir, 1, h);
+                    lineFace(xc - 7.5f, faceY, -dir, 1);
+                    lineFace(xc + 7.5f, faceY, -dir, 1);
+                } else if (seg[size_t(c)] % 3 == 2 && h.chance(hazardRate)) {
+                    lineFace(xc, faceY, -dir, 0);
                 }
             }
         }

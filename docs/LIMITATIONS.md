@@ -7,9 +7,9 @@ Stated plainly, with what each one means in practice.
   and loads on Geode 5.11.2. The self test presses the editor button, opens every tab, generates,
   applies, undoes, opens Tap Along, and checks the recorder (every click caught at the right tick).
   It cannot judge how levels feel to play. macOS builds on CI but has not been run.
-- **Structures are lighter than top levels.** 96-109 hitbox objects and 20-29 hazards per screen,
-  next to Bidal Wave (80 and 20) and xo (84 and 32). Bloodbath has 150, Tidal Wave 194 and Grief 284,
-  with 53-118 hazards, and saws are about 1 per screen against Tidal Wave's 31
+- **Structures are lighter than top levels.** 110-120 hitbox objects and 33-37 hazards per screen,
+  above Bidal Wave (80 and 20) and xo (84 and 32). Bloodbath has 150, Tidal Wave 194 and Grief 284,
+  with 53-118 hazards. Saws are 1-3 per screen, near Bloodbath's 3 but far from Tidal Wave's 31
   (`training/corpus/compare.py`).
 - **Simulator vs the real game.** Checked against the real game with the in-game self test (a
   `selftest.txt` in the mod's save folder plays a generated level with its designed clicks and logs
@@ -20,10 +20,11 @@ Stated plainly, with what each one means in practice.
   touching the ground, the landing of a step counting before a mode portal, a swing's press on a floor,
   where flying modes start. Generated levels keep 3 units of extra distance from hazards to absorb what is
   left, mostly one-tick pad timing.
-  - On the last round, 8 of 8 new levels reached 100% with their designed clicks in GD 2.2081, and the
-    round before 6 of 8 (both deaths fixed since). Seven of the last 8 traces stay within 2 units of
-    the simulator to the end of the level; the other drifted 2 units on a ship stretch and the run
-    still finished. These are bot runs that press on the exact tick. "Beatable" means beaten in the
+  - The current build, with straight spikes, has only one finished run in GD 2.2081: its first level
+    reached 100%, and the round was stopped for low memory before the other 7 and the menu check.
+    The full rounds before it, each on an older build, reached 100% on 8 of 8, 7 of 8 and 7 of 8
+    levels; each death was traced to a simulator rule that is fixed since. These are bot runs that
+    press on the exact tick. "Beatable" means beaten in the
     simulator, so play a level before trusting it.
   - Still not exact: riding along slopes, rotated portals (the generator avoids both), some spider
     teleports, and a wave leaving into a swing while it rides a bound (one step of gravity, about 2
