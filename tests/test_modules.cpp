@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 using namespace al;
@@ -146,6 +147,47 @@ TEST(wave_parts_are_line_slopes) {
     CHECK_MSG(count(res.level, 1338) > 100, "%d line slopes", count(res.level, 1338));
 }
 
+// Wave parts are a sealed corridor: over and under the wave there is always a wall or the bound,
+// and the wave rides on the floor or ceiling only now and then.
+TEST(wave_corridors_are_sealed) {
+    const auto& A = demoAnalysis();
+    int ticks = 0, open = 0, sliding = 0;
+    for (uint64_t seed : {7, 8, 9, 10}) {
+        GenOptions opt;
+        opt.engine = 2;
+        opt.seed = seed;
+        opt.difficulty = Difficulty(3 + int(seed % 5));
+        opt.variants = 1;
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        std::vector<const level::LevelObject*> walls;
+        for (const auto& o : res.level.objects)
+            if (o.id == 1338 || o.id == 1339 || o.id == level::id::OutlineTop) walls.push_back(&o);
+        std::sort(walls.begin(), walls.end(), [](auto a, auto b) { return a->x < b->x; });
+        phys::World W(res.level);
+        auto s = phys::initialState(W);
+        size_t next = 0;
+        bool held = false;
+        while (!s.dead && !s.won) {
+            while (next < res.inputs.events.size() && res.inputs.events[next].tick <= s.tick + 1) held = res.inputs.events[next++].press;
+            phys::step(W, s, held);
+            const auto& p = s.p[0];
+            if (p.mode != Mode::Wave || s.tick % 4) continue;
+            ++ticks;
+            sliding += p.onGround;
+            bool over = p.bounded && p.ceilY - p.y < 90, under = p.bounded && p.y - p.floorY < 90;
+            auto it = std::lower_bound(walls.begin(), walls.end(), p.x - 16.0, [](auto a, double v) { return a->x < v; });
+            for (; it != walls.end() && (*it)->x <= p.x + 16; ++it) {
+                const double dy = (*it)->y - p.y;
+                if (dy > 0 && dy < 150) over = true;
+                if (dy < 0 && dy > -150) under = true;
+            }
+            open += !(over && under);
+        }
+    }
+    std::printf("    %d wave ticks: %.1f%% without a wall on a side, %.1f%% sliding\n", ticks, 100.0 * open / std::max(1, ticks), 100.0 * sliding / std::max(1, ticks));
+    CHECK(ticks > 0);
+}
+
 TEST(mini_wave_parts_keep_their_walls) {
     const auto& A = demoAnalysis();
     GenOptions opt;
@@ -200,6 +242,102 @@ TEST(spikes_stand_straight) {
                 // thorn and wavy spikes are drawn bent
                 CHECK_MSG(o.id != 177 && o.id != 216 && o.id != 217 && o.id != 218, "style %d: bent spike %d at (%.0f, %.0f)", style, o.id, o.x, o.y);
             }
+    }
+}
+
+namespace {
+
+// What is drawn, roughly: a spike fills its 30 unit cell, a half spike the lower half of it, a saw
+// a little more than its hitbox.
+struct Drawn {
+    float x0, y0, x1, y1;
+    bool round;
+    int id = 0;
+};
+bool drawnHazard(const level::LevelObject& o, Drawn& d) {
+    phys::SimObject so;
+    if (!phys::World::makeSimObject(o, 0, so)) return false;
+    if (so.kind == level::Kind::Saw) {
+        const float r = so.hw * 1.1f;
+        d = {so.x - r, so.y - r, so.x + r, so.y + r, true, o.id};
+        return true;
+    }
+    if (so.kind != level::Kind::Hazard) return false;
+    float w = 30, h = 30;
+    if (o.id == 39 || o.id == 217) h = 14;
+    else if (o.id == 103 || o.id == 218) w = h = 18;
+    else if (o.id == 392) { w = 12; h = 10; }
+    else if (o.id == 458 || o.id == 459) h = 10;
+    const bool side = std::fmod(std::abs(o.rotation), 180.0) == 90;
+    if (side) std::swap(w, h);
+    d = {float(o.x) - w / 2, float(o.y) - h / 2, float(o.x) + w / 2, float(o.y) + h / 2, false, o.id};
+    return true;
+}
+float common(const Drawn& a, const Drawn& b) {
+    const float w = std::min(a.x1, b.x1) - std::max(a.x0, b.x0), h = std::min(a.y1, b.y1) - std::max(a.y0, b.y0);
+    return w > 0 && h > 0 ? w * h : 0;
+}
+float area(const Drawn& a) { return (a.x1 - a.x0) * (a.y1 - a.y0); }
+
+struct Overlaps {
+    int hazards = 0, piles = 0, buried = 0;
+};
+// Hazards on top of each other, and hazards drawn into a solid.
+Overlaps overlapsOf(const level::Level& L) {
+    Overlaps r;
+    std::vector<Drawn> hz, solid;
+    for (const auto& o : L.objects) {
+        Drawn d{};
+        if (drawnHazard(o, d)) { hz.push_back(d); continue; }
+        phys::SimObject so;
+        if (!phys::World::makeSimObject(o, 0, so) || so.kind != level::Kind::Solid) continue;
+        solid.push_back({so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh, false, o.id});
+    }
+    r.hazards = int(hz.size());
+    std::sort(hz.begin(), hz.end(), [](const Drawn& a, const Drawn& b) { return a.x0 < b.x0; });
+    std::sort(solid.begin(), solid.end(), [](const Drawn& a, const Drawn& b) { return a.x0 < b.x0; });
+    size_t s0 = 0;
+    for (size_t i = 0; i < hz.size(); ++i) {
+        for (size_t k = i + 1; k < hz.size() && hz[k].x0 < hz[i].x1; ++k)
+            if (common(hz[i], hz[k]) > 0.2f * std::min(area(hz[i]), area(hz[k]))) {
+                if (std::getenv("AL_OVERLAPS") && r.piles < 12)
+                    std::printf("      pile %d (%.0f %.0f %.0f %.0f) %d (%.0f %.0f %.0f %.0f)\n", hz[i].id, hz[i].x0, hz[i].y0, hz[i].x1, hz[i].y1, hz[k].id, hz[k].x0, hz[k].y0, hz[k].x1, hz[k].y1);
+                ++r.piles;
+                break;
+            }
+        // a hazard stands on a face: only a sliver of it may be in the solid
+        while (s0 < solid.size() && solid[s0].x0 < hz[i].x0 - 120) ++s0;
+        Drawn in = hz[i];
+        const float m = hz[i].round ? (hz[i].x1 - hz[i].x0) * 0.25f : 3.f;
+        in.x0 += m; in.y0 += m; in.x1 -= m; in.y1 -= m;
+        for (size_t k = s0; k < solid.size() && solid[k].x0 < in.x1; ++k)
+            if (common(in, solid[k]) > 1) {
+                if (std::getenv("AL_OVERLAPS") && r.buried < 12)
+                    std::printf("      sunk %d (%.0f %.0f %.0f %.0f) in %d (%.0f %.0f %.0f %.0f)\n", hz[i].id, hz[i].x0, hz[i].y0, hz[i].x1, hz[i].y1, solid[k].id, solid[k].x0, solid[k].y0, solid[k].x1, solid[k].y1);
+                ++r.buried;
+                break;
+            }
+    }
+    return r;
+}
+
+} // namespace
+
+// Hazards stand side by side on the faces, not in piles or sunk into the blocks.
+TEST(hazards_do_not_overlap) {
+    const auto& A = demoAnalysis();
+    for (int style = 1; style <= kStructureStyles; ++style) {
+        GenOptions opt;
+        opt.engine = 2;
+        opt.seed = uint64_t(90 + style);
+        opt.difficulty = Difficulty::Insane;
+        opt.structureStyle = style;
+        opt.variants = 1;
+        auto res = generateVariant(A, opt, opt.seed, nullptr);
+        const Overlaps o = overlapsOf(res.level);
+        std::printf("    style %d: %d hazards, %d in a pile, %d sunk into a block\n", style, o.hazards, o.piles, o.buried);
+        CHECK_MSG(o.piles * 100 <= o.hazards * 2, "style %d: %d of %d hazards in a pile", style, o.piles, o.hazards);
+        CHECK_MSG(o.buried * 100 <= o.hazards * 2, "style %d: %d of %d hazards sunk into a block", style, o.buried, o.hazards);
     }
 }
 

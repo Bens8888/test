@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string>
 
 using namespace al;
@@ -273,6 +274,62 @@ int main(int argc, char** argv) {
         if (argc >= 6) ro.x1 = float(std::atof(argv[5]));
         writeFile(argv[3], report::renderPng(L, nullptr, ro));
         std::printf("wrote %s\n", argv[3]);
+        return 0;
+    }
+    if (cmd == "wavecheck" && argc >= 4) {
+        // wave parts of a level played with its inputs (tick down|up per line): how much of the way
+        // a side has no wall, and how much the wave slides on a floor or ceiling
+        std::string text, err, inText;
+        if (!readFile(argv[2], text) || !readFile(argv[3], inText)) { std::fprintf(stderr, "cannot read the files\n"); return 1; }
+        auto lvl = level::Level::fromGmd(text, &err);
+        if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[2], err.c_str()); return 1; }
+        std::vector<std::pair<int, bool>> ev;
+        std::istringstream is(inText);
+        for (std::string w; is >> w;) {
+            std::string a;
+            is >> a;
+            ev.push_back({std::stoi(w), a == "down" || a == "1"});
+        }
+        std::vector<const level::LevelObject*> walls;
+        for (const auto& o : lvl->objects)
+            if (o.id == 1338 || o.id == 1339 || o.id == level::id::OutlineTop) walls.push_back(&o);
+        std::sort(walls.begin(), walls.end(), [](auto a, auto b) { return a->x < b->x; });
+        phys::World W(*lvl);
+        auto s = phys::initialState(W);
+        size_t next = 0;
+        bool held = false;
+        int ticks = 0, open = 0, sliding = 0, slideFloor = 0;
+        float lastOpenX = -1e9f, lastSlideX = -1e9f;
+        int modeTicks[8] = {};
+        while (!s.dead && !s.won && s.tick < 240 * 600) {
+            while (next < ev.size() && ev[next].first <= s.tick + 1) held = ev[next++].second;
+            phys::step(W, s, held);
+            const auto& p = s.p[0];
+            ++modeTicks[int(p.mode)];
+            if (p.mode != level::Mode::Wave) continue;
+            ++ticks;
+            if (p.onGround && p.x - lastSlideX > 200) std::printf("  slides at x %.0f y %.0f\n", p.x, p.y);
+            if (p.onGround) lastSlideX = p.x;
+            sliding += p.onGround;
+            slideFloor += p.onGround && !p.upsideDown;
+            bool over = p.bounded && p.ceilY - p.y < 90, under = p.bounded && p.y - p.floorY < 90;
+            auto it = std::lower_bound(walls.begin(), walls.end(), p.x - 16.0, [](auto a, double v) { return a->x < v; });
+            for (; it != walls.end() && (*it)->x <= p.x + 16; ++it) {
+                const double dy = (*it)->y - p.y;
+                if (dy > 0 && dy < 150) over = true;
+                if (dy < 0 && dy > -150) under = true;
+            }
+            if (!(over && under)) {
+                ++open;
+                if (p.x - lastOpenX > 300) std::printf("  open at x %.0f y %.0f (%s)\n", p.x, p.y, over ? "no wall under" : "no wall over");
+                lastOpenX = p.x;
+            }
+        }
+        std::printf("%s: %d wave ticks, %.1f%% open on a side, %.1f%% sliding (%.1f%% on a floor)%s\n", argv[2], ticks, 100.0 * open / std::max(1, ticks),
+                    100.0 * sliding / std::max(1, ticks), 100.0 * slideFloor / std::max(1, ticks), s.dead ? ", DIES" : "");
+        std::printf("  time per mode:");
+        for (int m = 0; m < 8; ++m) std::printf(" %s %.0f%%", level::modeName(level::Mode(m)), 100.0 * modeTicks[m] / std::max(1, s.tick));
+        std::printf("\n");
         return 0;
     }
     if (cmd == "path" && argc >= 3) {

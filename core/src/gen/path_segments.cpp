@@ -39,6 +39,10 @@ float rhythmFit(Mode m, double med, double shortest, float holds) {
     }
 }
 
+// How much of a real layout each gamemode gets: cube and ship carry most of it, spider and swing
+// are seasoning (cube, ship, ball, ufo, wave, robot, spider, swing).
+constexpr float kModeShare[kModeCount] = {2.4f, 1.8f, 0.8f, 0.9f, 1.3f, 0.8f, 0.5f, 0.6f};
+
 float styleSwitchRate(Style s) {
     switch (s) {
         case Style::Minimal: return 0.25f;
@@ -117,6 +121,9 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         std::sort(sorted.begin(), sorted.end());
         const double med = sorted.empty() ? 0.5 : sorted[sorted.size() / 2];
         const double shortest = sorted.empty() ? 0.5 : sorted.front();
+        // the longest wait for a click, the lead-in before the first one included
+        double longest = sorted.empty() ? 0.0 : sorted.back();
+        if (a < n) longest = std::max(longest, C[size_t(a)].time - (a > 0 ? C[size_t(a - 1)].time : 0.0));
         const float holdFrac = float(holds) / float(std::max(1, b - a + 1));
         float w[kModeCount];
         float total = 0;
@@ -127,7 +134,9 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
             if (Mode(m) == prev) x *= 0.12f;
             if (Mode(m) == prev2) x *= 0.6f;
             if (D < 2 && (Mode(m) == Mode::Wave || Mode(m) == Mode::Swing || Mode(m) == Mode::Spider)) x *= 0.3f;
-            w[m] = x * x;
+            // a wave with nothing to click slides along the floor, a swing falls onto it
+            if (longest > 0.75 && (Mode(m) == Mode::Wave || Mode(m) == Mode::Swing)) x *= Mode(m) == Mode::Wave ? 0.1f : 0.4f;
+            w[m] = x * x * kModeShare[m];
             total += w[m];
         }
         if (total <= 0) { for (int m = 0; m < kModeCount; ++m) w[m] = opt.modeWeights[size_t(m)] != 0 ? 1.0f : 0.0f; total = 1; }

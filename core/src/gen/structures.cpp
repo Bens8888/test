@@ -93,6 +93,32 @@ LevelObject make(int id, double x, double y, double rot = 0) {
 
 bool isFlyingMode(Mode m) { return m == Mode::Ship || m == Mode::Ufo || m == Mode::Wave || m == Mode::Swing; }
 
+// What a hazard looks like, not its hitbox: a spike fills its cell, a half spike the lower half of
+// it, a saw a little more than its hitbox. Two of these may touch but not overlap.
+bool drawnBox(const LevelObject& o, Box& out) {
+    phys::SimObject so;
+    if (!phys::World::makeSimObject(o, 0, so)) return false;
+    if (so.kind == level::Kind::Saw) {
+        const float r = so.hw * 1.1f;
+        out = {so.x - r, so.y - r, so.x + r, so.y + r};
+        return true;
+    }
+    if (so.kind != level::Kind::Hazard) return false;
+    float w = 2 * so.hw + 6, h = 2 * so.hh + 6;
+    switch (o.id) {
+        case 8: case 144: case 177: case 216: w = h = 30; break;
+        case 39: case 205: case 217: w = 30; h = 14; break;
+        case 103: case 145: case 218: w = h = 18; break;
+        case 392: w = 12; h = 10; break;
+        case 458: case 459: w = 30; h = 10; break; // a row of tiny spikes
+        default: break;
+    }
+    if (std::fmod(std::fabs(o.rotation), 180.0) == 90) std::swap(w, h);
+    out = {float(o.x) - w / 2, float(o.y) - h / 2, float(o.x) + w / 2, float(o.y) + h / 2};
+    return true;
+}
+Box shrunk(const Box& b, float m) { return {b.x0 + m, b.y0 + m, b.x1 - m, b.y1 - m}; }
+
 class Structurer {
 public:
     Structurer(const PathPlan& path, const DesignPlan& plan, const GenOptions& opt, Rng& rng, const StructureParams& prm)
@@ -116,8 +142,7 @@ private:
     std::vector<phys::GameState> m_pre; // state before each used click (index = PathClick index)
     std::vector<LevelObject> m_hazards;
     std::set<std::pair<int, int>> m_hazardCells;
-    struct HazardSpot { float x, y, rad; };
-    std::map<int, std::vector<HazardSpot>> m_hazardSpots; // by 60 unit column
+    Envelope m_drawn;                 // every hazard as it is drawn
     float m_margin = 4;               // extra distance kept from the reserved space
     float m_waveMargin = 30;          // from the wave's path to its walls
     int m_halfWin = 12;               // ticks each press may move either way
@@ -154,7 +179,7 @@ private:
     void addCell(int cx, int cy, CellKind k = CellKind::Solid);
     void addHazard(const LevelObject& o);
     void noteHazard(const LevelObject& o);
-    bool hazardRoom(float x, float y, float rad) const;
+    bool hazardRoom(const LevelObject& o) const;
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void placeModules(int firstLane, int lastLane);
@@ -162,7 +187,7 @@ private:
     bool bandCell(int cx, int cy);
     void lineFace(float x, float faceY, int toward, int kind);
     void lineWall(float wallX, float y, int side);
-    bool hazardFits(const LevelObject& o, float rad);
+    bool hazardFits(const LevelObject& o);
     void faceSaw(float x, float y);
     bool placeModule(const Module& m, bool mirrorX, bool under, int cx, int row, int floorRow, int ceilRow);
     bool objectFits(const LevelObject& o, Box* out) const;
@@ -301,7 +326,7 @@ bool Structurer::hazardFree(const LevelObject& o) const {
     if (so.kind == level::Kind::Saw) hh = hw;
     Box b{so.x - hw, so.y - hh, so.x + hw, so.y + hh};
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
-    if (m_env.hits(b, m_margin + 1) || m_built.hits(b, 2)) return false;
+    if (m_env.hits(b, m_margin + 1) || m_built.hits(b, 2) || !hazardRoom(o)) return false;
     // a saw may cut into a wall, but its centre stays in the open (not buried in the blocks)
     if (so.kind == level::Kind::Saw && m_res.cells.filled(int(std::floor(so.x / kCell)), int(std::floor(so.y / kCell)))) return false;
     // keep the path's orbs, pads and portals readable
@@ -333,22 +358,23 @@ void Structurer::addHazard(const LevelObject& o) {
 }
 
 void Structurer::noteHazard(const LevelObject& o) {
-    const auto& info = o.info();
-    const float rad = info.kind == level::Kind::Saw ? info.w * 0.5f : (o.id == oid::HalfSpike ? 5.f : 9.f);
-    m_hazardSpots[int(std::floor(o.x / 60.f))].push_back({float(o.x), float(o.y), rad});
+    Box d{};
+    if (drawnBox(o, d)) m_drawn.addBox(d);
 }
 
-// Hazards stand side by side, never in a pile.
-bool Structurer::hazardRoom(float x, float y, float rad) const {
-    const int c = int(std::floor(x / 60.f));
-    for (int k = c - 2; k <= c + 2; ++k) {
-        auto it = m_hazardSpots.find(k);
-        if (it == m_hazardSpots.end()) continue;
-        for (auto& h : it->second) {
-            const float d = rad + h.rad, dx = h.x - x, dy = h.y - y;
-            if (dx * dx + dy * dy < d * d) return false;
-        }
-    }
+// Hazards stand side by side, never in a pile, and on a face, not sunk into the blocks (a saw may
+// bite into a wall up to half its radius).
+bool Structurer::hazardRoom(const LevelObject& o) const {
+    Box d{};
+    if (!drawnBox(o, d)) return true;
+    if (m_drawn.hits(d, -1.5f)) return false;
+    const bool saw = o.info().kind == level::Kind::Saw;
+    const Box in = shrunk(d, saw ? (d.x1 - d.x0) * 0.25f : 3.f);
+    if (in.x1 <= in.x0 || in.y1 <= in.y0) return true;
+    if (m_built.hits(in, 0)) return false;
+    for (int cx = int(std::floor(in.x0 / kCell)); cx <= int(std::floor(in.x1 / kCell)); ++cx)
+        for (int cy = int(std::floor(in.y0 / kCell)); cy <= int(std::floor(in.y1 / kCell)); ++cy)
+            if (m_platforms.filled(cx, cy) || m_res.cells.filled(cx, cy)) return false;
     return true;
 }
 
@@ -418,6 +444,7 @@ bool Structurer::objectFits(const LevelObject& o, Box* out) const {
     const bool hazard = so.kind == level::Kind::Hazard || so.kind == level::Kind::Saw || so.kind == level::Kind::HazardSlope;
     if (m_env.hits(b, m_margin + (hazard ? 2.0f : 0.0f))) return false;
     if (m_built.hits(b, kModuleGap)) return false;
+    if (hazard ? !hazardRoom(o) : m_drawn.hits(b, -2.f)) return false;
     for (auto& po : m_path.objects)
         if (std::fabs(po.o.x - so.x) < 40 + hw && std::fabs(po.o.y - so.y) < 40 + hh) return false;
     return true;
@@ -454,6 +481,16 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         LevelObject o = make(id, double(cx) * kCell + x, double(row) * kCell + y, rot);
         o.flipX = fx;
         o.flipY = fy;
+        // some source levels pile hazards (a small spike on a spike): the first one stays
+        Box d{};
+        if (drawnBox(o, d)) {
+            bool piled = false;
+            for (auto& e : objs) {
+                Box d2{};
+                if (drawnBox(e, d2) && overlap(d, d2, -1.5f)) piled = true;
+            }
+            if (piled) continue;
+        }
         Box b{};
         if (!objectFits(o, &b)) return false;
         const float lowest = float(floorRow) * kCell, highest = float(ceilRow + 1) * kCell;
@@ -464,6 +501,38 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         objs.push_back(o);
     }
     if (objs.empty()) return false;
+    // A pillar's far end was cut off from the source level, where it ran on into the ground or the
+    // ceiling: its side lines go on to the floor (under the path) or the bound, else it would end
+    // open in the air. Over a cube or robot nothing is above: a few cells take it out of view.
+    {
+        float lo = 1e9f, hi = -1e9f;
+        std::vector<Box> boxes(objs.size());
+        for (size_t k = 0; k < objs.size(); ++k) {
+            objectFits(objs[k], &boxes[k]);
+            if (objs[k].info().kind != level::Kind::Solid) continue;
+            lo = std::min(lo, boxes[k].y0);
+            hi = std::max(hi, boxes[k].y1);
+        }
+        const bool bounded = ceilRow < 90;
+        const float target = under ? float(floorRow) * kCell : bounded ? float(ceilRow + 1) * kCell : hi + 4 * kCell;
+        const size_t count = objs.size();
+        for (size_t k = 0; k < count; ++k) {
+            const LevelObject& o = objs[k];
+            const bool upright = std::fmod(std::fabs(o.rotation), 180.0) == 90;
+            const bool side = (o.id == oid::OutlineTop && upright) || (o.id == oid::OutlinePillar && !upright);
+            if (!side || (under ? boxes[k].y0 > lo + 1 : boxes[k].y1 < hi - 1)) continue;
+            const float dir = under ? -1.f : 1.f;
+            for (int step = 1;; ++step) {
+                LevelObject e = o;
+                e.y = o.y + double(dir * kCell * float(step));
+                // the ground is drawn over what reaches into it
+                const float sink = under && target <= 0 ? 29.f : 0.5f;
+                if (under ? e.y - 15 < target - sink : e.y + 15 > target + 0.5f) break;
+                if (step > 8 || !objectFits(e, nullptr)) return false;
+                objs.push_back(e);
+            }
+        }
+    }
     for (auto& o : objs) {
         placeObject(o);
         Box b{};
@@ -561,7 +630,7 @@ bool Structurer::bandCell(int cx, int cy) {
     if (cy < 0 || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return false;
     const Box b = cellBox(cx, cy);
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
-    if (m_env.hits(b, m_margin) || m_built.hits(b, -1)) return false;
+    if (m_env.hits(b, m_margin) || m_built.hits(b, -1) || m_drawn.hits(b, -3)) return false;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - (b.x0 + 15)) < 55 && std::fabs(float(po.o.y) - (b.y0 + 15)) < 55) return false;
     addCell(cx, cy);
@@ -575,17 +644,17 @@ void Structurer::lineFace(float x, float faceY, int toward, int kind) {
     LevelObject o;
     if (kind == 0) o = make(oid::Spike, x, faceY + float(toward) * 15.f, toward > 0 ? 0 : 180);
     else o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
-    if (hazardFits(o, kind == 1 ? 5.f : 7.f)) addHazard(o);
+    if (hazardFits(o)) addHazard(o);
 }
 
-bool Structurer::hazardFits(const LevelObject& o, float room) {
+bool Structurer::hazardFits(const LevelObject& o) {
     phys::SimObject so;
     if (!phys::World::makeSimObject(o, 0, so)) return false;
     const float rad = std::sqrt(so.hw * so.hw + so.hh * so.hh);
     const Box b{so.x - rad, so.y - rad, so.x + rad, so.y + rad};
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
     if (m_env.hits(b, m_margin + 5)) return false;
-    if (!hazardRoom(so.x, so.y, room)) return false;
+    if (!hazardRoom(o)) return false;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return false;
     return true;
@@ -594,7 +663,7 @@ bool Structurer::hazardFits(const LevelObject& o, float room) {
 // A spike on the side of a step, pointing away from the wall.
 void Structurer::lineWall(float wallX, float y, int side) {
     LevelObject o = make(oid::Spike, wallX + float(side) * 15.f, y, side > 0 ? 90 : 270);
-    if (hazardFits(o, 9.f)) addHazard(o);
+    if (hazardFits(o)) addHazard(o);
 }
 
 // A saw biting out of a face.
@@ -604,7 +673,7 @@ void Structurer::faceSaw(float x, float y) {
     if (!phys::World::makeSimObject(sw, 0, so)) return;
     const Box b{so.x - so.hw, so.y - so.hw, so.x + so.hw, so.y + so.hw};
     if (m_env.hits(b, m_margin + 2)) return;
-    if (!hazardRoom(so.x, so.y, so.hw)) return;
+    if (!hazardRoom(sw)) return;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 60 && std::fabs(float(po.o.y) - so.y) < 60) return;
     addHazard(sw);
@@ -716,8 +785,7 @@ void Structurer::bands() {
                 } else if (seg[size_t(c)] % 3 == 0 && h.chance(hazardRate)) {
                     lineFace(xc, faceY, -dir, 0);
                 } else if (seg[size_t(c)] % 3 == 1 && h.chance(hazardRate)) {
-                    lineFace(xc - 7.5f, faceY, -dir, 1);
-                    lineFace(xc + 7.5f, faceY, -dir, 1);
+                    lineFace(xc, faceY, -dir, 1);
                 } else if (seg[size_t(c)] % 3 == 2 && h.chance(hazardRate)) {
                     lineFace(xc, faceY, -dir, 0);
                 }
@@ -782,6 +850,13 @@ void Structurer::waveWalls() {
         int j = i;
         while (j < n && m_nominal[size_t(j)].mode == Mode::Wave) ++j;
         m_waveSpans.push_back({m_nominal[size_t(i)].x - 45.f, m_nominal[size_t(j - 1)].x + 45.f});
+        // the open ends of both walls, to close the corridor at the end of the part
+        struct End { float x, y; bool set = false; };
+        End first[2], last[2]; // [0] over the path, [1] under it
+        auto note = [&](int side, float xl, float yl, float xr, float yr) {
+            if (!first[side].set || xl < first[side].x) first[side] = {xl, yl, true};
+            if (!last[side].set || xr > last[side].x) last[side] = {xr, yr, true};
+        };
         // the strokes: straight pieces of the path
         for (int a = i + 1; a + 1 < j;) {
             const auto dirAt = [&](int t) {
@@ -808,6 +883,7 @@ void Structurer::waveWalls() {
                         if (pieceBlocksPath(x, y, 0, y < p0.y)) continue;
                         m_objects.push_back(line);
                         m_W.addObject(line, -1);
+                        note(y > p0.y ? 0 : 1, x - 15, y, x + 15, y);
                     }
                 }
                 continue;
@@ -830,11 +906,35 @@ void Structurer::waveWalls() {
                     if (at == m_nominal.begin() + j) --at;
                     const float ceilY = (at->bounded ? at->ceilY : ceilEdge) - 2.f, floorY = (at->bounded ? at->floorY : floorEdge) + 2.f;
                     const float slope = float(dir) * rise;
-                    if (over + half <= ceilY && !nearPathObject(x, over) && !pieceBlocksPath(x, over, slope, false)) wallPiece(x, over, dir > 0, false, steep, layer == 0);
-                    if (under - half >= floorY && !nearPathObject(x, under) && !pieceBlocksPath(x, under, slope, true)) wallPiece(x, under, dir > 0, true, steep, layer == 0);
+                    if (over + half <= ceilY && !nearPathObject(x, over) && !pieceBlocksPath(x, over, slope, false)) {
+                        wallPiece(x, over, dir > 0, false, steep, layer == 0);
+                        note(0, x - 15, over - slope * 15, x + 15, over + slope * 15);
+                    }
+                    if (under - half >= floorY && !nearPathObject(x, under) && !pieceBlocksPath(x, under, slope, true)) {
+                        wallPiece(x, under, dir > 0, true, steep, layer == 0);
+                        note(1, x - 15, under - slope * 15, x + 15, under + slope * 15);
+                    }
                 }
             }
         }
+        // the corridor is closed at both ends: from each wall's end a line runs on to the bound,
+        // where it does not cross the way in or out
+        const Sample& in = m_nominal[size_t(i)];
+        const Sample& out = m_nominal[size_t(j - 1)];
+        for (int side = 0; side < 2; ++side)
+            for (const End& e : {first[side], last[side]}) {
+                const Sample& at = &e == &first[side] ? in : out;
+                if (!e.set || !at.bounded) continue;
+                const float dir = side == 0 ? 1.f : -1.f, bound = side == 0 ? at.ceilY : at.floorY;
+                for (float y = e.y + dir * 15.f; dir > 0 ? y - 15 < bound - 1 : y + 15 > bound + 1; y += dir * kCell) {
+                    LevelObject line = make(oid::OutlineTop, e.x, y, 90);
+                    const Box b{e.x - 2, y - 15, e.x + 2, y + 15};
+                    if (m_env.hits(b, 2) || m_built.hits(b, -3)) break;
+                    m_objects.push_back(line);
+                    m_W.addObject(line, -1);
+                    m_built.addBox(b);
+                }
+            }
         i = j;
     }
 }
