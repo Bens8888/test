@@ -1,6 +1,16 @@
 # Changelog
 
 ## v0.2.0
+- One-page menu: song, clicks (music, tap-along or a recording), difficulty, speed and structure
+  style, then Generate, Place in level, New layout or Remove. The old tabs (style, gamemodes,
+  sections, playtest, training, settings), the ghost, variants, seed and re-roll are gone, and
+  options an older version saved are no longer read
+- Hazards never overlap each other or sink into blocks, and pillars reach the floor or the next
+  face instead of ending open in the air
+- Wave corridors are closed at both ends; a stretch with a long wait for a click is not a wave
+  (it would slide along the floor)
+- More cube and ship, as in real layouts; flying paths keep off the edges of the screen
+- Structure library learned from 35 levels (was 18)
 - Structures come from real levels now: a trained library of modules from Bidal Wave and shapes
   shared between top levels, with Rail, Slope, Compact and Spiky styles
 - Each gamemode stretch repeats a few shapes in a rhythm, hugging the player's path

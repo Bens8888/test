@@ -308,7 +308,7 @@ Overlaps overlapsOf(const level::Level& L) {
         // a hazard stands on a face: only a sliver of it may be in the solid
         while (s0 < solid.size() && solid[s0].x0 < hz[i].x0 - 120) ++s0;
         Drawn in = hz[i];
-        const float m = hz[i].round ? (hz[i].x1 - hz[i].x0) * 0.25f : 3.f;
+        const float m = hz[i].round ? (hz[i].x1 - hz[i].x0) * 0.5f - 6.f : 3.f; // a saw bites into a wall, its hub stays out
         in.x0 += m; in.y0 += m; in.x1 -= m; in.y1 -= m;
         for (size_t k = s0; k < solid.size() && solid[k].x0 < in.x1; ++k)
             if (common(in, solid[k]) > 1) {

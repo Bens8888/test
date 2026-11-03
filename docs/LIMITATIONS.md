@@ -3,14 +3,15 @@
 Stated plainly, with what each one means in practice.
 
 ## Not verified inside the game yet
-- **Tested by the self test in GD, not yet by a person.** The mod builds against Geode 5.10.1 / GD 2.2081
-  and loads on Geode 5.11.2. The self test presses the editor button, opens every tab, generates,
-  applies, undoes, opens Tap Along, and checks the recorder (every click caught at the right tick).
-  It cannot judge how levels feel to play. macOS builds on CI but has not been run.
-- **Structures are lighter than top levels.** 110-120 hitbox objects and 33-37 hazards per screen,
-  above Bidal Wave (80 and 20) and xo (84 and 32). Bloodbath has 150, Tidal Wave 194 and Grief 284,
-  with 53-118 hazards. Saws are 1-3 per screen, near Bloodbath's 3 but far from Tidal Wave's 31
-  (`training/corpus/compare.py`).
+- **One playtest by a person so far.** Ben played the spike-fix build on 3 November 2026: overlapping
+  objects, open wave corridors, sliding along the floor, too little cube, flying near the edge of the
+  screen and a menu full of settings that no longer applied. Those are fixed in the code since, but
+  the fixed build has not been played by a person yet. The mod builds against Geode 5.10.1 / GD
+  2.2081 and loads on Geode 5.11.2. macOS builds on CI but has not been run.
+- **Structures are lighter than top levels.** 123-139 hitbox objects and 22-30 hazards per screen,
+  above Bidal Wave (80 and 20) and near xo (84 and 32). Bloodbath has 150, Tidal Wave 194 and Grief
+  284, with 53-118 hazards. Fewer hazards than before the overlap fix (33-37): what was dropped were
+  piles. About 1 saw per screen, Bloodbath has 3 and Tidal Wave 31 (`training/corpus/compare.py`).
 - **Simulator vs the real game.** Checked against the real game with the in-game self test (a
   `selftest.txt` in the mod's save folder plays a generated level with its designed clicks and logs
   every physics step) and `simtrace`. Horizontal error is about 0.001 units over whole levels. Fixed
@@ -20,23 +21,20 @@ Stated plainly, with what each one means in practice.
   touching the ground, the landing of a step counting before a mode portal, a swing's press on a floor,
   where flying modes start. Generated levels keep 3 units of extra distance from hazards to absorb what is
   left, mostly one-tick pad timing.
-  - The current build, with straight spikes, has only one finished run in GD 2.2081: its first level
-    reached 100%, and the round was stopped for low memory before the other 7 and the menu check.
-    The full rounds before it, each on an older build, reached 100% on 8 of 8, 7 of 8 and 7 of 8
-    levels; each death was traced to a simulator rule that is fixed since. These are bot runs that
-    press on the exact tick. "Beatable" means beaten in the
-    simulator, so play a level before trusting it.
+  - The spike-fix build reached 100% in GD 2.2081 on levels 131-133 (130 on the build before) before
+    the round was stopped for low memory (levels 134-137 not run). The builds after it change
+    structures and gamemode choice, not the physics, and have no runs in GD yet. The full rounds
+    before, each on an older build, reached 100% on 8 of 8, 7 of 8 and 7 of 8 levels; each death was
+    traced to a simulator rule that is fixed since. These are bot runs that press on the exact tick.
+    "Beatable" means beaten in the simulator, so play a level before trusting it.
   - Still not exact: riding along slopes, rotated portals (the generator avoids both), some spider
     teleports, and a wave leaving into a swing while it rides a bound (one step of gravity, about 2
     units until the next contact).
-- **Editor coordinates.** The ghost overlay and recorded positions assume GD's object layer is 90
-  units above level-string coordinates. If the ghost path appears shifted, that constant
+- **Editor coordinates.** Recorded positions assume GD's object layer is 90
+  units above level-string coordinates. If recorded clicks appear shifted, that constant
   (`kEditorYOffset`) is the one to change.
 
 ## Generator (path-first builder, the default)
-- **Outline pieces unverified in GD.** The outline look (Style → Look) relies on how GD draws its
-  outline pieces by default; Settings → Place piece test shows it in a minute (see the user
-  guide). The default block look does not depend on it.
 - **Not every click is strictly necessary.** Skipping a click often kills, but ship and wave taps
   often only nudge the path, and some jumps have no spot for a hazard that would not also touch a
   fair early or late press. Timing windows are always kept.

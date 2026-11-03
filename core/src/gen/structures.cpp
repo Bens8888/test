@@ -366,13 +366,13 @@ void Structurer::noteHazard(const LevelObject& o) {
 }
 
 // Hazards stand side by side, never in a pile, and on a face, not sunk into the blocks (a saw may
-// bite into a wall up to half its radius).
+// bite into a wall, its hub stays in the open).
 bool Structurer::hazardRoom(const LevelObject& o) const {
     Box d{};
     if (!drawnBox(o, d)) return true;
     if (m_drawn.hits(d, -1.5f)) return false;
     const bool saw = o.info().kind == level::Kind::Saw;
-    const Box in = shrunk(d, saw ? (d.x1 - d.x0) * 0.25f : 3.f);
+    const Box in = shrunk(d, saw ? (d.x1 - d.x0) * 0.5f - 6.f : 3.f);
     if (in.x1 <= in.x0 || in.y1 <= in.y0) return true;
     if (m_built.hits(in, 0)) return false;
     for (int cx = int(std::floor(in.x0 / kCell)); cx <= int(std::floor(in.x1 / kCell)); ++cx)
