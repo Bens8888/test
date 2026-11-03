@@ -743,11 +743,19 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const auto& e = c.end.p[0];
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
     if (e.bounded && !c.trace.empty()) {
-        for (auto& q : c.trace) if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
+        int edge = 0;
+        for (auto& q : c.trace) {
+            if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
+            else if (q.y - q.half <= e.floorY + 25 || q.y + q.half >= e.ceilY - 25) ++edge;
+        }
         s -= (e.mode == Mode::Wave ? 14.0 : isFlying(e.mode) ? 3.0 : 1.2) * double(boundContact) / double(c.trace.size());
+        // flying along the edge of the screen: the structures on that side have no room and the
+        // player is half under the progress bar
+        if (isFlying(e.mode)) s -= 2.0 * double(edge) / double(c.trace.size());
         const float mid = (e.floorY + e.ceilY) * 0.5f;
         // the wave zig-zags through the middle (room for triangles above and below)
-        s -= (e.mode == Mode::Wave ? 2.5 : 0.4) * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
+        const double pull = e.mode == Mode::Wave ? 2.5 : e.mode == Mode::Swing ? 1.5 : isFlying(e.mode) ? 0.8 : 0.4;
+        s -= pull * std::fabs(e.y - mid) / std::max(60.0f, e.ceilY - e.floorY);
     }
     // long runs make wide platforms: prefer landing shortly before the next click
     if (!c.trace.empty()) {

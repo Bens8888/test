@@ -300,12 +300,17 @@ int main(int argc, char** argv) {
         bool held = false;
         int ticks = 0, open = 0, sliding = 0, slideFloor = 0;
         float lastOpenX = -1e9f, lastSlideX = -1e9f;
-        int modeTicks[8] = {};
+        int modeTicks[8] = {}, flyTicks = 0, edgeTicks = 0;
         while (!s.dead && !s.won && s.tick < 240 * 600) {
             while (next < ev.size() && ev[next].first <= s.tick + 1) held = ev[next++].second;
             phys::step(W, s, held);
             const auto& p = s.p[0];
             ++modeTicks[int(p.mode)];
+            const bool flying = p.mode == level::Mode::Ship || p.mode == level::Mode::Ufo || p.mode == level::Mode::Wave || p.mode == level::Mode::Swing;
+            if (flying && p.bounded) {
+                ++flyTicks;
+                edgeTicks += p.y - p.height() / 2 <= p.floorY + 25 || p.y + p.height() / 2 >= p.ceilY - 25;
+            }
             if (p.mode != level::Mode::Wave) continue;
             ++ticks;
             if (p.onGround && p.x - lastSlideX > 200) std::printf("  slides at x %.0f y %.0f\n", p.x, p.y);
@@ -327,6 +332,7 @@ int main(int argc, char** argv) {
         }
         std::printf("%s: %d wave ticks, %.1f%% open on a side, %.1f%% sliding (%.1f%% on a floor)%s\n", argv[2], ticks, 100.0 * open / std::max(1, ticks),
                     100.0 * sliding / std::max(1, ticks), 100.0 * slideFloor / std::max(1, ticks), s.dead ? ", DIES" : "");
+        std::printf("  flying within 25 units of the floor or ceiling: %.1f%%\n", 100.0 * edgeTicks / std::max(1, flyTicks));
         std::printf("  time per mode:");
         for (int m = 0; m < 8; ++m) std::printf(" %s %.0f%%", level::modeName(level::Mode(m)), 100.0 * modeTicks[m] / std::max(1, s.tick));
         std::printf("\n");
