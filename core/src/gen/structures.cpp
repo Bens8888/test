@@ -10,6 +10,7 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <string>
 
 namespace al::gen {
 
@@ -187,6 +188,7 @@ private:
     int m_moduleCount = 0;
     std::vector<PillarEnd> m_pillarEnds;
     void extendPillars();
+    void mergePlatforms(std::vector<LevelObject>& objs) const;
     void bands();
     // a Classic ground stretch without a ceiling: real cube parts have nothing above the player
     bool openSky(const Sample& s) const { return m_style == 4 && !s.bounded && !isFlyingMode(s.mode) && s.mode != Mode::Wave; }
@@ -581,9 +583,18 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         ++m_moduleCount;
     }
     for (auto& o : objs) {
-        placeObject(o);
         Box b{};
         objectFits(o, &b);
+        // a plain block on the grid joins the cells, so it is drawn in the layout's look (an
+        // outline layout would otherwise show filled black blocks among its outlines)
+        const double fx = std::fmod(o.x, 30.0), fy = std::fmod(o.y, 30.0);
+        if (o.id == oid::Block && std::fabs(fx - 15) < 0.5 && std::fabs(fy - 15) < 0.5) {
+            const int cx = int(std::floor(o.x / kCell)), cy = int(std::floor(o.y / kCell));
+            addCell(cx, cy);
+            m_built.addBox(cellBox(cx, cy));
+        } else {
+            placeObject(o);
+        }
         for (int c = int(std::floor(b.x0 / kCell)); c <= int(std::floor((b.x1 - 0.01f) / kCell)); ++c) {
             auto& reach = under ? m_reachUnder : m_reachOver;
             auto it = reach.find(c);
@@ -697,6 +708,68 @@ void Structurer::extendPillars() {
             break;
         }
     }
+}
+
+// Path platforms that overlap or touch are one shape: drawn as one, without their edges crossing
+// inside it. Only edges with solid on both sides go, so the faces the player touches stay as planned
+// (the final check runs on the merged layout).
+void Structurer::mergePlatforms(std::vector<LevelObject>& objs) const {
+    const auto& S = m_path.surfaces;
+    const size_t n = S.size();
+    auto touch = [](const PathSurface& a, const PathSurface& b) {
+        if (a.look != b.look) return false;
+        const bool xs = a.cx0 <= b.cx1 + 1 && b.cx0 <= a.cx1 + 1, ys = a.cy0 <= b.cy1 + 1 && b.cy0 <= a.cy1 + 1;
+        const bool xo = a.cx0 <= b.cx1 && b.cx0 <= a.cx1, yo = a.cy0 <= b.cy1 && b.cy0 <= a.cy1;
+        return (xo && ys) || (yo && xs); // overlapping or sharing an edge, not only a corner
+    };
+    std::vector<int> comp(n, -1);
+    int comps = 0;
+    for (size_t i = 0; i < n; ++i) {
+        if (comp[i] >= 0) continue;
+        std::vector<size_t> todo{i};
+        comp[i] = comps;
+        while (!todo.empty()) {
+            const size_t a = todo.back();
+            todo.pop_back();
+            for (size_t b = 0; b < n; ++b)
+                if (comp[b] < 0 && touch(S[a], S[b])) { comp[b] = comps; todo.push_back(b); }
+        }
+        ++comps;
+    }
+    auto key = [](const LevelObject& o) {
+        return std::to_string(o.id) + ":" + std::to_string(std::lround(o.x * 4)) + ":" + std::to_string(std::lround(o.y * 4)) + ":" +
+               std::to_string(std::lround(std::fmod(o.rotation + 360.0, 360.0)));
+    };
+    std::vector<int> size(size_t(comps), 0);
+    for (int c : comp) ++size[size_t(c)];
+    std::multiset<std::string> drop;
+    std::vector<LevelObject> add;
+    for (int c = 0; c < comps; ++c) {
+        if (size[size_t(c)] < 2) continue;
+        CellGrid all;
+        uint8_t look = 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (comp[i] != c) continue;
+            CellGrid one;
+            one.fill(S[i].cx0, S[i].cy0, S[i].cx1, S[i].cy1);
+            std::vector<LevelObject> pieces;
+            tileCells(one, TileLook(S[i].look), pieces);
+            for (auto& o : pieces) drop.insert(key(o));
+            all.fill(S[i].cx0, S[i].cy0, S[i].cx1, S[i].cy1);
+            look = S[i].look;
+        }
+        tileCells(all, TileLook(look), add);
+    }
+    if (add.empty()) return;
+    std::vector<LevelObject> kept;
+    kept.reserve(objs.size());
+    for (auto& o : objs) {
+        auto it = drop.find(key(o));
+        if (it != drop.end()) { drop.erase(it); continue; }
+        kept.push_back(o);
+    }
+    for (auto& o : add) kept.push_back(o);
+    objs = std::move(kept);
 }
 
 // Every gamemode stretch uses a small set of shapes and repeats them, as real layouts do: that
@@ -1171,6 +1244,7 @@ StructureResult Structurer::run() {
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards
     level::Level& L = m_res.level;
     L = m_base;
+    mergePlatforms(L.objects);
     tileCells(m_res.cells, m_prm.look, L.objects);
     for (auto& o : m_objects) L.objects.push_back(o);
     for (auto& h : m_hazards) L.objects.push_back(h);

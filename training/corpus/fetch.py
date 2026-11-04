@@ -36,10 +36,10 @@ def search(name):
     return best
 
 
-def rated(diff, pages):
+def rated(diff, pages, first=0):
     """IDs of the most liked rated levels of one difficulty (3 Hard, 4 Harder, 5 Insane), 10 per page."""
     ids = []
-    for page in range(pages):
+    for page in range(first, first + pages):
         body = post("getGJLevels21.php", type=2, diff=diff, star=1, page=page)
         time.sleep(2)
         if body.startswith("-1"):
@@ -54,8 +54,9 @@ def main():
     index = json.load(open(index_path)) if os.path.exists(index_path) else {}
     args = sys.argv[1:]
     if args[:1] == ["--rated"]:
-        # fetch.py --rated 3,4,5 6: the most liked rated levels of those difficulties, 6 pages each
-        args = [i for d in args[1].split(",") for i in rated(d, int(args[2]))]
+        # fetch.py --rated 3,4,5 6 [first page]: the most liked rated levels of those difficulties, 6 pages each
+        first = int(args[3]) if len(args) > 3 else 0
+        args = [i for d in args[1].split(",") for i in rated(d, int(args[2]), first)]
     for arg in args:
         creator = "?"
         level_id = arg

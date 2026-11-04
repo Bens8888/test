@@ -354,6 +354,11 @@ void Planner::clickOptions(int k, int T, int Tn, std::vector<Cand>& out) {
         posAtPress(x, y);
         if (y < 25 || y > 470) return;
         for (int id : ids) {
+            // the orbs real levels of each rating use: Easy only yellow, Normal adds pink and
+            // blue, Hard red, Harder green and the dash orb, Insane black
+            const float need = id == oid::OrbYellow ? 0.f : id == oid::OrbPink || id == oid::OrbBlue ? 1.f : id == oid::OrbRed ? 2.f
+                             : id == oid::OrbGreen || id == oid::OrbDash ? 3.f : 4.f;
+            if (m_D < need) continue;
             Cand c;
             press(c, T + 3);
             if (id == oid::OrbDash) {
@@ -586,7 +591,7 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
     out.push_back(base); // free: whatever happens without new objects
     // flying modes with a long gap: a gravity portal turns the player around before it would
     // slide along the floor or the ceiling
-    if (isFlying(m) && m_opt.gravityFlips != Tri::Off && Tn - T > int(0.4 * phys::kTPS)) {
+    if (isFlying(m) && m_opt.gravityFlips != Tri::Off && m_D >= 2.0f && Tn - T > int(0.4 * phys::kTPS)) {
         for (double f : {0.35, 0.5, 0.65}) {
             const int P = T + int(double(Tn - T) * f);
             const TraceSample& q = at(base, P);
@@ -610,6 +615,8 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
                     const auto& sf = l.surfaces.back().second;
                     const float surfY = sf.g > 0 ? (sf.cy1 + 1) * kCell : sf.cy0 * kCell;
                     for (int id : {oid::PadYellow, oid::PadPink, oid::PadRed, oid::PadBlue}) {
+                        // Easy only the yellow pad, Normal the pink one, from Hard all
+                        if (m_D < (id == oid::PadYellow ? 0.f : id == oid::PadPink ? 1.f : 2.f)) continue;
                         Cand pc = l;
                         LevelObject o = make(id, std::round((q.x + 20) / 15.0f) * 15.0f, surfY + float(sf.g) * float(level::objectInfo(id).h) * 0.5f);
                         if (sf.g < 0) o.flipY = true;
