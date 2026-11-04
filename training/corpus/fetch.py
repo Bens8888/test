@@ -61,8 +61,9 @@ def main():
         text = zlib.decompress(base64.urlsafe_b64decode(fields["4"] + "=="), 47).decode("utf8", "replace")
         with open(path, "w", encoding="utf8") as f:
             f.write(text)
-        index[level_id] = {"name": fields.get("2"), "creator": creator, "objects": text.count(";") - 1, "song": fields.get("35")}
-        print(level_id, fields.get("2"), "by", creator, text.count(";") - 1, "objects", flush=True)
+        index[level_id] = {"name": fields.get("2"), "creator": creator, "objects": text.count(";") - 1, "song": fields.get("35"),
+                           "stars": int(fields.get("18", 0) or 0)}
+        print(level_id, fields.get("2"), "by", creator, text.count(";") - 1, "objects,", fields.get("18", "?"), "stars", flush=True)
         json.dump(index, open(index_path, "w"), indent=1)
 
 

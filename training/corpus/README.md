@@ -12,7 +12,12 @@ Teaches the generator what good structures look like.
   sheet and each level's style numbers.
 - `train.py` writes `core/src/gen/module_library.inc`. Edit its `STYLES` to change which levels define a
   style, and `OWN` for levels whose structures may ship as they are. From every other level only
-  shapes used by two or more levels ship.
+  shapes used by two or more levels ship (RobTop's levels count as one).
+- The Classic style learns from RobTop's own levels, rated Harder to Insane levels (6 to 9 stars, by
+  the `stars` fetch.py stores) and a few classic easy demons. Its shapes use only the plain block
+  and the outline pieces, and no style keeps a shape whose blocks lie over each other.
+- RobTop's levels come from the game itself: `Resources/levels/<n>.txt`, base64 of a gzipped level
+  string, stored in `levels/` as `rt<n>.txt`.
 
 To check the physics against the game, build `simtrace` and run it on a route and a trace from the
 FB Pathfinder folder. Set `SIMTRACE_RESYNC=1` to list every mismatch across a whole level:

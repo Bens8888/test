@@ -748,7 +748,7 @@ void Structurer::bands() {
     if (m_density <= 0.31f || m_nominal.empty()) return;
     const int n = int(m_nominal.size());
     const float D = m_plan.baseDifficulty;
-    static const int kThick[kStructureStyles][2] = {{1, 2}, {2, 3}, {3, 5}, {1, 3}};
+    static const int kThick[kStructureStyles][2] = {{1, 2}, {2, 3}, {3, 5}, {1, 3}, {1, 2}};
     const double hazardRate = std::clamp(0.45 + 0.13 * double(D), 0.45, 1.0);
     for (int i = 0; i < n;) {
         const Sample& q = m_nominal[size_t(i)];
@@ -1029,9 +1029,11 @@ StructureResult Structurer::run() {
     if (m_opt.structureStyle > 0) {
         m_style = std::clamp(m_opt.structureStyle - 1, 0, kStructureStyles - 1);
     } else {
-        // automatic: each variant its own style, mostly the rail style of Bidal Wave
+        // automatic: below demon ratings the classic look of RobTop's and rated Insane levels;
+        // demons mostly the rail style of Bidal Wave
         const uint64_t pick = m_seed % 20;
-        m_style = pick < 9 ? 0 : pick < 15 ? 1 : pick < 18 ? 2 : 3;
+        if (m_plan.baseDifficulty < 5.0f) m_style = pick < 16 ? 4 : 0;
+        else m_style = pick < 9 ? 0 : pick < 15 ? 1 : pick < 18 ? 2 : 3;
     }
     m_density = m_prm.density >= 0 ? m_prm.density : (m_plan.style == Style::Minimal ? 0.3f : m_plan.style == Style::Chaotic ? 0.85f : 0.65f);
     // the path as planned: its objects and platform pieces (same objects, same order)

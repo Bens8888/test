@@ -141,7 +141,7 @@ void AutoLayoutPopup::build() {
         O().speedStyle = i;
         save();
     }));
-    form->row("Structures", ui::CycleControl::create({"Auto", "Rails", "Slopes", "Compact", "Spiky"}, std::clamp(O().structureStyle, 0, 4), 170.f, [](int i) {
+    form->row("Structures", ui::CycleControl::create({"Auto", "Rails", "Slopes", "Compact", "Spiky", "Classic"}, std::clamp(O().structureStyle, 0, 5), 170.f, [](int i) {
         O().structureStyle = i;
         save();
     }));

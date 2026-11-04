@@ -1,4 +1,5 @@
 #include <al/gen/options.hpp>
+#include <al/gen/modules.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -123,7 +124,7 @@ GenOptions GenOptions::fromJson(const Json& j) {
     for (size_t i = 0; i < o.modeWeights.size() && i < mw.size(); ++i) o.modeWeights[i] = float(mw[i].asNumber(-1));
     o.speedChanges = SpeedChanges(std::clamp(j.get("speedChanges", 0), 0, 3));
     o.startSpeed = std::clamp(j.get("startSpeed", -1), -1, 4);
-    o.structureStyle = std::clamp(j.get("structureStyle", 0), 0, 4);
+    o.structureStyle = std::clamp(j.get("structureStyle", 0), 0, kStructureStyles);
     o.speedStyle = std::clamp(j.get("speedStyle", 0), 0, 3);
     o.portalFrequency = float(j.get("portalFrequency", -1.0));
     o.gravityFlips = Tri(std::clamp(j.get("gravityFlips", 0), 0, 2));

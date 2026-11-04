@@ -21,8 +21,17 @@ STYLES = {
     "Slope": ["86407629", "151559360", "87665224"],
     "Compact": ["10565740", "58825144", "54953085"],
     "Spiky": ["149992717", "148598469", "49896559"],
+    "Classic": [],   # filled in main(): RobTop's levels, rated Harder to Insane levels, classic easy demons
 }
-SKIP = {"13850073", "4125776", "11431524", "76962930"}   # copies, and one-of-a-kind mega structures
+# classic easy demons (rated 10 stars, but plain gameplay of the kind Insane levels have)
+CLASSIC_DEMONS = {"5310094", "7116121", "13519", "10109", "5904109", "6939821", "55520", "3543219", "11402965", "2842129", "814678",
+                  "23298409", "38445559"}
+
+
+def source(level_id):
+    """Who made a level: RobTop's levels count as one source, every other level as its own."""
+    return "robtop" if level_id.startswith("rt") else level_id
+SKIP = {"13850073", "4125776", "11431524", "76962930", "rt3001"}   # copies, and one-of-a-kind mega structures
 SPIKES = {8, 39, 103, 392, 144, 145, 177, 178, 179, 205, 216, 217, 218, 458, 459}
 MODE_PORTALS = {12: "ground", 47: "ground", 745: "ground", 1331: "ground", 13: "fly", 111: "fly", 1933: "fly", 660: "wave"}
 MODE_BIT = {"ground": 1, "fly": 2, "wave": 4}
@@ -33,9 +42,26 @@ def quarter(rot):
     return abs(q - round(q)) < 0.01
 
 
+OUTLINE_SET = {1, 467, 468, 469, 470, 471}   # the plain block and the outline pieces the tiler uses
+
+
+def self_overlap(body):
+    """Whether two solid pieces of a structure lie over each other (in the source level a fill
+    covered that; drawn as outlines it is a tangle)."""
+    boxes = [o.box() for o in body if o.kind == "Solid"]
+    for i in range(len(boxes)):
+        a = boxes[i]
+        for b in boxes[i + 1:]:
+            if min(a[2], b[2]) - max(a[0], b[0]) > 4 and min(a[3], b[3]) - max(a[1], b[1]) > 4:
+                return True
+    return False
+
+
 def clean(f):
     """The structure as pieces, or None if it is not a usable module."""
     if len(f["body"]) < 2 or any(abs(o.scale - 1) > 0.01 or not quarter(o.rot) for o in f["body"]):
+        return None
+    if self_overlap(f["body"]):
         return None
     spikes = [s for s in f["spikes"] if s.id in SPIKES and abs(s.scale - 1) < 0.01 and quarter(s.rot)]
     seen, kept = set(), []
@@ -113,6 +139,9 @@ def lanes(found):
 def main():
     kinds = extract.object_table()
     index = json.load(open(os.path.join(extract.LEVELS, "index.json")))
+    STYLES["Classic"] = sorted(l for l, e in index.items() if l not in SKIP and
+                               (l.startswith("rt") or 6 <= e.get("stars", 0) <= 9 or l in CLASSIC_DEMONS))
+    print("classic levels:", len(STYLES["Classic"]))
     level_found, level_portals, level_saws = {}, {}, {}
     for level_id in index:
         if level_id in SKIP:
@@ -136,10 +165,13 @@ def main():
     modules = []
     for e in table.values():
         own = any(l in OWN for l in e["levels"])
-        if not own and len([l for l in e["levels"] if l not in OWN]) < 2:
+        if not own and len({source(l) for l in e["levels"] if l not in OWN}) < 2:
             continue
         pieces, w, h, side = e["c"]
         weights = [sum(e["levels"][l] for l in STYLES[s]) for s in style_names]
+        # the classic look is one block set: a module mixing in others would look patched together
+        if any(p[0] not in OUTLINE_SET and p[0] not in SPIKES for p in pieces):
+            weights[style_names.index("Classic")] = 0
         if sum(1 for p in pieces if p[0] in SPIKES) < 2:
             weights[style_names.index("Spiky")] = 0
         if not any(weights):

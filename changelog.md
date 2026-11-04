@@ -7,6 +7,9 @@
 - Wave below demon ratings: no mini, the full timing window, corridors about a block and a half
   to each wall, turns no faster than about four a second, and the path keeps its walls clear of
   the floor and ceiling so they are never cut off
+- Classic structure style, learned from RobTop's levels and 31 rated Harder and Insane levels: one
+  block set, plain shapes, the usual look below demon ratings (Auto picks it there). No style
+  keeps a source shape whose blocks lie over each other any more
 - A layout that fails its final check loses only the hazards the run dies on, after a lighter
   retry, instead of all its structures
 - One-page menu: song, clicks (music, tap-along or a recording), difficulty, speed and structure

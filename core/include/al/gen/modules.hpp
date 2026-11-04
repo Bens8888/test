@@ -17,7 +17,7 @@ struct Module {
     int w, h;         // size in cells
     int directed;     // 1: it hangs over the path with its dangerous side down; 0: either way
     int modes;        // bit 0 ground modes, bit 1 flying modes, bit 2 wave parts
-    int weight[4];    // how often each style uses it
+    int weight[5];    // how often each style uses it
 };
 
 struct StyleStats {
@@ -28,7 +28,8 @@ struct StyleStats {
     float saws;              // saws per structure
 };
 
-constexpr int kStructureStyles = 4;
+// Rail, Slope, Compact, Spiky, Classic (RobTop's levels and rated Harder to Insane levels)
+constexpr int kStructureStyles = 5;
 
 const Module* moduleTable(size_t& count);
 const ModulePiece* modulePieces();
