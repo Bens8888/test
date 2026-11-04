@@ -143,6 +143,29 @@ private:
     std::vector<phys::GameState> m_pre; // state before each used click (index = PathClick index)
     std::vector<LevelObject> m_hazards;
     std::set<std::pair<int, int>> m_hazardCells;
+    // spikes in rows: on the ground of the easier ratings at most m_maxRun side by side
+    std::set<std::pair<long, long>> m_spikeAt; // (column, height in half cells)
+    int m_maxRun = 99;
+    bool m_groundStretch = false;
+    static bool rowSpike(const LevelObject& o) {
+        return o.info().kind == level::Kind::Hazard && std::fmod(std::fabs(o.rotation), 180.0) == 0;
+    }
+    static std::pair<long, long> spikeKey(const LevelObject& o) { return {long(std::floor(o.x / 30.0)), std::lround(o.y / 15.0)}; }
+    void noteSpike(const LevelObject& o) { if (rowSpike(o)) m_spikeAt.insert(spikeKey(o)); }
+    // the longest row the spikes in `add` would be part of
+    int spikeRun(const std::vector<LevelObject>& add) const {
+        std::set<std::pair<long, long>> s;
+        for (auto& o : add) if (rowSpike(o)) s.insert(spikeKey(o));
+        int best = 0;
+        for (auto [x, y] : s) {
+            auto has = [&](long xx) { return s.count({xx, y}) || m_spikeAt.count({xx, y}); };
+            int n = 1;
+            for (long d = 1; has(x - d); ++d) ++n;
+            for (long d = 1; has(x + d); ++d) ++n;
+            best = std::max(best, n);
+        }
+        return best;
+    }
     Envelope m_drawn;                 // every hazard as it is drawn
     float m_margin = 4;               // extra distance kept from the reserved space
     float m_waveMargin = 30;          // from the wave's path to its walls
@@ -189,6 +212,8 @@ private:
     std::vector<PillarEnd> m_pillarEnds;
     void extendPillars();
     void mergePlatforms(std::vector<LevelObject>& objs) const;
+    static bool isCellPiece(const LevelObject& o);
+    void putPiece(const LevelObject& o);
     void bands();
     // a Classic ground stretch without a ceiling: real cube parts have nothing above the player
     bool openSky(const Sample& s) const { return m_style == 4 && !s.bounded && !isFlyingMode(s.mode) && s.mode != Mode::Wave; }
@@ -360,6 +385,7 @@ void Structurer::addCell(int cx, int cy, CellKind k) {
 
 void Structurer::addHazard(const LevelObject& o) {
     m_hazards.push_back(o);
+    noteSpike(o);
     m_W.addObject(o, -1);
     m_hazardCells.insert({int(std::floor(o.x / kCell)), int(std::floor(o.y / kCell))});
     noteHazard(o);
@@ -453,13 +479,35 @@ bool Structurer::objectFits(const LevelObject& o, Box* out) const {
     if (m_env.hits(b, m_margin + (hazard ? 2.0f : 0.0f))) return false;
     if (m_built.hits(b, kModuleGap)) return false;
     if (hazard ? !hazardRoom(o) : m_drawn.hits(b, -2.f)) return false;
+    // nothing inside a path platform or the cells built so far (its outline would cross theirs)
+    for (int cx = int(std::floor((b.x0 + 1) / kCell)); cx <= int(std::floor((b.x1 - 1) / kCell)); ++cx)
+        for (int cy = int(std::floor((b.y0 + 1) / kCell)); cy <= int(std::floor((b.y1 - 1) / kCell)); ++cy)
+            if ((m_platforms.filled(cx, cy) || m_res.cells.filled(cx, cy)) && overlap(shrunk(b, 1.f), cellBox(cx, cy), 0)) return false;
     for (auto& po : m_path.objects)
         if (std::fabs(po.o.x - so.x) < 40 + hw && std::fabs(po.o.y - so.y) < 40 + hh) return false;
     return true;
 }
 
+// A whole-cell block or outline piece on the grid: it joins the cells, so it is drawn in the
+// layout's look and as one outline with whatever it touches (side by side, two shapes would each
+// draw their own edge, or an outline layout would show filled black blocks).
+bool Structurer::isCellPiece(const LevelObject& o) {
+    const bool id = o.id == oid::Block || o.id == oid::OutlineSquare || o.id == oid::OutlineCorner || o.id == oid::OutlineTopPillar ||
+                    o.id == oid::OutlinePillar;
+    const double fx = o.x - std::floor(o.x / 30.0) * 30.0, fy = o.y - std::floor(o.y / 30.0) * 30.0;
+    return id && std::fabs(fx - 15) < 0.5 && std::fabs(fy - 15) < 0.5;
+}
+
+void Structurer::putPiece(const LevelObject& o) {
+    if (!isCellPiece(o)) { placeObject(o); return; }
+    const int cx = int(std::floor(o.x / kCell)), cy = int(std::floor(o.y / kCell));
+    addCell(cx, cy);
+    m_built.addBox(cellBox(cx, cy));
+}
+
 void Structurer::placeObject(const LevelObject& o) {
     m_objects.push_back(o);
+    noteSpike(o);
     m_W.addObject(o, -1);
     phys::SimObject so;
     if (!phys::World::makeSimObject(o, 0, so)) return;
@@ -484,8 +532,8 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         // the thorn and wavy spikes some source levels use look bent: the plain spike has their hitbox
         int id = p.id;
         if (id == 216 || id == 177) id = oid::Spike;
-        else if (id == 217) id = oid::HalfSpike;
-        else if (id == 218) id = 103;
+        else if (id == 217 || id == 178) id = oid::HalfSpike;
+        else if (id == 218 || id == 179) id = 103;
         LevelObject o = make(id, double(cx) * kCell + x, double(row) * kCell + y, rot);
         o.flipX = fx;
         o.flipY = fy;
@@ -560,6 +608,7 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         objs = std::move(kept);
     }
     if (objs.empty()) return false;
+    if (m_groundStretch && spikeRun(objs) > m_maxRun) return false;
     // A pillar's far end was cut off from the source level, where it ran on into the ground or the
     // ceiling: its side lines go on later (extendPillars, once the bands are built).
     std::vector<PillarEnd> ends;
@@ -585,16 +634,7 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
     for (auto& o : objs) {
         Box b{};
         objectFits(o, &b);
-        // a plain block on the grid joins the cells, so it is drawn in the layout's look (an
-        // outline layout would otherwise show filled black blocks among its outlines)
-        const double fx = std::fmod(o.x, 30.0), fy = std::fmod(o.y, 30.0);
-        if (o.id == oid::Block && std::fabs(fx - 15) < 0.5 && std::fabs(fy - 15) < 0.5) {
-            const int cx = int(std::floor(o.x / kCell)), cy = int(std::floor(o.y / kCell));
-            addCell(cx, cy);
-            m_built.addBox(cellBox(cx, cy));
-        } else {
-            placeObject(o);
-        }
+        putPiece(o);
         for (int c = int(std::floor(b.x0 / kCell)); c <= int(std::floor((b.x1 - 0.01f) / kCell)); ++c) {
             auto& reach = under ? m_reachUnder : m_reachOver;
             auto it = reach.find(c);
@@ -654,7 +694,7 @@ void Structurer::extendPillars() {
                 for (int s = 1; s <= steps; ++s) {
                     LevelObject e = pe.piece;
                     e.y = pe.piece.y + double(d * kCell * float(s));
-                    placeObject(e);
+                    putPiece(e);
                 }
             const double endY = ends[0].piece.y + double(d * kCell * (float(steps) + 0.5f)) - double(d * 0.75f);
             auto cap = [&](double x0, double x1) {
@@ -666,7 +706,7 @@ void Structurer::extendPillars() {
             };
             for (size_t k = 0; k < ends.size();) {
                 const LevelObject& o = ends[k].piece;
-                if (o.id == oid::OutlinePillar) { cap(o.x - 15, o.x + 15); ++k; continue; }
+                if (o.id == oid::OutlinePillar) { if (!isCellPiece(o)) cap(o.x - 15, o.x + 15); ++k; continue; }
                 // two side lines up to four cells apart are one pillar
                 if (k + 1 < ends.size() && ends[k + 1].piece.id == oid::OutlineTop && ends[k + 1].piece.x - o.x > 20 && ends[k + 1].piece.x - o.x < 125) {
                     cap(o.x - 0.75, ends[k + 1].piece.x + 0.75);
@@ -692,18 +732,18 @@ void Structurer::extendPillars() {
                 const double rest = d < 0 ? (y - 15) - pe.target : pe.target - (y + 15);
                 if (rest > 2 && rest < kCell && sink < 1) {
                     e.y = y + d * rest;
-                    if (fits(e)) placeObject(e);
+                    if (!isCellPiece(o) && fits(e)) placeObject(e); // a cell cannot be cut short
                 }
                 break;
             }
             if (fits(e)) {
-                placeObject(e);
+                putPiece(e);
                 y = e.y;
                 continue;
             }
             for (float part : {25.f, 20.f, 15.f, 10.f, 5.f}) {
                 e.y = y + double(d * part);
-                if (fits(e)) { placeObject(e); break; }
+                if (!isCellPiece(o) && fits(e)) { placeObject(e); break; }
             }
             break;
         }
@@ -787,6 +827,7 @@ void Structurer::placeModules(int firstLane, int lastLane) {
         while (j < n && m_nominal[size_t(j)].mode == q.mode) ++j;
         const int c0 = int(std::floor(q.x / kCell)) + 2, c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell)) - 1;
         if (q.mode == Mode::Wave || c1 - c0 < 3) { i = j; continue; }
+        m_groundStretch = !isFlyingMode(q.mode);
         Rng r = at(c0, 0x90D1);
         const int bit = isFlyingMode(q.mode) ? 2 : 1;
         // the palette of this stretch
@@ -871,6 +912,7 @@ void Structurer::lineFace(float x, float faceY, int toward, int kind) {
     LevelObject o;
     if (kind == 0) o = make(oid::Spike, x, faceY + float(toward) * 15.f, toward > 0 ? 0 : 180);
     else o = make(oid::HalfSpike, x, faceY + float(toward) * 7.5f, toward > 0 ? 0 : 180);
+    if (m_groundStretch && spikeRun({o}) > m_maxRun) return;
     if (hazardFits(o)) addHazard(o);
 }
 
@@ -924,6 +966,7 @@ void Structurer::bands() {
         const int first = i;
         i = j;
         if (q.mode == Mode::Wave || c1 - c0 < 3) continue;
+        m_groundStretch = !isFlyingMode(q.mode);
         Rng r = at(c0, 0xBA4D);
         const float heat = intensityAt(double(first + 1) / phys::kTPS);
         if (heat < 0.3f && r.chance(0.2)) continue; // some quiet stretches stay open
@@ -1234,15 +1277,34 @@ StructureResult Structurer::run() {
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
     buildEnvelope();
     waveWalls();
+    // Easy and Normal ground parts have at most two spikes in a row, Hard and Harder three
+    m_maxRun = m_plan.baseDifficulty < 2.0f ? 2 : m_plan.baseDifficulty < 3.5f ? 3 : 99;
     placeModules(0, 1);
     bands();
     placeModules(2, 3);
+    m_groundStretch = false;
     extendPillars();
     // what the structures do not force yet gets a hazard of its own
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards
     level::Level& L = m_res.level;
+    // an edge line with filled cells on both sides is inside a shape
+    {
+        auto solid = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
+        std::vector<LevelObject> kept;
+        for (auto& o : m_objects) {
+            if (o.id == oid::OutlineTop) {
+                const bool upright = std::fmod(std::fabs(o.rotation), 180.0) == 90;
+                const int a = int(std::lround((upright ? o.x : o.y) / kCell)); // the cell boundary it lies on
+                const int c = int(std::floor((upright ? o.y : o.x) / kCell));
+                const bool inside = upright ? solid(a - 1, c) && solid(a, c) : solid(c, a - 1) && solid(c, a);
+                if (inside) continue;
+            }
+            kept.push_back(o);
+        }
+        m_objects = std::move(kept);
+    }
     L = m_base;
     mergePlatforms(L.objects);
     tileCells(m_res.cells, m_prm.look, L.objects);

@@ -1,8 +1,15 @@
 # Changelog
 
 ## v0.2.0
-- Classic structures learned from about 280 levels (was about 70): the most liked rated Hard,
-  Harder and Insane levels join RobTop's levels, with wider spacing as in those levels
+- Classic structures learned from about 680 levels (was about 70): the most liked rated Easy to
+  Insane levels join RobTop's levels, with wider spacing as in those levels
+- Orbs, pads and gravity portals by rating: Easy only yellow orbs and pads, Normal adds pink and
+  blue, Hard red, Harder green and the dash orb, Insane black
+- Easy and Normal ground parts have at most two spikes in a row, Hard and Harder three
+- Path platforms that overlap, and shapes that touch, are drawn as one outline: no edges crossing
+  inside a shape and no double lines between neighbours; plain blocks take the layout's look
+- Structures keep out of the path's platforms
+- The bent thorn spikes 178 and 179 become the plain half and small spike
 - Classic cube parts keep the sky open: everything stands on the ground, nothing hangs over the
   player unless there is a ceiling
 - Pillars that cannot reach the floor or the bound are closed at the end, and lone edge lines

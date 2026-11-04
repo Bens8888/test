@@ -21,7 +21,7 @@ STYLES = {
     "Slope": ["86407629", "151559360", "87665224"],
     "Compact": ["10565740", "58825144", "54953085"],
     "Spiky": ["149992717", "148598469", "49896559"],
-    "Classic": [],   # filled in main(): RobTop's levels, rated Harder to Insane levels, classic easy demons
+    "Classic": [],   # filled in main(): RobTop's levels, rated Easy to Insane levels, classic easy demons
 }
 # classic easy demons (rated 10 stars, but plain gameplay of the kind Insane levels have)
 CLASSIC_DEMONS = {"5310094", "7116121", "13519", "10109", "5904109", "6939821", "55520", "3543219", "11402965", "2842129", "814678",
@@ -29,7 +29,7 @@ CLASSIC_DEMONS = {"5310094", "7116121", "13519", "10109", "5904109", "6939821", 
 
 
 # mixes and sped-up copies of RobTop's levels
-ROBTOP_COPIES = {"411459", "741941", "1694003", "11698380", "856066", "862216", "877915"}
+ROBTOP_COPIES = {"411459", "741941", "1694003", "11698380", "856066", "862216", "877915", "509393", "3140440", "4376468"}
 
 
 def source(level_id):
@@ -144,7 +144,7 @@ def main():
     kinds = extract.object_table()
     index = json.load(open(os.path.join(extract.LEVELS, "index.json")))
     STYLES["Classic"] = sorted(l for l, e in index.items() if l not in SKIP and
-                               (l.startswith("rt") or 4 <= e.get("stars", 0) <= 9 or l in CLASSIC_DEMONS))
+                               (l.startswith("rt") or 2 <= e.get("stars", 0) <= 9 or l in CLASSIC_DEMONS))
     print("classic levels:", len(STYLES["Classic"]))
     level_found, level_portals, level_saws = {}, {}, {}
     for level_id in index:
