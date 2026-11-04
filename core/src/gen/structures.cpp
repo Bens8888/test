@@ -693,7 +693,14 @@ bool Structurer::designedLives(int tick, int until) const {
     size_t k = 0;
     while (k + 1 < m_pre.size() && m_pre[k + 1].tick <= tick - 30) ++k;
     if (m_pre.empty()) return true;
-    return runFrom(m_pre[k], m_path.inputs.events, std::min(until, m_path.endTick), nullptr);
+    // alive is not enough: a block that bends the path (an earlier landing) sends the rest of the
+    // run where nothing was checked, so it must be back on the designed path by the end
+    const int end = std::min(until, m_path.endTick);
+    std::vector<Sample> tr;
+    if (!runFrom(m_pre[k], m_path.inputs.events, end, &tr)) return false;
+    if (tr.empty() || m_nominal.empty()) return true;
+    const Sample& want = m_nominal[size_t(std::clamp(m_pre[k].tick + int(tr.size()) - 1, 0, int(m_nominal.size()) - 1))];
+    return std::fabs(tr.back().x - want.x) < 2.0f && std::fabs(tr.back().y - want.y) < 2.0f;
 }
 
 // Above Insane the windows are the rating's: a click the structures leave loose (a press well
@@ -736,6 +743,9 @@ bool Structurer::objectFits(const LevelObject& o, Box* out) const {
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false; // wave parts hold only their walls
     const bool hazard = so.kind == level::Kind::Hazard || so.kind == level::Kind::Saw || so.kind == level::Kind::HazardSlope;
     if (m_env.hits(b, hazard ? m_hazMargin + 2.0f : m_margin)) return false;
+    // a slope pulls a player passing just over it down onto it (and the run off its path): slopes
+    // keep a block away
+    if (so.kind == level::Kind::Slope && m_env.hits(b, m_margin + 30.0f)) return false;
     if (m_built.hits(b, kModuleGap)) return false;
     if (hazard ? !hazardRoom(o) : m_drawn.hits(b, -2.f)) return false;
     // nothing inside a path platform or the cells built so far (its outline would cross theirs)
@@ -1500,6 +1510,11 @@ void Structurer::waveWalls() {
             Tip& t = tip[side];
             if (t.set && std::fabs(t.x - x) < 2.0f && std::fabs(t.y - y) > 2.0f) {
                 const float lo = std::min(t.y, y), hi = std::max(t.y, y);
+                // never in the way: the player must not graze it (at the end of a part it would)
+                const float clear = m_waveMargin * 0.3f;
+                auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x - 40.f, [](const Sample& q, float v) { return q.x < v; });
+                for (; it != m_nominal.end() && it->x <= x + 40.f; ++it)
+                    if (std::fabs(it->x - x) < it->half + clear && it->y + it->half + clear > lo && it->y - it->half - clear < hi) return;
                 const int count = std::max(1, int(std::ceil((hi - lo) / kCell - 0.01f)));
                 const float len = (hi - lo) / float(count);
                 for (int k = 0; k < count; ++k) {
@@ -1561,7 +1576,16 @@ void Structurer::waveWalls() {
                     auto at = std::lower_bound(m_nominal.begin() + i, m_nominal.begin() + j, x, [](const Sample& q, float v) { return q.x < v; });
                     if (at == m_nominal.begin() + j) --at;
                     const float ceilY = (at->bounded ? at->ceilY : ceilEdge) - 2.f, floorY = (at->bounded ? at->floorY : floorEdge) + 2.f;
-                    const bool fits = side == 0 ? y + half <= ceilY : y - half >= floorY;
+                    bool fits = side == 0 ? y + half <= ceilY : y - half >= floorY;
+                    // at the portals in and out the player is another mode with a bigger hitbox (a
+                    // ship is three times as tall as a wave): there the whole piece keeps clear of it
+                    if (fits && (x - hw < m_nominal[size_t(i)].x + 60.f || x + hw > m_nominal[size_t(j - 1)].x - 60.f)) {
+                        auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x - hw - 40.f, [](const Sample& q, float v) { return q.x < v; });
+                        for (; fits && it != m_nominal.end() && it->x <= x + hw + 40.f; ++it) {
+                            const float r = std::max(it->half, 15.f) + 3.f;
+                            fits = !(it->x + r > x - hw && it->x - r < x + hw && it->y + r > y - half && it->y - r < y + half);
+                        }
+                    }
                     if (!fits || nearPathObject(x, y) || pieceBlocksPath(x, y, rise, side == 1, hw)) continue;
                     wallPiece(x, y, dir > 0, side == 1, steep, true, sc);
                     note(side, x - hw, y - rise * hw, x + hw, y + rise * hw);

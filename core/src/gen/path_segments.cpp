@@ -27,8 +27,7 @@ float rhythmFit(Mode m, double med, double shortest, float holds, double cubeMin
     auto band = [](double x, double lo, double hi) { return x >= lo && x <= hi ? 1.0f : float(std::exp(-std::pow((x < lo ? lo - x : x - hi) / 0.08, 2))); };
     switch (m) {
         // a cube cannot land between clicks much under a quarter second apart: every click would be
-        // an orb, a chain no real layout has (faster rhythms are ufo, ball, wave or ship); demons
-        // jump every fifth of a second, as Extreme demons' cube parts do
+        // an orb, a chain no real layout has (faster rhythms are ufo, ball, wave or ship)
         case Mode::Cube: {
             const float fast = med < cubeMin ? float(std::exp(-std::pow((cubeMin - med) / 0.04, 2))) : 1.0f;
             return (0.25f + 0.75f * band(med, cubeMin, 0.8) - 0.3f * holds) * fast;
@@ -144,7 +143,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         float total = 0;
         for (int m = 0; m < kModeCount; ++m) {
             float user = opt.modeWeights[size_t(m)] < 0 ? 1.0f : opt.modeWeights[size_t(m)];
-            float x = rhythmFit(Mode(m), med, shortest, holdFrac, D >= 6 ? 0.2 : 0.24) * user;
+            float x = rhythmFit(Mode(m), med, shortest, holdFrac) * user;
             if (opt.profile) x *= opt.profile->modeFactor(m);
             if (Mode(m) == prev) x *= 0.12f;
             if (Mode(m) == prev2) x *= 0.6f;
