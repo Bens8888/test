@@ -1,6 +1,9 @@
 # Changelog
 
 ## v0.2.0
+- Fixed: wave walls broke or drifted off the path where the wave turns to mini and on strokes
+  shorter than a block; each stroke is now tiled exactly, and a change in the corridor's width is
+  closed with an upright line
 - Demons are harder, closer to real ones (measured against a Bloodbath run logged in GD): normal
   speed with the hazards packed close, spikes along the whole path (on the ground, on faces and on
   short pillars grown from the structures), and a spike for every click a badly timed press would

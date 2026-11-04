@@ -244,9 +244,9 @@ private:
     bool objectFits(const LevelObject& o, Box* out) const;
     void placeObject(const LevelObject& o);
     void waveWalls();
-    void wallPiece(float x, float y, bool up, bool solidBelow, bool steep, bool solid);
+    void wallPiece(float x, float y, bool up, bool solidBelow, bool steep, bool solid, float scale = 1.0f);
     bool nearPathObject(float x, float y) const;
-    bool pieceBlocksPath(float x, float y, float slope, bool solidBelow) const;
+    bool pieceBlocksPath(float x, float y, float slope, bool solidBelow, float halfW = 15.0f) const;
     void measureWindows();
 };
 
@@ -1417,8 +1417,9 @@ void Structurer::joinShapes() {
 }
 
 // One slope of a wave wall, its long edge through (x, y). solid: the player can reach it.
-void Structurer::wallPiece(float x, float y, bool up, bool solidBelow, bool steep, bool solid) {
+void Structurer::wallPiece(float x, float y, bool up, bool solidBelow, bool steep, bool solid, float scale) {
     LevelObject o = make(steep ? 1339 : 1338, x, y, steep ? 90 : 0);
+    o.scale = scale;
     if (steep) {
         o.flipX = !solidBelow;
         o.flipY = solidBelow == up;
@@ -1429,7 +1430,8 @@ void Structurer::wallPiece(float x, float y, bool up, bool solidBelow, bool stee
     m_objects.push_back(o);
     if (!solid) return;
     m_W.addObject(o, -1);
-    m_built.addBox({x - 15, y - (steep ? 30.f : 15.f), x + 15, y + (steep ? 30.f : 15.f)});
+    const float hw = 15.f * scale, hh = (steep ? 30.f : 15.f) * scale;
+    m_built.addBox({x - hw, y - hh, x + hw, y + hh});
     ++m_res.corridorCells;
 }
 
@@ -1444,9 +1446,9 @@ bool Structurer::nearPathObject(float x, float y) const {
 }
 
 // Whether the planned path comes within a few units of the solid side of a wall piece.
-bool Structurer::pieceBlocksPath(float x, float y, float slope, bool solidBelow) const {
-    const float x0 = x - 15, x1 = x + 15;
-    const float half = std::fabs(slope) * 15.0f; // half the piece's height
+bool Structurer::pieceBlocksPath(float x, float y, float slope, bool solidBelow, float halfW) const {
+    const float x0 = x - halfW, x1 = x + halfW;
+    const float half = std::fabs(slope) * halfW; // half the piece's height
     auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x0 - 12.f, [](const Sample& q, float v) { return q.x < v; });
     const float clear = m_waveMargin * 0.3f;
     for (; it != m_nominal.end() && it->x <= x1 + 12.f; ++it) {
@@ -1479,64 +1481,90 @@ void Structurer::waveWalls() {
             if (!first[side].set || xl < first[side].x) first[side] = {xl, yl, true};
             if (!last[side].set || xr > last[side].x) last[side] = {xr, yr, true};
         };
-        // the strokes: straight pieces of the path
+        // the strokes: straight pieces of the path, split where the slope changes (a mini or speed
+        // portal) as well as at every turn
+        const auto dirAt = [&](int t) {
+            const Sample& u = m_nominal[size_t(t)];
+            const Sample& v = m_nominal[size_t(t + 1)];
+            const float d = v.y - u.y, dx = std::max(0.01f, v.x - u.x);
+            const int sgn = d > 0.05f ? 1 : d < -0.05f ? -1 : 0;
+            return std::fabs(d) > 1.5f * dx ? sgn * 2 : sgn;
+        };
+        // where each wall's line ended, so a jump in the corridor's width (a size portal) is closed
+        // with an upright line instead of leaving a gap
+        struct Tip { float x, y; bool set = false; };
+        Tip tip[2];
+        auto joinTo = [&](int side, float x, float y) {
+            Tip& t = tip[side];
+            if (t.set && std::fabs(t.x - x) < 2.0f && std::fabs(t.y - y) > 2.0f) {
+                const float lo = std::min(t.y, y), hi = std::max(t.y, y);
+                const int count = std::max(1, int(std::ceil((hi - lo) / kCell - 0.01f)));
+                const float len = (hi - lo) / float(count);
+                for (int k = 0; k < count; ++k) {
+                    const float cy = lo + len * (float(k) + 0.5f);
+                    LevelObject line = make(oid::OutlineTop, x, cy, 90);
+                    line.scale = len / kCell;
+                    m_objects.push_back(line);
+                    m_W.addObject(line, -1);
+                }
+            }
+        };
         for (int a = i + 1; a + 1 < j;) {
-            const auto dirAt = [&](int t) {
-                const float d = m_nominal[size_t(t + 1)].y - m_nominal[size_t(t)].y;
-                return d > 0.05f ? 1 : d < -0.05f ? -1 : 0;
-            };
-            const int dir = dirAt(a);
+            const int key = dirAt(a);
             int b = a + 1;
-            while (b + 1 < j && dirAt(b) == dir) ++b;
+            while (b + 1 < j && dirAt(b) == key) ++b;
             const Sample& p0 = m_nominal[size_t(a)];
             const Sample& p1 = m_nominal[size_t(b)];
             const float width = p1.x - p0.x;
             a = b;
-            if (width < 8) continue;
+            if (width < 3) continue;
+            const int dir = key > 0 ? 1 : key < 0 ? -1 : 0;
             // a 2:1 stroke moves twice as fast up and down, so a late press costs twice the room
             const float gap0 = m_waveMargin * (p0.half < 4 ? 1.6f : 1.0f) + p0.half;
             const float ceilEdge = p0.bounded ? p0.ceilY : 2700.f, floorEdge = p0.bounded ? p0.floorY : 0.f;
+            // the stroke is tiled exactly: whole pieces, all scaled down a little so the last one ends
+            // on the turn (a stroke shorter than a block gets one small piece)
+            const int count = std::max(1, int(std::ceil(width / kCell - 0.01f)));
+            const float step = width / float(count), sc = step / kCell, hw = 15.f * sc;
             if (dir == 0) {
                 // a slide: a straight stretch of wall joins the strokes on both sides
-                for (float x = p0.x + 15; x < p1.x; x += kCell) {
-                    for (const float y : {p0.y + gap0, p0.y - gap0}) {
-                        if (y >= ceilEdge || y <= floorEdge || nearPathObject(x, y)) continue;
+                for (const float y : {p0.y + gap0, p0.y - gap0}) {
+                    const int side = y > p0.y ? 0 : 1;
+                    if (y >= ceilEdge || y <= floorEdge) continue;
+                    joinTo(side, p0.x, y);
+                    for (int k = 0; k < count; ++k) {
+                        const float x = p0.x + step * (float(k) + 0.5f);
+                        if (nearPathObject(x, y) || pieceBlocksPath(x, y, 0, side == 1, hw)) continue;
                         LevelObject line = make(oid::OutlineTop, x, y, 0);
-                        if (pieceBlocksPath(x, y, 0, y < p0.y)) continue;
+                        line.scale = sc;
                         m_objects.push_back(line);
                         m_W.addObject(line, -1);
-                        note(y > p0.y ? 0 : 1, x - 15, y, x + 15, y);
+                        note(side, x - hw, y, x + hw, y);
                     }
+                    tip[side] = {p1.x, y, true};
                 }
                 continue;
             }
-            const bool steep = std::fabs(p1.y - p0.y) > width * 1.5f;
-            const float rise = steep ? 2.0f : 1.0f;
-            // pieces from both ends of the stroke; in the middle they overlap
-            std::vector<float> xs;
-            const int count = std::max(1, int(std::ceil(width / kCell)));
-            for (int k = 0; k < count; ++k) xs.push_back(count == 1 ? 0.5f * (p0.x + p1.x) : p0.x + 15 + (width - 30) * float(k) / float(count - 1));
-            const float half = steep ? 30.f : 15.f;
-            for (int layer = 0; layer < 1; ++layer) {
-                const float off = gap0 + float(layer) * 2.0f * half;
-                for (size_t xi = 0; xi < xs.size(); ++xi) {
-                    const float x = xs[xi];
-                    const float y = p0.y + float(dir) * rise * (x - p0.x);
-                    const float over = y + off, under = y - off;
+            const bool steep = key == 2 || key == -2;
+            const float slope = (p1.y - p0.y) / width;
+            const float rise = float(dir) * (steep ? 2.0f : 1.0f);
+            const float half = (steep ? 30.f : 15.f) * sc;
+            for (int side = 0; side < 2; ++side) {
+                const float off = side == 0 ? gap0 : -gap0;
+                joinTo(side, p0.x, p0.y + off);
+                for (int k = 0; k < count; ++k) {
+                    const float x = p0.x + step * (float(k) + 0.5f);
+                    const float y = p0.y + slope * (x - p0.x) + off;
                     // the bounds where the piece is (a wave portal can move them)
                     auto at = std::lower_bound(m_nominal.begin() + i, m_nominal.begin() + j, x, [](const Sample& q, float v) { return q.x < v; });
                     if (at == m_nominal.begin() + j) --at;
                     const float ceilY = (at->bounded ? at->ceilY : ceilEdge) - 2.f, floorY = (at->bounded ? at->floorY : floorEdge) + 2.f;
-                    const float slope = float(dir) * rise;
-                    if (over + half <= ceilY && !nearPathObject(x, over) && !pieceBlocksPath(x, over, slope, false)) {
-                        wallPiece(x, over, dir > 0, false, steep, layer == 0);
-                        note(0, x - 15, over - slope * 15, x + 15, over + slope * 15);
-                    }
-                    if (under - half >= floorY && !nearPathObject(x, under) && !pieceBlocksPath(x, under, slope, true)) {
-                        wallPiece(x, under, dir > 0, true, steep, layer == 0);
-                        note(1, x - 15, under - slope * 15, x + 15, under + slope * 15);
-                    }
+                    const bool fits = side == 0 ? y + half <= ceilY : y - half >= floorY;
+                    if (!fits || nearPathObject(x, y) || pieceBlocksPath(x, y, rise, side == 1, hw)) continue;
+                    wallPiece(x, y, dir > 0, side == 1, steep, true, sc);
+                    note(side, x - hw, y - rise * hw, x + hw, y + rise * hw);
                 }
+                tip[side] = {p1.x, p1.y + off, true};
             }
         }
         // the corridor is closed at both ends: from each wall's end a line runs on to the bound,
