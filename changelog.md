@@ -1,6 +1,12 @@
 # Changelog
 
 ## v0.2.0
+- Classic structures learned from about 280 levels (was about 70): the most liked rated Hard,
+  Harder and Insane levels join RobTop's levels, with wider spacing as in those levels
+- Classic cube parts keep the sky open: everything stands on the ground, nothing hangs over the
+  player unless there is a ceiling
+- Pillars that cannot reach the floor or the bound are closed at the end, and lone edge lines
+  left over from a cut-off pillar are dropped
 - Difficulty matches real ratings: Auto picks Harder to Insane (it used to land near Easy demon),
   Insane clicks about twice a second at its busiest (Extreme about five times), with wider timing
   windows and fewer gamemode changes below demon ratings

@@ -28,9 +28,13 @@ CLASSIC_DEMONS = {"5310094", "7116121", "13519", "10109", "5904109", "6939821", 
                   "23298409", "38445559"}
 
 
+# mixes and sped-up copies of RobTop's levels
+ROBTOP_COPIES = {"411459", "741941", "1694003", "11698380", "856066", "862216", "877915"}
+
+
 def source(level_id):
-    """Who made a level: RobTop's levels count as one source, every other level as its own."""
-    return "robtop" if level_id.startswith("rt") else level_id
+    """Who made a level: RobTop's levels and copies of them count as one source, every other level as its own."""
+    return "robtop" if level_id.startswith("rt") or level_id in ROBTOP_COPIES else level_id
 SKIP = {"13850073", "4125776", "11431524", "76962930", "rt3001"}   # copies, and one-of-a-kind mega structures
 SPIKES = {8, 39, 103, 392, 144, 145, 177, 178, 179, 205, 216, 217, 218, 458, 459}
 MODE_PORTALS = {12: "ground", 47: "ground", 745: "ground", 1331: "ground", 13: "fly", 111: "fly", 1933: "fly", 660: "wave"}
@@ -140,7 +144,7 @@ def main():
     kinds = extract.object_table()
     index = json.load(open(os.path.join(extract.LEVELS, "index.json")))
     STYLES["Classic"] = sorted(l for l, e in index.items() if l not in SKIP and
-                               (l.startswith("rt") or 6 <= e.get("stars", 0) <= 9 or l in CLASSIC_DEMONS))
+                               (l.startswith("rt") or 4 <= e.get("stars", 0) <= 9 or l in CLASSIC_DEMONS))
     print("classic levels:", len(STYLES["Classic"]))
     level_found, level_portals, level_saws = {}, {}, {}
     for level_id in index:

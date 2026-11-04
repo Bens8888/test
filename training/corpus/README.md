@@ -13,9 +13,11 @@ Teaches the generator what good structures look like.
 - `train.py` writes `core/src/gen/module_library.inc`. Edit its `STYLES` to change which levels define a
   style, and `OWN` for levels whose structures may ship as they are. From every other level only
   shapes used by two or more levels ship (RobTop's levels count as one).
-- The Classic style learns from RobTop's own levels, rated Harder to Insane levels (6 to 9 stars, by
+- The Classic style learns from RobTop's own levels, rated Hard to Insane levels (4 to 9 stars, by
   the `stars` fetch.py stores) and a few classic easy demons. Its shapes use only the plain block
   and the outline pieces, and no style keeps a shape whose blocks lie over each other.
+  `python fetch.py --rated 3,4,5 8` fetches the 80 most liked rated Hard, Harder and Insane levels
+  each. Mixes and sped-up copies of RobTop's levels go in `ROBTOP_COPIES` in train.py.
 - RobTop's levels come from the game itself: `Resources/levels/<n>.txt`, base64 of a gzipped level
   string, stored in `levels/` as `rt<n>.txt`.
 

@@ -11,9 +11,9 @@ OUT = os.path.join(HERE, "levels")
 BASE = "https://www.boomlings.com/database/"
 
 
-def post(page, **fields):
+def post(endpoint, **fields):
     fields["secret"] = "Wmfd2893gb7"
-    req = urllib.request.Request(BASE + page, urllib.parse.urlencode(fields).encode(), {"User-Agent": ""})
+    req = urllib.request.Request(BASE + endpoint, urllib.parse.urlencode(fields).encode(), {"User-Agent": ""})
     with urllib.request.urlopen(req, timeout=40) as r:
         return r.read().decode("latin1")
 
@@ -36,11 +36,27 @@ def search(name):
     return best
 
 
+def rated(diff, pages):
+    """IDs of the most liked rated levels of one difficulty (3 Hard, 4 Harder, 5 Insane), 10 per page."""
+    ids = []
+    for page in range(pages):
+        body = post("getGJLevels21.php", type=2, diff=diff, star=1, page=page)
+        time.sleep(2)
+        if body.startswith("-1"):
+            break
+        ids += [parse(e)["1"] for e in body.split("#")[0].split("|")]
+    return ids
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     index_path = os.path.join(OUT, "index.json")
     index = json.load(open(index_path)) if os.path.exists(index_path) else {}
-    for arg in sys.argv[1:]:
+    args = sys.argv[1:]
+    if args[:1] == ["--rated"]:
+        # fetch.py --rated 3,4,5 6: the most liked rated levels of those difficulties, 6 pages each
+        args = [i for d in args[1].split(",") for i in rated(d, int(args[2]))]
+    for arg in args:
         creator = "?"
         level_id = arg
         if not arg.isdigit():

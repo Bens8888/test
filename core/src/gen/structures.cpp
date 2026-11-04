@@ -183,10 +183,13 @@ private:
     void necessity();
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void placeModules(int firstLane, int lastLane);
-    struct PillarEnd { LevelObject piece; float dir, target; };
+    struct PillarEnd { LevelObject piece; float dir, target; int module; };
+    int m_moduleCount = 0;
     std::vector<PillarEnd> m_pillarEnds;
     void extendPillars();
     void bands();
+    // a Classic ground stretch without a ceiling: real cube parts have nothing above the player
+    bool openSky(const Sample& s) const { return m_style == 4 && !s.bounded && !isFlyingMode(s.mode) && s.mode != Mode::Wave; }
     bool bandCell(int cx, int cy);
     void lineFace(float x, float faceY, int toward, int kind);
     void lineWall(float wallX, float y, int side);
@@ -522,6 +525,38 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         }
         objs = std::move(kept);
     }
+    // an edge line touching no other piece (its pillar was cut off at a bound) stands alone in the air
+    {
+        std::vector<Box> boxes(objs.size());
+        std::vector<bool> solid(objs.size());
+        for (size_t k = 0; k < objs.size(); ++k) {
+            phys::SimObject so;
+            solid[k] = phys::World::makeSimObject(objs[k], 0, so) && so.kind == level::Kind::Solid;
+            if (solid[k]) boxes[k] = {so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh};
+        }
+        // groups of touching solid pieces; a group of only upright edge lines is a lone line
+        std::vector<int> group(objs.size(), -1);
+        int groups = 0;
+        for (size_t k = 0; k < objs.size(); ++k) {
+            if (!solid[k] || group[k] >= 0) continue;
+            std::vector<size_t> todo{k};
+            group[k] = groups;
+            while (!todo.empty()) {
+                const size_t a = todo.back();
+                todo.pop_back();
+                for (size_t m = 0; m < objs.size(); ++m)
+                    if (solid[m] && group[m] < 0 && overlap(boxes[a], boxes[m], 1.5f)) { group[m] = groups; todo.push_back(m); }
+            }
+            ++groups;
+        }
+        std::vector<bool> lone(size_t(groups), true);
+        for (size_t k = 0; k < objs.size(); ++k)
+            if (group[k] >= 0 && !(objs[k].id == oid::OutlineTop && std::fmod(std::fabs(objs[k].rotation), 180.0) == 90)) lone[size_t(group[k])] = false;
+        std::vector<LevelObject> kept;
+        for (size_t k = 0; k < objs.size(); ++k)
+            if (group[k] < 0 || !lone[size_t(group[k])]) kept.push_back(objs[k]);
+        objs = std::move(kept);
+    }
     if (objs.empty()) return false;
     // A pillar's far end was cut off from the source level, where it ran on into the ground or the
     // ceiling: its side lines go on later (extendPillars, once the bands are built).
@@ -541,8 +576,9 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
             const LevelObject& o = objs[k];
             const bool upright = std::fmod(std::fabs(o.rotation), 180.0) == 90;
             const bool side = (o.id == oid::OutlineTop && upright) || (o.id == oid::OutlinePillar && !upright);
-            if (side && (under ? boxes[k].y0 <= lo + 1 : boxes[k].y1 >= hi - 1)) ends.push_back({o, under ? -1.f : 1.f, target});
+            if (side && (under ? boxes[k].y0 <= lo + 1 : boxes[k].y1 >= hi - 1)) ends.push_back({o, under ? -1.f : 1.f, target, m_moduleCount});
         }
+        ++m_moduleCount;
     }
     for (auto& o : objs) {
         placeObject(o);
@@ -562,23 +598,78 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
 // The side lines of the pillars go on to the floor or the bound, so they do not end open in the
 // air, and stop at the first face on the way (a band, another structure): a line through a block
 // would show inside it. The last piece moves up to the face, overlapping the one before.
+// A pillar that cannot reach either stops at the same height on both sides and is closed there.
 void Structurer::extendPillars() {
-    for (const PillarEnd& pe : m_pillarEnds) {
+    auto fits = [&](const LevelObject& e) {
+        const Box b{float(e.x) - 2, float(e.y) - 15, float(e.x) + 2, float(e.y) + 15};
+        for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+        if (m_env.hits(b, m_margin) || m_drawn.hits(b, -1)) return false;
+        if (m_built.hits({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, 0.5f)) return false;
+        const int cy = int(std::floor(float(e.y) / kCell));
+        for (int cx = int(std::floor(b.x0 / kCell)); cx <= int(std::floor(b.x1 / kCell)); ++cx)
+            for (int y = cy - 1; y <= cy + 1; ++y) {
+                const Box cb = cellBox(cx, y);
+                if ((m_res.cells.filled(cx, y) || m_platforms.filled(cx, y)) && overlap({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, cb, 0)) return false;
+            }
+        return true;
+    };
+    // whole cells each end can go before it is blocked, and whether that reaches its bound
+    auto reach = [&](const PillarEnd& pe, bool& reaches) {
+        const float sink = pe.dir < 0 && pe.target <= 0 ? 29.f : 0.5f;
+        LevelObject e = pe.piece;
+        for (int step = 0; step < 10; ++step) {
+            e.y = pe.piece.y + double(pe.dir * kCell * float(step + 1));
+            if (pe.dir < 0 ? e.y - 15 < pe.target - sink : e.y + 15 > pe.target + 0.5f) { reaches = true; return step; }
+            if (!fits(e)) break;
+        }
+        reaches = false;
+        return 0;
+    };
+    std::vector<PillarEnd> open;
+    for (size_t a = 0; a < m_pillarEnds.size();) {
+        size_t b = a;
+        while (b < m_pillarEnds.size() && m_pillarEnds[b].module == m_pillarEnds[a].module) ++b;
+        bool all = true;
+        for (size_t k = a; k < b && all; ++k) reach(m_pillarEnds[k], all);        if (all) {
+            for (size_t k = a; k < b; ++k) open.push_back(m_pillarEnds[k]);
+        } else {
+            // stop every side at the shortest whole reach and close the pillars there
+            std::vector<PillarEnd> ends(m_pillarEnds.begin() + long(a), m_pillarEnds.begin() + long(b));
+            std::sort(ends.begin(), ends.end(), [](const PillarEnd& p, const PillarEnd& q) { return p.piece.x < q.piece.x; });
+            const float d = ends[0].dir;
+            int steps = 10;
+            for (auto& pe : ends) { bool r; steps = std::min(steps, reach(pe, r)); }
+            for (auto& pe : ends)
+                for (int s = 1; s <= steps; ++s) {
+                    LevelObject e = pe.piece;
+                    e.y = pe.piece.y + double(d * kCell * float(s));
+                    placeObject(e);
+                }
+            const double endY = ends[0].piece.y + double(d * kCell * (float(steps) + 0.5f)) - double(d * 0.75f);
+            auto cap = [&](double x0, double x1) {
+                for (double x = x0 + 15; x < x1 + 14; x += kCell) {
+                    LevelObject c = make(oid::OutlineTop, std::min(x, x1 - 15), endY, d < 0 ? 180 : 0);
+                    m_objects.push_back(c);
+                    m_W.addObject(c, -1);
+                }
+            };
+            for (size_t k = 0; k < ends.size();) {
+                const LevelObject& o = ends[k].piece;
+                if (o.id == oid::OutlinePillar) { cap(o.x - 15, o.x + 15); ++k; continue; }
+                // two side lines up to four cells apart are one pillar
+                if (k + 1 < ends.size() && ends[k + 1].piece.id == oid::OutlineTop && ends[k + 1].piece.x - o.x > 20 && ends[k + 1].piece.x - o.x < 125) {
+                    cap(o.x - 0.75, ends[k + 1].piece.x + 0.75);
+                    k += 2;
+                    continue;
+                }
+                ++k;
+            }
+        }
+        a = b;
+    }
+    for (const PillarEnd& pe : open) {
         const LevelObject& o = pe.piece;
         const float d = pe.dir;
-        auto fits = [&](const LevelObject& e) {
-            const Box b{float(e.x) - 2, float(e.y) - 15, float(e.x) + 2, float(e.y) + 15};
-            for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
-            if (m_env.hits(b, m_margin) || m_drawn.hits(b, -1)) return false;
-            if (m_built.hits({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, 0.5f)) return false;
-            const int cy = int(std::floor(float(e.y) / kCell));
-            for (int cx = int(std::floor(b.x0 / kCell)); cx <= int(std::floor(b.x1 / kCell)); ++cx)
-                for (int y = cy - 1; y <= cy + 1; ++y) {
-                    const Box cb = cellBox(cx, y);
-                    if ((m_res.cells.filled(cx, y) || m_platforms.filled(cx, y)) && overlap({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, cb, 0)) return false;
-                }
-            return true;
-        };
         // the ground is drawn over what reaches into it
         const float sink = d < 0 && pe.target <= 0 ? 29.f : 0.5f;
         double y = o.y;
@@ -643,6 +734,8 @@ void Structurer::placeModules(int firstLane, int lastLane) {
         // flies through structures instead of past a few shapes
         for (int lane = firstLane; lane <= lastLane; ++lane) {
             const bool under = lane % 2 == 1, back = lane >= 2;
+            // a classic ground stretch keeps its sky open and stands everything on the floor
+            if (openSky(q) && (back || under == (q.g < 0))) continue;
             si = size_t(i);
             int cx = c0 + (under ? 1 + int(r.below(3)) : 0) + (back ? 2 : 0);
             int step = 0;
@@ -766,6 +859,7 @@ void Structurer::bands() {
         const int cols = c1 - c0 + 1;
         const size_t ncol = size_t(cols);
         for (int dir : {1, -1}) {
+            if (openSky(q) && dir == q.g) continue;
             const auto& reach = dir > 0 ? m_reachOver : m_reachUnder;
             auto further = [dir](int a, int b) { return dir > 0 ? std::max(a, b) : std::min(a, b); };
             // the first free row of each column on this side of the reserved space
