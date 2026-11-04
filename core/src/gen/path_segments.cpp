@@ -207,7 +207,9 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         int cap = D >= 6 ? 3 : (D >= 3 ? 3 : 2);
         if ((sg.mode == Mode::Wave || sg.mode == Mode::Swing || sg.mode == Mode::Spider) && D < 6) cap = 2;
         // slow speed only in a breather
-        const bool slowOk = sg.mode != Mode::Spider && sg.mode != Mode::Wave && sg.mode != Mode::Swing;
+        // (not in demons: at half speed the portals into the next part need more room than the
+        // quick clicks leave, and the switch never happens)
+        const bool slowOk = D < 5 && sg.mode != Mode::Spider && sg.mode != Mode::Wave && sg.mode != Mode::Swing;
         sg.speed = std::clamp(sp, slowOk && (intent == Intent::Breather || sg.intensity < 0.35f) ? 0 : 1, cap);
         if (sg.mode == Mode::Wave) sg.speed = std::max(sg.speed, 2); // longer strokes, bigger triangles
         // size: mini for fast streams in flying modes

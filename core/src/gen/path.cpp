@@ -576,7 +576,8 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
             if (sg.mini != cur.mini) { px += 45; addObj(c, make(sg.mini ? oid::PortalSizeMini : oid::PortalSizeNormal, px, portalY(px)), Act::ModePortal, k); }
             // upside down with nothing above, a part that starts high falls up off the screen and
             // climbs on from platform to platform: it stays the right way up
-            const bool flip = sg.flipped && (cur.bounded || q.y < 360.0f);
+            // (the ceiling of the part before does not count: the new mode may have none)
+            const bool flip = sg.flipped && q.y < 360.0f;
             if (flip != cur.upsideDown) { px += 45; addObj(c, make(flip ? oid::PortalGravFlip : oid::PortalGravNormal, px, portalY(px)), Act::ModePortal, k); }
             if (px <= at(base, Tn - 12).x && evaluate(c, until) && c.end.p[0].mode == sg.mode) {
                 // after the portals the new mode may need a surface for its first click
@@ -729,6 +730,16 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     // (real Extreme demons take about one orb a second, so a chain is scored well down, except in a
     // spider part, which often has no other way to make a click count)
     if (c.act == Act::Orb && n && n->used && n->act == Act::Orb && n->parent && n->parent->used && n->parent->act == Act::Orb) s -= c.info.mode == Mode::Spider ? 0.6 : 1.8;
+    // and about one orb in four clicks over all: pairs of orbs with a tap between are a chain too
+    if (c.act == Act::Orb && c.info.mode != Mode::Spider) {
+        int orbs = 0, seen = 0;
+        for (const Node* p = n; p && seen < 4; p = p->parent.get()) {
+            if (!p->used) continue;
+            ++seen;
+            orbs += p->act == Act::Orb;
+        }
+        s -= 0.5 * orbs;
+    }
     // big actions on strong hits
     const bool big = (c.act == Act::Orb && (c.sub == oid::OrbRed || c.sub == oid::OrbBlack || c.sub == oid::OrbDash || c.sub == oid::OrbGreen || c.sub == oid::OrbBlue));
     if (big) s += 0.8 * (ck.strength - 0.45);

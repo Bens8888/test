@@ -172,7 +172,18 @@ private:
     // structures stay between the start and the end of the level (nothing behind the player at the
     // start or after the end trigger)
     float m_xMin = 300, m_xMax = 1e9f;
-    bool inLevel(const Box& b) const { return b.x0 >= m_xMin && b.x1 <= m_xMax; }
+    // between the start and the end, and no more than a screen's third above the path there
+    // (a shape far up in the sky is off the screen)
+    bool inLevel(const Box& b) const {
+        if (b.x0 < m_xMin || b.x1 > m_xMax) return false;
+        if (m_pathTop.empty()) return true;
+        const int c0 = std::clamp(int(std::floor(b.x0 / kCell)), 0, int(m_pathTop.size()) - 1);
+        const int c1 = std::clamp(int(std::floor(b.x1 / kCell)), 0, int(m_pathTop.size()) - 1);
+        float top = 0;
+        for (int c = c0; c <= c1; ++c) top = std::max(top, m_pathTop[size_t(c)]);
+        return b.y0 <= top + 240.0f;
+    }
+    std::vector<float> m_pathTop;     // per column: the highest the path gets within a screen of it
     Envelope m_drawn;                 // every hazard as it is drawn
     float m_margin = 4;               // extra distance kept from the reserved space
     float m_hazMargin = 4;            // the same for hazards (smaller at demon ratings)
@@ -1688,6 +1699,17 @@ StructureResult Structurer::run() {
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
     const float endX = std::floor(((m_nominal.empty() ? 600.0f : m_nominal.back().x) - 45.0f) / 30.0f) * 30.0f + 15;
     m_xMax = endX - 15;
+    {
+        std::vector<float> col(size_t(std::max(1.0f, endX / kCell + 2)), 0.0f);
+        for (const Sample& q : m_nominal) {
+            const int c = int(std::floor(q.x / kCell));
+            if (c >= 0 && c < int(col.size())) col[size_t(c)] = std::max(col[size_t(c)], q.y + q.half);
+        }
+        m_pathTop.assign(col.size(), 0.0f);
+        for (int c = 0; c < int(col.size()); ++c)
+            for (int d = -10; d <= 10; ++d)
+                if (c + d >= 0 && c + d < int(col.size())) m_pathTop[size_t(c)] = std::max(m_pathTop[size_t(c)], col[size_t(c + d)]);
+    }
     buildEnvelope();
     waveWalls();
     // Easy and Normal ground parts have at most two spikes in a row, Hard and Harder three

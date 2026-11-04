@@ -4,7 +4,12 @@
 - Fixed: Extreme layouts on most songs failed their final check and fell back to fewer
   structures. A ship leaving a wave part grazed the last wall piece (a ship is taller than a wave),
   and a ship passing over a slope was pulled down onto it; both bent the run off the checked path
-- Orb chains outside spider parts are scored further down
+- About one orb in four clicks, as in real Extreme demons: pairs of orbs over and over are scored
+  down too (ufo parts took an orb on two clicks in three)
+- Nothing is built far above the path, and no part starts upside down high up (it fell up and
+  climbed off the screen)
+- Slow speed only below demon ratings: in demons the portals out of a slow part did not fit
+  between the quick clicks, and one gamemode could run for half the level
 - Measured against about 800 real levels (`alcli stats`, new demons fetched with `fetch.py --rated d3,d4,d5`)
   and tuned toward them: cube is the main gamemode again (near half of the time, spider and swing
   rare), pads as often as in real levels below demon ratings, gravity portals rarer below demons
