@@ -222,7 +222,10 @@ TEST(structures_are_a_mass_with_lined_faces) {
     }
     const double screens = last / 570.0;
     CHECK_MSG(double(res.level.objects.size()) / screens > 40, "%.0f objects per screen", double(res.level.objects.size()) / screens);
-    CHECK_MSG(double(hazards) / screens > 15, "%.0f hazards per screen", double(hazards) / screens);
+    // per second, as the player meets them (real Insane levels: about 17 a second); a screen is longer
+    // in the faster parts
+    const double secs = std::max(1.0, res.plan.duration);
+    CHECK_MSG(double(hazards) / secs > 10, "%.1f hazards a second", double(hazards) / secs);
 }
 
 // Spikes stand straight on their block or wall, at quarter turns only.

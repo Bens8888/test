@@ -39,6 +39,7 @@ static int usage() {
         "  alcli bench [model.alm] [out.json]        performance benchmark (analysis, generation, physics, bot, model)\n"
         "  alcli validate <level.gmd> <recording> [yOffset=90]  simulator vs a run recorded in GD (position error per input)\n"
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
+        "  alcli stats <level.gmd|level.txt>...       gamemode stretches, hazards, orbs and portals per second (one line per level)\n"
         "  alcli render <level.gmd|piece-test> <out.png> [x0] [x1] [y0 y1]   draw a level (outline silhouettes, orbs, pads, portals)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
@@ -276,6 +277,82 @@ int main(int argc, char** argv) {
         if (argc >= 8) { ro.y0 = float(std::atof(argv[6])); ro.y1 = float(std::atof(argv[7])); }
         writeFile(argv[3], report::renderPng(L, nullptr, ro));
         std::printf("wrote %s\n", argv[3]);
+        return 0;
+    }
+    if (cmd == "stats" && argc >= 3) {
+        // what a level is made of over time, the same numbers for a real level and a generated one:
+        // one tab-separated line per level (a .gmd or a raw level string)
+        std::printf("level\tsec\tmodes\tchanges/min\tmedian stretch s\tshortest quarter s\thazards/s\tsolids/s\torbs/s\tpads/s\tgravity/min\tspeed changes\tcube\tship\tball\tufo\twave\trobot\tspider\tswing\n");
+        for (int a = 2; a < argc; ++a) {
+            std::string text, err;
+            if (!readFile(argv[a], text)) { std::fprintf(stderr, "cannot read %s\n", argv[a]); continue; }
+            auto lvl = text.rfind("<?xml", 0) == 0 ? level::Level::fromGmd(text, &err) : level::Level::fromLevelString(text, &err);
+            if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[a], err.c_str()); continue; }
+            struct Ev { double x; level::Kind kind; int sub; };
+            std::vector<Ev> ev;
+            double xEnd = 0;
+            for (auto& o : lvl->objects) {
+                const auto& info = level::objectInfo(o.id);
+                if (info.kind == level::Kind::Deco || info.kind == level::Kind::Trigger || info.kind == level::Kind::StartPos) continue;
+                ev.push_back({o.x, info.kind, info.sub});
+                if (info.kind != level::Kind::EndTrigger) xEnd = std::max(xEnd, o.x);
+            }
+            std::sort(ev.begin(), ev.end(), [](const Ev& p, const Ev& q) { return p.x < q.x; });
+            // seconds at every x, from the speed portals in order
+            std::vector<std::pair<double, int>> speeds{{0.0, lvl->settings.startSpeed}};
+            for (auto& e : ev) if (e.kind == level::Kind::SpeedPortal) speeds.push_back({e.x, e.sub});
+            auto timeAt = [&](double x) {
+                double t = 0;
+                for (size_t k = 0; k < speeds.size(); ++k) {
+                    const double x0 = speeds[k].first, x1 = k + 1 < speeds.size() ? speeds[k + 1].first : 1e18;
+                    const double v = phys::unitsPerSecond(speeds[k].second);
+                    if (x <= x1) return t + (x - x0) / v;
+                    t += (x1 - x0) / v;
+                }
+                return t;
+            };
+            const double secs = std::max(1.0, timeAt(xEnd));
+            int haz = 0, sol = 0, orb = 0, pad = 0, grav = 0, spd = 0;
+            int mode = int(lvl->settings.startMode);
+            double since = 0;
+            std::vector<double> stretches;
+            double share[8] = {0};
+            int changes = 0;
+            for (auto& e : ev) {
+                switch (e.kind) {
+                    case level::Kind::Hazard: case level::Kind::Saw: case level::Kind::HazardSlope: ++haz; break;
+                    case level::Kind::Solid: case level::Kind::Slope: ++sol; break;
+                    case level::Kind::Orb: ++orb; break;
+                    case level::Kind::Pad: ++pad; break;
+                    case level::Kind::GravityPortal: ++grav; break;
+                    case level::Kind::SpeedPortal: ++spd; break;
+                    case level::Kind::ModePortal: {
+                        if (e.sub == mode) break;
+                        const double t = timeAt(e.x);
+                        // portals a moment apart (a pair stacked over each other, or a fake) are one change
+                        if (t - since < 0.2) { mode = e.sub; break; }
+                        stretches.push_back(t - since);
+                        share[mode & 7] += t - since;
+                        since = t;
+                        mode = e.sub;
+                        ++changes;
+                        break;
+                    }
+                    default: break;
+                }
+            }
+            stretches.push_back(secs - since);
+            share[mode & 7] += std::max(0.0, secs - since);
+            std::sort(stretches.begin(), stretches.end());
+            int used = 0;
+            for (double v : share) used += v > 0.5;
+            std::string name = argv[a];
+            name = name.substr(name.find_last_of("/\\") + 1);
+            std::printf("%s\t%.0f\t%d\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f\t%.2f\t%.2f\t%.1f\t%d", name.c_str(), secs, used, changes * 60.0 / secs, stretches[stretches.size() / 2],
+                        stretches[stretches.size() / 4], haz / secs, sol / secs, orb / secs, pad / secs, grav * 60.0 / secs, spd);
+            for (double v : share) std::printf("\t%.0f%%", 100.0 * v / secs);
+            std::printf("\n");
+        }
         return 0;
     }
     if (cmd == "windows" && argc >= 4) {

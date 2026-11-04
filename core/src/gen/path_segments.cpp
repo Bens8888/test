@@ -23,14 +23,15 @@ bool nearDownbeat(const audio::MusicAnalysis& A, double t) {
 }
 
 // How well a gamemode expresses a stretch of clicks: median gap, shortest gap, share of holds.
-float rhythmFit(Mode m, double med, double shortest, float holds) {
+float rhythmFit(Mode m, double med, double shortest, float holds, double cubeMin = 0.24) {
     auto band = [](double x, double lo, double hi) { return x >= lo && x <= hi ? 1.0f : float(std::exp(-std::pow((x < lo ? lo - x : x - hi) / 0.08, 2))); };
     switch (m) {
         // a cube cannot land between clicks much under a quarter second apart: every click would be
-        // an orb, a chain no real layout has (faster rhythms are ufo, ball, wave or ship)
+        // an orb, a chain no real layout has (faster rhythms are ufo, ball, wave or ship); demons
+        // jump every fifth of a second, as Extreme demons' cube parts do
         case Mode::Cube: {
-            const float fast = med < 0.24 ? float(std::exp(-std::pow((0.24 - med) / 0.04, 2))) : 1.0f;
-            return (0.25f + 0.75f * band(med, 0.24, 0.8) - 0.3f * holds) * fast;
+            const float fast = med < cubeMin ? float(std::exp(-std::pow((cubeMin - med) / 0.04, 2))) : 1.0f;
+            return (0.25f + 0.75f * band(med, cubeMin, 0.8) - 0.3f * holds) * fast;
         }
         case Mode::Robot: return 0.2f + 0.5f * band(med, 0.26, 0.8) + 0.5f * holds;
         case Mode::Ball: return 0.2f + 0.7f * band(med, 0.22, 0.6);
@@ -76,11 +77,11 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         const float intensity = P ? P->intensity : 0.5f;
         const float rate = std::clamp(switchRate * (0.6f + 0.8f * intensity), 0.0f, 1.0f);
         const double meanLen = 20.0 + (1.6 - 20.0) * rate;
-        const double easierL = 1.0 + 0.3 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        const double easierL = 1.0 + 0.22 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
         const int L = std::max(1, int(std::lround(meanLen * easierL * rng.uniform(0.6, 1.4))));
         // a stretch needs a few seconds: structures repeat over it, and it reads as a part
         // (longer below demon ratings: fewer portals to react to)
-        const double easier = 1.0 + 0.35 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        const double easier = 1.0 + 0.27 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
         const double minLen = switchRate >= 1.0f ? 0.0 : (2.5 * (1.0 - switchRate) + 1.2) * easier;
         int lo = std::min(n - 1, i + std::max(0, L / 2 - 1));
         while (lo + 1 < n && C[size_t(lo)].time - C[size_t(i)].time < minLen) ++lo;
@@ -110,6 +111,10 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
     // Wave): fast speeds would need everything further from the path for the same timing window
     const int baseSpeed = D < 2.5f || D >= 5.0f ? 1 : 2;
     Mode prev = Mode::Count, prev2 = Mode::Count;
+    // each gamemode's share of the time in real levels (about 700 of them, all ratings): cube near
+    // half, ship a fifth, spider and swing rare; a mode behind its share so far is picked more often
+    const float target[kModeCount] = {0.42f, 0.20f, 0.10f, 0.09f, D >= 5 ? 0.12f : 0.07f, 0.07f, 0.03f, 0.015f};
+    double spent[kModeCount] = {0}, spentAll = 0;
     for (auto [a, b] : ranges) {
         // the segment's own choices come from its own stream (re-rolled with its salt)
         const size_t si = segs.size();
@@ -139,7 +144,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         float total = 0;
         for (int m = 0; m < kModeCount; ++m) {
             float user = opt.modeWeights[size_t(m)] < 0 ? 1.0f : opt.modeWeights[size_t(m)];
-            float x = rhythmFit(Mode(m), med, shortest, holdFrac) * user;
+            float x = rhythmFit(Mode(m), med, shortest, holdFrac, D >= 6 ? 0.2 : 0.24) * user;
             if (opt.profile) x *= opt.profile->modeFactor(m);
             if (Mode(m) == prev) x *= 0.12f;
             if (Mode(m) == prev2) x *= 0.6f;
@@ -149,35 +154,62 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
             // below demon ratings a wave turns no faster than about four times a second
             if (Mode(m) == Mode::Wave && D < 5 && (med < 0.24 || shortest < 0.16)) x *= 0.2f;
             w[m] = x * x * kModeShare[m];
+            if (spentAll > 10.0) w[m] *= std::clamp(float((target[m] + 0.02) / (spent[m] / spentAll + 0.02)), 0.25f, 4.0f);
             total += w[m];
         }
         if (total <= 0) { for (int m = 0; m < kModeCount; ++m) w[m] = opt.modeWeights[size_t(m)] != 0 ? 1.0f : 0.0f; total = 1; }
-        double r = own.uniform() * double(total);
-        int pick = 0;
-        for (int m = 0; m < kModeCount; ++m) {
-            if (w[m] <= 0) continue;
-            pick = m;
-            if ((r -= w[m]) <= 0) break;
+        auto draw = [&](Rng& from) {
+            double r = from.uniform() * double(total);
+            int p = 0;
+            for (int m = 0; m < kModeCount; ++m) {
+                if (w[m] <= 0) continue;
+                p = m;
+                if ((r -= w[m]) <= 0) break;
+            }
+            return p;
+        };
+        int pick = draw(own);
+        // a re-rolled segment takes another gamemode than the one it had
+        if (salt != 0) {
+            Rng base = rng.fork(combineSeed(0x5E6E0000ull + si, 0));
+            const int was = draw(base);
+            if (pick == was && total > w[was] + 1e-6f) {
+                total -= w[was];
+                w[was] = 0;
+                pick = draw(own);
+            }
         }
         sg.mode = Mode(pick);
+        {
+            const double dur = (b + 1 < n ? C[size_t(b + 1)].time : C[size_t(std::max(a, std::min(b, n - 1)))].time + 1.0) - t;
+            spent[pick] += std::max(0.0, dur);
+            spentAll += std::max(0.0, dur);
+        }
         // speed: the base speed, faster in intense parts, slower in breathers
         int sp = baseSpeed;
         const Intent intent = P ? P->intent : Intent::Groove;
         const SpeedChanges sc = opt.speedChanges == SpeedChanges::Auto ? SpeedChanges::Subtle : opt.speedChanges;
         if (sc == SpeedChanges::Subtle) {
+            // real levels change speed often (Harder about 12 times, Extreme demons over 40)
             if (intent == Intent::Climax && sg.intensity > 0.7f && D >= 4) sp += 1;
-            if (intent == Intent::Breather) sp -= 1;
+            else if (intent == Intent::Build && D >= 3 && own.chance(0.35)) sp += 1;
+            else if (D >= 2 && sg.intensity > 0.6f && own.chance(0.3)) sp += 1;
+            if (intent == Intent::Breather || (sg.intensity < 0.35f && sg.mode != Mode::Spider && own.chance(0.4))) sp -= 1;
         } else if (sc == SpeedChanges::Aggressive) {
             if (intent == Intent::Climax) sp += sg.intensity > 0.75f ? 2 : 1;
             else if (intent == Intent::Build) sp += 1;
             else if (intent == Intent::Breather) sp -= 1;
         }
+        // a long climax would run at one speed: real levels switch back and forth between parts
+        if (sc != SpeedChanges::Off && !segs.empty() && sp == segs.back().speed && D >= 2 && sg.mode != Mode::Spider && own.chance(0.35)) sp += sp > baseSpeed ? -1 : 1;
         if (opt.startSpeed >= 0 && sc == SpeedChanges::Off) sp = opt.startSpeed;
         if (opt.speedStyle == 1) sp -= 1;
         else if (opt.speedStyle == 3) sp += 1;
         int cap = D >= 6 ? 3 : (D >= 3 ? 3 : 2);
         if ((sg.mode == Mode::Wave || sg.mode == Mode::Swing || sg.mode == Mode::Spider) && D < 6) cap = 2;
-        sg.speed = std::clamp(sp, 1, cap);
+        // slow speed only in a breather
+        const bool slowOk = sg.mode != Mode::Spider && sg.mode != Mode::Wave && sg.mode != Mode::Swing;
+        sg.speed = std::clamp(sp, slowOk && (intent == Intent::Breather || sg.intensity < 0.35f) ? 0 : 1, cap);
         if (sg.mode == Mode::Wave) sg.speed = std::max(sg.speed, 2); // longer strokes, bigger triangles
         // size: mini for fast streams in flying modes
         const double miniChance = opt.sizeChanges == Tri::Off ? 0.0 : opt.sizeChanges == Tri::On ? 0.4 : (D >= 3 && med < 0.25 ? 0.3 : 0.08);
@@ -186,7 +218,7 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         // (only for fast clicks: at half a second a stroke would run from the floor to the ceiling)
         if (sg.mode == Mode::Wave && opt.sizeChanges == Tri::Auto && D >= 6 && med < 0.26) sg.mini = own.chance(0.7);
         // gravity: some ground segments run upside down
-        const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 3 ? 0.18 : 0.0);
+        const double flipChance = opt.gravityFlips == Tri::Off ? 0.0 : opt.gravityFlips == Tri::On ? 0.35 : (D >= 5 ? 0.2 : D >= 3 ? 0.18 : D >= 1 ? 0.06 : 0.0);
         sg.flipped = (sg.mode == Mode::Cube || sg.mode == Mode::Robot || sg.mode == Mode::Ball || sg.mode == Mode::Spider || sg.mode == Mode::Ufo) && a > 0 && own.chance(flipChance);
         sg.why = std::string(modeName(sg.mode)) + ": median gap " + std::to_string(int(std::lround(med * 1000))) + " ms" +
                  (holdFrac > 0.3f ? ", holds" : "") + (P ? std::string(", ") + intentName(P->intent) : "");

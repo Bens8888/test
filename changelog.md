@@ -1,6 +1,12 @@
 # Changelog
 
 ## v0.2.0
+- Measured against about 800 real levels (`alcli stats`, new demons fetched with `fetch.py --rated d3,d4,d5`)
+  and tuned toward them: cube is the main gamemode again (near half of the time, spider and swing
+  rare), pads as often as in real levels below demon ratings, gravity portals rarer below demons
+  and more frequent in Insane and Extreme demons, speed changes between parts (slow speed in calm
+  parts), gamemode parts a little shorter below demons, and spikes along the path from Hard up
+- A part no longer starts upside down high in the air, where it fell up and climbed off the screen
 - Fixed: wave walls broke or drifted off the path where the wave turns to mini and on strokes
   shorter than a block; each stroke is now tiled exactly, and a change in the corridor's width is
   closed with an upright line

@@ -605,9 +605,11 @@ bool Structurer::killOnFace(const std::vector<Sample>& run, size_t i, const std:
 // half a block from the player most of the time (Bloodbath, from a run logged in GD).
 void Structurer::threadPath() {
     const float D = m_plan.baseDifficulty;
-    if (D < 5.0f || m_nominal.empty()) return;
+    if (D < 2.0f || m_nominal.empty()) return;
     const float margin = std::clamp(m_margin + 1.0f - (D - 5.0f) * 1.5f, 1.5f, m_margin + 1.0f);
-    const double rate = std::clamp(0.25 + 0.17 * double(D - 5.0f), 0.25, 0.95);
+    // below demon ratings a few, at their own distance (real Hard to Insane levels have about two
+    // thirds as many hazards per second as Hard demons)
+    const double rate = D < 5.0f ? 0.1 * double(D - 1.0f) : std::clamp(0.3 + 0.16 * double(D - 5.0f), 0.3, 0.95);
     auto filled = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
     auto fits = [&](const LevelObject& o) {
         phys::SimObject so;

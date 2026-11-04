@@ -574,7 +574,10 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
             if (sg.speed != int(cur.speed)) { addObj(c, make(speedPortalId(sg.speed), px, portalY(px)), Act::ModePortal, k); px += 45; }
             addObj(c, make(portalIdFor(sg.mode), px, portalY(px)), Act::ModePortal, k);
             if (sg.mini != cur.mini) { px += 45; addObj(c, make(sg.mini ? oid::PortalSizeMini : oid::PortalSizeNormal, px, portalY(px)), Act::ModePortal, k); }
-            if (sg.flipped != cur.upsideDown) { px += 45; addObj(c, make(sg.flipped ? oid::PortalGravFlip : oid::PortalGravNormal, px, portalY(px)), Act::ModePortal, k); }
+            // upside down with nothing above, a part that starts high falls up off the screen and
+            // climbs on from platform to platform: it stays the right way up
+            const bool flip = sg.flipped && (cur.bounded || q.y < 360.0f);
+            if (flip != cur.upsideDown) { px += 45; addObj(c, make(flip ? oid::PortalGravFlip : oid::PortalGravNormal, px, portalY(px)), Act::ModePortal, k); }
             if (px <= at(base, Tn - 12).x && evaluate(c, until) && c.end.p[0].mode == sg.mode) {
                 // after the portals the new mode may need a surface for its first click
                 std::vector<Cand> landed;
@@ -607,10 +610,10 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
         for (auto& l : landed) {
             if (!evaluate(l, until) || !l.end.p[0].onGround) continue;
             // a pad on the platform for long gaps: bounce once more without a click
-            if (groundMode(m) && Tn - T > int(0.55 * phys::kTPS)) {
+            if (groundMode(m) && Tn - T > int(0.42 * phys::kTPS)) {
                 int landTick = -1;
                 for (size_t i = 0; i < l.trace.size(); ++i) if (l.trace[i].onGround && int(i) + t0 > T + 6) { landTick = int(i) + t0; break; }
-                if (landTick > 0 && Tn - landTick > int(0.32 * phys::kTPS)) {
+                if (landTick > 0 && Tn - landTick > int(0.26 * phys::kTPS)) {
                     const TraceSample& q = at(l, landTick);
                     const auto& sf = l.surfaces.back().second;
                     const float surfY = sf.g > 0 ? (sf.cy1 + 1) * kCell : sf.cy0 * kCell;
@@ -736,7 +739,11 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     int pads = 0, grav = 0, lands = 0;
     for (auto& ob : c.objs) { pads += ob.act == Act::Pad; grav += ob.act == Act::GravityPortal; }
     lands = int(c.surfaces.size());
-    s += 0.25 * pads + 0.2 * grav;
+    // as often as in real levels of the rating (measured on about 700 of them): a pad for every one
+    // or two orbs, gravity portals rare below demon ratings and every few seconds in Extreme demons
+    // (a ball or spider part lives on them at any rating)
+    const double gravWeight = m_D < 5.0f ? (surfaceMode(c.info.mode) ? 0.2 : -0.1) : m_D < 7.5f ? 0.4 : 0.9;
+    s += 0.6 * pads + gravWeight * grav;
     // height: stay on the screen, use the vertical space
     float hi = 0, lo = 1e9f;
     int ground = 0, boundContact = 0;
@@ -755,6 +762,8 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     float hiFree = 0;
     for (auto& q : c.trace) if (q.mode == Mode::Cube || q.mode == Mode::Robot || q.mode == Mode::Spider) hiFree = std::max(hiFree, q.y);
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
+    // and a ground part that starts high keeps going down instead of climbing on from there
+    if (hiFree > 650) s -= 0.08 * (hiFree - 650);
     if (hiFree > 750) s -= 40.0;
     if (e.bounded && !c.trace.empty()) {
         int edge = 0, waveEdge = 0;

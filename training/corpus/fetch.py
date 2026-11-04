@@ -37,10 +37,12 @@ def search(name):
 
 
 def rated(diff, pages, first=0):
-    """IDs of the most liked rated levels of one difficulty (3 Hard, 4 Harder, 5 Insane), 10 per page."""
+    """IDs of the most liked rated levels of one difficulty (3 Hard, 4 Harder, 5 Insane; d1 to d5 the
+    demons from Easy to Extreme), 10 per page."""
     ids = []
     for page in range(first, first + pages):
-        body = post("getGJLevels21.php", type=2, diff=diff, star=1, page=page)
+        query = dict(diff=-2, demonFilter=int(diff[1:])) if diff.startswith("d") else dict(diff=diff)
+        body = post("getGJLevels21.php", type=2, star=1, page=page, **query)
         time.sleep(2)
         if body.startswith("-1"):
             break
@@ -55,6 +57,7 @@ def main():
     args = sys.argv[1:]
     if args[:1] == ["--rated"]:
         # fetch.py --rated 3,4,5 6 [first page]: the most liked rated levels of those difficulties, 6 pages each
+        # (d1 to d5: Easy to Extreme demons)
         first = int(args[3]) if len(args) > 3 else 0
         args = [i for d in args[1].split(",") for i in rated(d, int(args[2]), first)]
     for arg in args:
@@ -79,7 +82,7 @@ def main():
         with open(path, "w", encoding="utf8") as f:
             f.write(text)
         index[level_id] = {"name": fields.get("2"), "creator": creator, "objects": text.count(";") - 1, "song": fields.get("35"),
-                           "stars": int(fields.get("18", 0) or 0)}
+                           "stars": int(fields.get("18", 0) or 0), "demon": int(fields.get("43", 0) or 0) if fields.get("17") == "1" else 0}
         print(level_id, fields.get("2"), "by", creator, text.count(";") - 1, "objects,", fields.get("18", "?"), "stars", flush=True)
         json.dump(index, open(index_path, "w"), indent=1)
 
