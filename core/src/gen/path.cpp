@@ -748,7 +748,12 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     }
     if (skimsFloor) s -= 8.0;
     const auto& e = c.end.p[0];
+    // stay on the screen; far above it (upside down with nothing over it, a cube or spider falls up
+    // out of the layout) only when nothing else lives
+    float hiFree = 0;
+    for (auto& q : c.trace) if (q.mode == Mode::Cube || q.mode == Mode::Robot || q.mode == Mode::Spider) hiFree = std::max(hiFree, q.y);
     if (!e.bounded && hi > kMaxY) s -= 0.02 * (hi - kMaxY);
+    if (hiFree > 750) s -= 40.0;
     if (e.bounded && !c.trace.empty()) {
         int edge = 0, waveEdge = 0;
         // a wave's walls need their whole distance from the path (as in the structurer) plus a piece

@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -38,7 +39,7 @@ static int usage() {
         "  alcli bench [model.alm] [out.json]        performance benchmark (analysis, generation, physics, bot, model)\n"
         "  alcli validate <level.gmd> <recording> [yOffset=90]  simulator vs a run recorded in GD (position error per input)\n"
         "  alcli rec-info <recording> [out.json]     inspect / convert a recording or macro (.alrec, .json, .gdr, frames)\n"
-        "  alcli render <level.gmd|piece-test> <out.png> [x0] [x1]   draw a level (outline silhouettes, orbs, pads, portals)\n"
+        "  alcli render <level.gmd|piece-test> <out.png> [x0] [x1] [y0 y1]   draw a level (outline silhouettes, orbs, pads, portals)\n"
         "  alcli generate <audio|demo> [--seed N] [--difficulty 0-9] [--variants N] [--style N]\n"
         "               [--variant-seed N] [--modes 0,4,...] [--recording file|demo] [--faith 0-1]\n"
         "               [--density 0-1] [--speed-changes 0-3] [--engine 1|2] [--switch 0-1] [--look 0|1] [--profile p.json]\n"
@@ -272,8 +273,144 @@ int main(int argc, char** argv) {
         ro.drawPath = false;
         if (argc >= 5) ro.x0 = float(std::atof(argv[4]));
         if (argc >= 6) ro.x1 = float(std::atof(argv[5]));
+        if (argc >= 8) { ro.y0 = float(std::atof(argv[6])); ro.y1 = float(std::atof(argv[7])); }
         writeFile(argv[3], report::renderPng(L, nullptr, ro));
         std::printf("wrote %s\n", argv[3]);
+        return 0;
+    }
+    if (cmd == "windows" && argc >= 4) {
+        // timing windows of a run per gamemode, the same measure for real levels and generated ones
+        std::string text, err;
+        if (!readFile(argv[2], text)) { std::fprintf(stderr, "cannot read %s\n", argv[2]); return 1; }
+        auto lvl = text.rfind("<?xml", 0) == 0 ? level::Level::fromGmd(text, &err) : level::Level::fromLevelString(text, &err);
+        if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[2], err.c_str()); return 1; }
+        bot::InputTrack in;
+        {
+            std::ifstream f(argv[3]);
+            for (std::string line; std::getline(f, line);) {
+                if (line.empty() || line[0] == '#') continue;
+                int tick = 0;
+                char what[16] = {0};
+                if (std::sscanf(line.c_str(), "%d %15s", &tick, what) != 2) continue;
+                const std::string w = what;
+                in.add(tick, w == "1" || w == "down" || w == "press");
+            }
+        }
+        in.normalize();
+        phys::World W(*lvl);
+        W.setEndX(1e9f);
+        // the mode at every press, and how far the run gets
+        std::map<int, int> modeAt;
+        int death = -1;
+        {
+            auto g = phys::initialState(W);
+            size_t ei = 0;
+            bool held = false;
+            const int end = in.lastTick() + 240;
+            while (!g.dead && !g.won && g.tick < end) {
+                const int next = g.tick + 1;
+                while (ei < in.events.size() && in.events[ei].tick <= next) {
+                    held = in.events[ei].press;
+                    if (held) modeAt[in.events[ei].tick] = int(g.p[0].mode);
+                    ++ei;
+                }
+                phys::step(W, g, held);
+            }
+            if (g.dead) death = g.tick;
+        }
+        if (death >= 0) {
+            std::printf("the run dies at tick %d (%.1f s): measuring the part before it\n", death, death / double(phys::kTPS));
+            std::vector<bot::InputEvent> keep;
+            for (auto& e : in.events) if (e.tick < death - 120) keep.push_back(e);
+            if (!keep.empty() && keep.back().press) keep.pop_back();
+            in.events = keep;
+        }
+        const auto tw = bot::timingWindows(W, in, 24, 120);
+        std::map<int, std::vector<double>> ws;
+        for (auto& t : tw) if (t.press && modeAt.count(t.tick)) ws[modeAt[t.tick]].push_back(t.windowMs());
+        double seconds = (in.lastTick() - (in.events.empty() ? 0 : in.events.front().tick)) / double(phys::kTPS);
+        std::printf("%zu presses over %.1f s (%.1f a second)\n", in.pressCount(), seconds, in.pressCount() / std::max(1.0, seconds));
+        for (auto& [m, w] : ws) {
+            std::sort(w.begin(), w.end());
+            std::printf("  %-6s %4zu presses  windows: median %3.0f ms, tightest quarter %3.0f ms, tightest tenth %3.0f ms\n", level::modeName(level::Mode(m)), w.size(),
+                        w[w.size() / 2], w[w.size() / 4], w[w.size() / 10]);
+        }
+        return 0;
+    }
+    if (cmd == "clearance" && argc >= 4) {
+        // how close the hazards come to the player's path, per gamemode: for a real level from a run
+        // logged in GD (trace .tsv, y offset 90), for a generated one from its inputs
+        std::string text, err;
+        if (!readFile(argv[2], text)) { std::fprintf(stderr, "cannot read %s\n", argv[2]); return 1; }
+        auto lvl = text.rfind("<?xml", 0) == 0 ? level::Level::fromGmd(text, &err) : level::Level::fromLevelString(text, &err);
+        if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[2], err.c_str()); return 1; }
+        phys::World W(*lvl);
+        W.setEndX(1e9f);
+        struct P { float x, y; int mode; };
+        std::vector<P> path;
+        const std::string src = argv[3];
+        if (src.size() > 4 && src.substr(src.size() - 4) == ".tsv") {
+            // GD's form numbers: 1 cube, 2 ship, 3 ball, 4 ufo, 5 wave, 6 robot, 7 spider, 8 swing
+            std::ifstream f(src);
+            std::string line;
+            std::getline(f, line);
+            while (std::getline(f, line)) {
+                int tick, hold, ground, form;
+                double x, y, vy;
+                if (std::sscanf(line.c_str(), "%d\t%d\t%lf\t%lf\t%lf\t%d\t%d", &tick, &hold, &x, &y, &vy, &ground, &form) == 7)
+                    path.push_back({float(x), float(y - 90.0), std::clamp(form - 1, 0, 7)});
+            }
+        } else {
+            bot::InputTrack in;
+            std::ifstream f(src);
+            for (std::string line; std::getline(f, line);) {
+                int tick = 0;
+                char what[16] = {0};
+                if (line.empty() || line[0] == '#' || std::sscanf(line.c_str(), "%d %15s", &tick, what) != 2) continue;
+                const std::string w = what;
+                in.add(tick, w == "1" || w == "down" || w == "press");
+            }
+            in.normalize();
+            auto g = phys::initialState(W);
+            size_t ei = 0;
+            bool held = false;
+            while (!g.dead && !g.won && g.tick < in.lastTick() + 240) {
+                while (ei < in.events.size() && in.events[ei].tick <= g.tick + 1) held = in.events[ei++].press;
+                phys::step(W, g, held);
+                path.push_back({g.p[0].x, g.p[0].y, int(g.p[0].mode)});
+            }
+        }
+        // hazards by column
+        std::map<int, std::vector<const phys::SimObject*>> cols;
+        for (auto& o : W.objects())
+            if (o.kind == level::Kind::Hazard || o.kind == level::Kind::Saw || o.kind == level::Kind::HazardSlope)
+                for (int c = int(std::floor((o.x - o.hw) / 60)); c <= int(std::floor((o.x + o.hw) / 60)); ++c) cols[c].push_back(&o);
+        std::map<int, std::vector<float>> dist;
+        std::map<int, double> near;
+        for (size_t i = 0; i < path.size(); i += 2) {
+            const P& p = path[i];
+            float best = 1e9f;
+            int within = 0;
+            for (int c = int(std::floor((p.x - 120) / 60)); c <= int(std::floor((p.x + 120) / 60)); ++c) {
+                auto it = cols.find(c);
+                if (it == cols.end()) continue;
+                for (auto* o : it->second) {
+                    const float hh = o->kind == level::Kind::Saw ? o->hw : o->hh;
+                    const float dx = std::max(0.f, std::fabs(p.x - o->x) - 15 - o->hw), dy = std::max(0.f, std::fabs(p.y - o->y) - 15 - hh);
+                    const float d = std::hypot(dx, dy);
+                    best = std::min(best, d);
+                    if (d < 45 && std::fabs(p.x - o->x) < 120 && c == int(std::floor(o->x / 60))) ++within;
+                }
+            }
+            dist[p.mode].push_back(std::min(best, 300.f));
+            near[p.mode] += within;
+        }
+        for (auto& [m, d] : dist) {
+            const double n = double(d.size());
+            std::sort(d.begin(), d.end());
+            std::printf("  %-6s %6.1f s  nearest hazard: median %5.1f, closest quarter %5.1f, closest tenth %5.1f units | hazards within 45 units: %.1f\n",
+                        level::modeName(level::Mode(m)), n * 2 / phys::kTPS, d[d.size() / 2], d[d.size() / 4], d[d.size() / 10], near[m] / n);
+        }
         return 0;
     }
     if (cmd == "wavecheck" && argc >= 4) {

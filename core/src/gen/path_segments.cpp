@@ -101,7 +101,9 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
     if (ranges.empty()) ranges.push_back({0, -1});
     // ---- gamemode, speed, size, gravity per segment
     const float D = plan.baseDifficulty;
-    const int baseSpeed = D < 2.5f ? 1 : 2;
+    // demons run at normal speed with the hazards packed close, as real ones do (Bloodbath, Sonic
+    // Wave): fast speeds would need everything further from the path for the same timing window
+    const int baseSpeed = D < 2.5f || D >= 5.0f ? 1 : 2;
     Mode prev = Mode::Count, prev2 = Mode::Count;
     for (auto [a, b] : ranges) {
         // the segment's own choices come from its own stream (re-rolled with its salt)

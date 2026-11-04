@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <string>
@@ -21,6 +23,7 @@ namespace {
 
 constexpr float kCell = 30.0f;
 constexpr float kModuleGap = 12.0f; // free space between structures, so they stay separate shapes
+constexpr float kSolidMargin = 5.0f; // blocks added close to the path keep at least this off it (a player grazing a block lands on it or bumps its head)
 
 struct Box {
     float x0, y0, x1, y1;
@@ -166,8 +169,14 @@ private:
         }
         return best;
     }
+    // structures stay between the start and the end of the level (nothing behind the player at the
+    // start or after the end trigger)
+    float m_xMin = 300, m_xMax = 1e9f;
+    bool inLevel(const Box& b) const { return b.x0 >= m_xMin && b.x1 <= m_xMax; }
     Envelope m_drawn;                 // every hazard as it is drawn
     float m_margin = 4;               // extra distance kept from the reserved space
+    float m_hazMargin = 4;            // the same for hazards (smaller at demon ratings)
+    float m_faceMargin = 5;           // and on top of it for the spikes lining faces
     float m_waveMargin = 30;          // from the wave's path to its walls
     int m_halfWin = 12;               // ticks each press may move either way
     float m_density = 0.5f;
@@ -205,6 +214,11 @@ private:
     void noteHazard(const LevelObject& o);
     bool hazardRoom(const LevelObject& o) const;
     void necessity();
+    void tighten();
+    void threadPath();
+    // the designed run still lives from before the click nearest `tick` until `until`
+    bool designedLives(int tick, int until) const;
+    bool killOnFace(const std::vector<Sample>& run, size_t i, const std::vector<bot::InputEvent>& ev, int horizon, float margin);
     bool tryKill(size_t clickIndex, const std::vector<Sample>& skip, const std::vector<bot::InputEvent>& ev, int horizon);
     void placeModules(int firstLane, int lastLane);
     struct PillarEnd { LevelObject piece; float dir, target; int module; };
@@ -215,8 +229,12 @@ private:
     static bool isCellPiece(const LevelObject& o);
     void putPiece(const LevelObject& o);
     void bands();
+    void joinShapes();
     // a Classic ground stretch without a ceiling: real cube parts have nothing above the player
-    bool openSky(const Sample& s) const { return m_style == 4 && !s.bounded && !isFlyingMode(s.mode) && s.mode != Mode::Wave; }
+    bool openSky(const Sample& s) const { return m_style == 4 && noCeiling(s); }
+    // a ground stretch without bounds: shapes over the player would hang from nothing, so in every
+    // style only a band (one connected ceiling) goes there
+    static bool noCeiling(const Sample& s) { return !s.bounded && !isFlyingMode(s.mode) && s.mode != Mode::Wave; }
     bool bandCell(int cx, int cy);
     void lineFace(float x, float faceY, int toward, int kind);
     void lineWall(float wallX, float y, int side);
@@ -317,7 +335,9 @@ void Structurer::buildEnvelope() {
         const int T = c.tick;
         uint32_t want = 0;
         for (int t = T; t <= T + 3 && t - 1 < int(m_nominal.size()); ++t) want |= m_nominal[size_t(t - 1)].events & kClickEvents;
-        const int horizon = std::min(m_path.endTick, nextPressAfter(T) + 15);
+        // a moved press is followed up to the next click (below demon ratings a little past it): what
+        // the run does after a click it never made is not the player's room
+        const int horizon = std::min(m_path.endTick, nextPressAfter(T) + (m_plan.baseDifficulty >= 5.0f ? 2 : 15));
         int lo, hi;
         moveRange(i, lo, hi);
         // a wave corridor is as tight as the walls in hard demon wave parts: half the window of a jump
@@ -343,7 +363,7 @@ void Structurer::buildEnvelope() {
 }
 
 bool Structurer::cellFree(int cx, int cy) const {
-    if (cy < 0) return false;
+    if (cy < 0 || !inLevel(cellBox(cx, cy))) return false;
     if (m_res.cells.filled(cx, cy)) return false;
     // never on or next to a platform (its outline pieces must stay exactly as planned)
     for (int dx = -1; dx <= 1; ++dx)
@@ -358,8 +378,9 @@ bool Structurer::hazardFree(const LevelObject& o) const {
     float hw = so.hw, hh = so.hh;
     if (so.kind == level::Kind::Saw) hh = hw;
     Box b{so.x - hw, so.y - hh, so.x + hw, so.y + hh};
+    if (!inLevel(b)) return false;
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
-    if (m_env.hits(b, m_margin + 1) || m_built.hits(b, 2) || !hazardRoom(o)) return false;
+    if (m_env.hits(b, m_hazMargin + 1) || m_built.hits(b, 2) || !hazardRoom(o)) return false;
     // a saw may cut into a wall, but its centre stays in the open (not buried in the blocks)
     if (so.kind == level::Kind::Saw && m_res.cells.filled(int(std::floor(so.x / kCell)), int(std::floor(so.y / kCell)))) return false;
     // keep the path's orbs, pads and portals readable
@@ -468,15 +489,251 @@ void Structurer::necessity() {
     }
 }
 
+// A spike on a face the player passes (the ground, a bound, a platform or a structure's cells),
+// pointing at the path, that kills the run `run` (a press moved out of the window) but keeps
+// `margin` off every run inside the window. Nothing new floats in the air: the spike sits on
+// something that is already there, or on a pillar (1-6 cells) grown from it toward the path.
+bool Structurer::killOnFace(const std::vector<Sample>& run, size_t i, const std::vector<bot::InputEvent>& ev, int horizon, float margin) {
+    auto filled = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
+    auto dies = [&]() {
+        int dt = -1;
+        runFrom(m_pre[i], ev, horizon, nullptr, &dt);
+        return dt >= 0;
+    };
+    auto fits = [&](const LevelObject& o) {
+        phys::SimObject so;
+        if (!phys::World::makeSimObject(o, 0, so)) return false;
+        const Box b{so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh};
+        if (!inLevel(b)) return false;
+        for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+        if (m_env.hits(b, margin) || !hazardRoom(o)) return false;
+        for (auto& po : m_path.objects)
+            if (std::fabs(po.o.x - o.x) < 36 && std::fabs(po.o.y - o.y) < 36) return false;
+        return true;
+    };
+    // a cell a grown pillar may take
+    auto open = [&](int cx, int cy) {
+        if (cy < 0 || filled(cx, cy)) return false;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                if (m_platforms.filled(cx + dx, cy + dy)) return false;
+        const Box b = cellBox(cx, cy);
+        if (!inLevel(b) || m_env.hits(b, std::max(margin, kSolidMargin)) || m_built.hits(shrunk(b, 3.f), 0) || m_drawn.hits(b, -1.f)) return false;
+        for (auto& po : m_path.objects)
+            if (std::fabs(float(po.o.x) - (b.x0 + 15)) < 45 && std::fabs(float(po.o.y) - (b.y0 + 15)) < 45) return false;
+        return true;
+    };
+    auto meets = [&](const LevelObject& o, size_t j) {
+        phys::SimObject so;
+        phys::World::makeSimObject(o, 0, so);
+        for (size_t k = j >= 30 ? j - 30 : 0; k < run.size() && k < j + 60; ++k)
+            if (std::fabs(run[k].x - so.x) < so.hw + run[k].half + 1 && std::fabs(run[k].y - so.y) < so.hh + run[k].half + 1) return true;
+        return false;
+    };
+    // tried in the world alone; kept (and noted everywhere) only when it catches the press
+    auto attempt = [&](const LevelObject& spike, const std::vector<std::pair<int, int>>& cells) {
+        const size_t mk = mark();
+        for (auto [cx, cy] : cells) m_W.addObject(make(oid::Block, cx * kCell + 15, cy * kCell + 15), -1);
+        m_W.addObject(spike, -1);
+        const bool caught = dies() && designedLives(m_path.clicks[i].tick, horizon + 60);
+        m_W.truncate(mk);
+        if (!caught) return false;
+        for (auto [cx, cy] : cells) {
+            addCell(cx, cy);
+            m_built.addBox(cellBox(cx, cy));
+        }
+        addHazard(spike);
+        return true;
+    };
+    for (size_t j = 0; j < run.size() && j < 180; j += 3) {
+        const Sample& q = run[j];
+        if (q.mode == Mode::Wave) continue;
+        const int qx = int(std::floor(q.x / kCell));
+        // the faces over and under the player in its column: a filled cell, the floor, a bound
+        for (int dir : {-1, 1}) {
+            float faceY = NAN;
+            const int row = int(std::floor(q.y / kCell));
+            for (int k = 0; k <= 6 && std::isnan(faceY); ++k) {
+                const int r = row + dir * k;
+                if (filled(qx, r)) faceY = float(dir > 0 ? r : r + 1) * kCell;
+            }
+            if (std::isnan(faceY)) {
+                if (dir < 0) faceY = q.bounded ? q.floorY : 0.f;
+                else if (q.bounded) faceY = q.ceilY;
+                else continue;
+            }
+            if (std::fabs(faceY - q.y) > 6 * kCell) continue;
+            const bool ground = faceY <= 0.5f || (q.bounded && (faceY == q.floorY || faceY == q.ceilY));
+            for (float dx : {0.f, 7.5f, -7.5f, 15.f}) {
+                const float x = std::round((q.x + dx) / 7.5f) * 7.5f;
+                // a spike stands on the face along its whole width
+                if (!ground) {
+                    const int r = dir > 0 ? int(std::lround(faceY / kCell)) : int(std::lround(faceY / kCell)) - 1;
+                    if (!filled(int(std::floor((x - 12) / kCell)), r) || !filled(int(std::floor((x + 12) / kCell)), r)) continue;
+                }
+                for (int id : {oid::Spike, oid::HalfSpike}) {
+                    const float h = id == oid::Spike ? 15.f : 7.5f;
+                    LevelObject o = make(id, x, faceY - float(dir) * h, dir > 0 ? 180 : 0);
+                    if (fits(o) && meets(o, j) && attempt(o, {})) return true;
+                }
+            }
+            // a pillar from the face toward the path, the spike on its tip (on the grid, in the
+            // player's column and the next one)
+            const int faceRow = int(std::lround(faceY / kCell));
+            for (int cx : {qx, qx + 1}) {
+                std::vector<std::pair<int, int>> cells;
+                for (int ext = 1; ext <= 6; ++ext) {
+                    const int cy = dir > 0 ? faceRow - ext : faceRow + ext - 1;
+                    if (!open(cx, cy)) break;
+                    // the pillar stands on the face: the first cell needs something under it
+                    if (ext == 1 && !ground && !filled(cx, dir > 0 ? faceRow : faceRow - 1)) break;
+                    cells.push_back({cx, cy});
+                    const float tipY = float(dir > 0 ? cy : cy + 1) * kCell;
+                    LevelObject o = make(oid::Spike, cx * kCell + 15, tipY - float(dir) * 15.f, dir > 0 ? 180 : 0);
+                    if (!fits(o) || !meets(o, j)) continue;
+                    if (attempt(o, cells)) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Demons thread the player through hazards: along the whole path (not only where a press would
+// go wrong) a spike sits as close as the timing window allows, on the ground, a face over or under
+// the player, or the tip of a pillar (up to 6 cells) grown from one. Real Extreme demons keep a hazard about
+// half a block from the player most of the time (Bloodbath, from a run logged in GD).
+void Structurer::threadPath() {
+    const float D = m_plan.baseDifficulty;
+    if (D < 5.0f || m_nominal.empty()) return;
+    const float margin = std::clamp(m_margin + 1.0f - (D - 5.0f) * 1.5f, 1.5f, m_margin + 1.0f);
+    const double rate = std::clamp(0.25 + 0.17 * double(D - 5.0f), 0.25, 0.95);
+    auto filled = [&](int cx, int cy) { return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy); };
+    auto fits = [&](const LevelObject& o) {
+        phys::SimObject so;
+        if (!phys::World::makeSimObject(o, 0, so)) return false;
+        const Box b{so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh};
+        if (!inLevel(b)) return false;
+        for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+        if (m_env.hits(b, margin) || !hazardRoom(o)) return false;
+        for (auto& po : m_path.objects)
+            if (std::fabs(po.o.x - o.x) < 36 && std::fabs(po.o.y - o.y) < 36) return false;
+        return true;
+    };
+    auto open = [&](int cx, int cy) {
+        if (cy < 0 || filled(cx, cy)) return false;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                if (m_platforms.filled(cx + dx, cy + dy)) return false;
+        const Box b = cellBox(cx, cy);
+        if (!inLevel(b) || m_env.hits(b, std::max(margin, kSolidMargin)) || m_built.hits(shrunk(b, 3.f), 0) || m_drawn.hits(b, -1.f)) return false;
+        for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+        for (auto& po : m_path.objects)
+            if (std::fabs(float(po.o.x) - (b.x0 + 15)) < 45 && std::fabs(float(po.o.y) - (b.y0 + 15)) < 45) return false;
+        return true;
+    };
+    int lastCol = INT_MIN;
+    for (const Sample& q : m_nominal) {
+        const int cx = int(std::floor(q.x / kCell));
+        if (cx == lastCol || q.mode == Mode::Wave) continue;
+        lastCol = cx;
+        for (int dir : {-1, 1}) {
+            Rng r = at(cx, dir > 0 ? 0x7A1 : 0x7A2);
+            if (!r.chance(rate)) continue;
+            // the face on this side in the column
+            float faceY = NAN;
+            const int row = int(std::floor(q.y / kCell));
+            for (int k = 0; k <= 6 && std::isnan(faceY); ++k)
+                if (filled(cx, row + dir * k)) faceY = float(dir > 0 ? row + dir * k : row + dir * k + 1) * kCell;
+            if (std::isnan(faceY)) {
+                if (dir < 0) faceY = q.bounded ? q.floorY : 0.f;
+                else if (q.bounded) faceY = q.ceilY;
+                else continue;
+            }
+            const bool ground = faceY <= 0.5f || (q.bounded && (faceY == q.floorY || faceY == q.ceilY));
+            const int faceRow = int(std::lround(faceY / kCell));
+            if (!ground && !filled(cx, dir > 0 ? faceRow : faceRow - 1)) continue;
+            // the closest that fits: the longest pillar, else the spike on the face itself
+            std::vector<std::pair<int, int>> cells, best;
+            bool found = false;
+            LevelObject pick;
+            auto spikeAt = [&](float tipY) { return make(oid::Spike, cx * kCell + 15, tipY - float(dir) * 15.f, dir > 0 ? 180 : 0); };
+            if (LevelObject o = spikeAt(faceY); fits(o)) { pick = o; found = true; }
+            for (int ext = 1; ext <= 6; ++ext) {
+                const int cy = dir > 0 ? faceRow - ext : faceRow + ext - 1;
+                if (!open(cx, cy)) break;
+                cells.push_back({cx, cy});
+                LevelObject o = spikeAt(float(dir > 0 ? cy : cy + 1) * kCell);
+                if (fits(o)) { pick = o; best = cells; found = true; }
+            }
+            if (!found) continue;
+            if (m_groundStretch && spikeRun({pick}) > m_maxRun) continue;
+            {
+                const size_t mk = mark();
+                for (auto [x, y] : best) m_W.addObject(make(oid::Block, x * kCell + 15, y * kCell + 15), -1);
+                m_W.addObject(pick, -1);
+                const int tick = int(&q - m_nominal.data()) + 1;
+                const bool ok = designedLives(tick, tick + 240);
+                m_W.truncate(mk);
+                if (!ok) continue;
+            }
+            for (auto [x, y] : best) {
+                addCell(x, y);
+                m_built.addBox(cellBox(x, y));
+            }
+            addHazard(pick);
+            ++m_res.hazards;
+        }
+    }
+}
+
+bool Structurer::designedLives(int tick, int until) const {
+    size_t k = 0;
+    while (k + 1 < m_pre.size() && m_pre[k + 1].tick <= tick - 30) ++k;
+    if (m_pre.empty()) return true;
+    return runFrom(m_pre[k], m_path.inputs.events, std::min(until, m_path.endTick), nullptr);
+}
+
+// Above Insane the windows are the rating's: a click the structures leave loose (a press well
+// before or after the beat still survives) gets a spike on a nearby face that catches that press.
+void Structurer::tighten() {
+    const float D = m_plan.baseDifficulty;
+    if (D < 5.0f) return;
+    // demons trust the simulator closer to the path (Extreme: a unit and a half)
+    const float margin = std::clamp(m_margin + 1.0f - (D - 5.0f) * 1.5f, 1.5f, m_margin + 1.0f);
+    for (size_t i = 0; i < m_path.clicks.size(); ++i) {
+        const PathClick& c = m_path.clicks[i];
+        if (c.mode == Mode::Wave || c.act == Act::Release) continue;
+        int lo, hi;
+        moveRange(i, lo, hi);
+        const int horizon = std::min(m_path.endTick, nextPressAfter(c.tick) + 15);
+        for (int side : {-1, 1}) {
+            // early presses can be simulated back to the state kept before the click
+            const int far = 3 * m_halfWin;
+            for (int s = m_halfWin + 1; s <= far; s += 3) {
+                const int t = c.tick + side * s;
+                if (t <= lo + 1 || t >= hi - 1) break;
+                auto ev = shifted(i, side * s, false);
+                std::vector<Sample> tr;
+                int dt = -1;
+                runFrom(m_pre[i], ev, horizon, &tr, &dt);
+                if (dt >= 0) break; // already caught here
+                if (killOnFace(tr, i, ev, horizon, margin)) { ++m_res.hazards; break; }
+            }
+        }
+    }
+}
+
 bool Structurer::objectFits(const LevelObject& o, Box* out) const {
     phys::SimObject so;
     if (!phys::World::makeSimObject(o, 0, so)) return true;
     const float hw = so.hw, hh = so.kind == level::Kind::Saw ? so.hw : so.hh;
     const Box b{so.x - hw, so.y - hh, so.x + hw, so.y + hh};
     if (out) *out = b;
+    if (!inLevel(b)) return false;
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false; // wave parts hold only their walls
     const bool hazard = so.kind == level::Kind::Hazard || so.kind == level::Kind::Saw || so.kind == level::Kind::HazardSlope;
-    if (m_env.hits(b, m_margin + (hazard ? 2.0f : 0.0f))) return false;
+    if (m_env.hits(b, hazard ? m_hazMargin + 2.0f : m_margin)) return false;
     if (m_built.hits(b, kModuleGap)) return false;
     if (hazard ? !hazardRoom(o) : m_drawn.hits(b, -2.f)) return false;
     // nothing inside a path platform or the cells built so far (its outline would cross theirs)
@@ -653,6 +910,7 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
 void Structurer::extendPillars() {
     auto fits = [&](const LevelObject& e) {
         const Box b{float(e.x) - 2, float(e.y) - 15, float(e.x) + 2, float(e.y) + 15};
+        if (!inLevel(b)) return false;
         for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
         if (m_env.hits(b, m_margin) || m_drawn.hits(b, -1)) return false;
         if (m_built.hits({b.x0, b.y0 + 2, b.x1, b.y1 - 2}, 0.5f)) return false;
@@ -849,7 +1107,7 @@ void Structurer::placeModules(int firstLane, int lastLane) {
         for (int lane = firstLane; lane <= lastLane; ++lane) {
             const bool under = lane % 2 == 1, back = lane >= 2;
             // a classic ground stretch keeps its sky open and stands everything on the floor
-            if (openSky(q) && (back || under == (q.g < 0))) continue;
+            if ((openSky(q) && back) || (noCeiling(q) && under == (q.g < 0))) continue;
             si = size_t(i);
             int cx = c0 + (under ? 1 + int(r.below(3)) : 0) + (back ? 2 : 0);
             int step = 0;
@@ -897,6 +1155,7 @@ void Structurer::placeModules(int firstLane, int lastLane) {
 bool Structurer::bandCell(int cx, int cy) {
     if (cy < 0 || m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return false;
     const Box b = cellBox(cx, cy);
+    if (!inLevel(b)) return false;
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
     if (m_env.hits(b, m_margin) || m_built.hits(b, -1) || m_drawn.hits(b, -3)) return false;
     for (auto& po : m_path.objects)
@@ -921,8 +1180,9 @@ bool Structurer::hazardFits(const LevelObject& o) {
     if (!phys::World::makeSimObject(o, 0, so)) return false;
     const float rad = std::sqrt(so.hw * so.hw + so.hh * so.hh);
     const Box b{so.x - rad, so.y - rad, so.x + rad, so.y + rad};
+    if (!inLevel(b)) return false;
     for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
-    if (m_env.hits(b, m_margin + 5)) return false;
+    if (m_env.hits(b, m_hazMargin + m_faceMargin)) return false;
     if (!hazardRoom(o)) return false;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 45 && std::fabs(float(po.o.y) - so.y) < 45) return false;
@@ -941,7 +1201,7 @@ void Structurer::faceSaw(float x, float y) {
     phys::SimObject so;
     if (!phys::World::makeSimObject(sw, 0, so)) return;
     const Box b{so.x - so.hw, so.y - so.hw, so.x + so.hw, so.y + so.hw};
-    if (m_env.hits(b, m_margin + 2)) return;
+    if (!inLevel(b) || m_env.hits(b, m_hazMargin + 2)) return;
     if (!hazardRoom(sw)) return;
     for (auto& po : m_path.objects)
         if (std::fabs(float(po.o.x) - so.x) < 60 && std::fabs(float(po.o.y) - so.y) < 60) return;
@@ -1061,6 +1321,88 @@ void Structurer::bands() {
                     lineFace(xc, faceY, -dir, 0);
                 }
             }
+        }
+    }
+}
+
+// Some stretches are one big structure: the gaps between shapes on the same side of the path (a
+// few cells across or down) are filled, so the shapes over the path, and those under it, join into
+// one mass with one outline, the way many layouts build a whole stretch.
+void Structurer::joinShapes() {
+    if (m_density <= 0.31f || m_nominal.empty()) return;
+    const int n = int(m_nominal.size());
+    auto side = [&](int cx, int cy) {
+        float a, b;
+        if (!m_env.range(cx, a, b)) return 0;
+        if (float(cy) * kCell >= b + m_margin) return 1;
+        if (float(cy + 1) * kCell <= a - m_margin) return -1;
+        return 0;
+    };
+    auto free = [&](int cx, int cy) {
+        if (cy < 0 || m_res.cells.filled(cx, cy)) return false;
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = -1; dy <= 1; ++dy)
+                if (m_platforms.filled(cx + dx, cy + dy)) return false;
+        const Box b = cellBox(cx, cy);
+        if (!inLevel(b)) return false;
+        for (auto& w : m_waveSpans) if (b.x1 > w.first && b.x0 < w.second) return false;
+        if (m_env.hits(b, std::max(m_margin, kSolidMargin)) || m_built.hits(shrunk(b, 3.f), 0) || m_drawn.hits(b, -1.f)) return false;
+        for (auto& po : m_path.objects)
+            if (std::fabs(float(po.o.x) - (b.x0 + 15)) < 50 && std::fabs(float(po.o.y) - (b.y0 + 15)) < 50) return false;
+        return true;
+    };
+    for (int i = 0; i < n;) {
+        const Sample& q = m_nominal[size_t(i)];
+        int j = i;
+        while (j < n && m_nominal[size_t(j)].mode == q.mode) ++j;
+        const int c0 = int(std::floor(q.x / kCell)), c1 = int(std::floor(m_nominal[size_t(j - 1)].x / kCell));
+        i = j;
+        if (q.mode == Mode::Wave || c1 - c0 < 6) continue;
+        Rng r = at(c0, 0x701E);
+        if (!r.chance(0.55)) continue;
+        // the filled cells of the stretch, by row and by column
+        std::map<int, std::vector<int>> rows, cols;
+        for (auto [k, kind] : m_res.cells.cells()) {
+            (void)kind;
+            const int cx = int(int32_t(uint32_t(k >> 32))), cy = int(int32_t(uint32_t(k)));
+            if (cx < c0 || cx > c1) continue;
+            rows[cy].push_back(cx);
+            cols[cx].push_back(cy);
+        }
+        std::vector<std::pair<int, int>> add;
+        auto bridge = [&](std::vector<std::pair<int, int>> gap) {
+            if (gap.empty()) return;
+            const int s = side(gap.front().first, gap.front().second);
+            if (s == 0) return;
+            for (auto [cx, cy] : gap)
+                if (side(cx, cy) != s || !free(cx, cy)) return;
+            for (auto& g : gap) add.push_back(g);
+        };
+        for (auto& [cy, xs] : rows) {
+            std::sort(xs.begin(), xs.end());
+            for (size_t k = 0; k + 1 < xs.size(); ++k) {
+                const int gap = xs[k + 1] - xs[k] - 1;
+                if (gap < 1 || gap > 4 || side(xs[k], cy) != side(xs[k + 1], cy)) continue;
+                std::vector<std::pair<int, int>> g;
+                for (int x = xs[k] + 1; x < xs[k + 1]; ++x) g.push_back({x, cy});
+                bridge(g);
+            }
+        }
+        for (auto& [cx, ys] : cols) {
+            std::sort(ys.begin(), ys.end());
+            for (size_t k = 0; k + 1 < ys.size(); ++k) {
+                const int gap = ys[k + 1] - ys[k] - 1;
+                if (gap < 1 || gap > 3 || side(cx, ys[k]) != side(cx, ys[k + 1])) continue;
+                std::vector<std::pair<int, int>> g;
+                for (int y = ys[k] + 1; y < ys[k + 1]; ++y) g.push_back({cx, y});
+                bridge(g);
+            }
+        }
+        for (auto [cx, cy] : add) {
+            if (m_res.cells.filled(cx, cy)) continue;
+            addCell(cx, cy);
+            m_built.addBox(cellBox(cx, cy));
+            ++m_res.corridorCells;
         }
     }
 }
@@ -1220,9 +1562,11 @@ void Structurer::measureWindows() {
             if (c.tick + s <= lo + 1 || c.tick + s >= hi - 1) return false;
             return runFrom(m_pre[i], shifted(i, s, false), horizon, nullptr);
         };
+        // measured well past the target (up to 100 ms each way), so loose clicks show as loose
+        const int cap = std::max(m_halfWin * 2, 24);
         int e = 0, l = 0;
-        while (e < m_halfWin * 2 && ok(-(e + 1))) ++e;
-        while (l < m_halfWin * 2 && ok(l + 1)) ++l;
+        while (e < cap && ok(-(e + 1))) ++e;
+        while (l < cap && ok(l + 1)) ++l;
         m_res.checks[i].early = e;
         m_res.checks[i].late = l;
     }
@@ -1233,6 +1577,10 @@ StructureResult Structurer::run() {
     m_halfWin = std::clamp(int(std::lround(prof.minWindowMs * 0.5 / 1000.0 * phys::kTPS)), 4, 30);
     // 3 units on top: on runs logged in GD the simulator's path is off by a few units after some pads
     m_margin = std::clamp(prof.clearance * 0.3f + 2.0f, 2.0f, 16.0f) + 3.0f;
+    // demons: the spikes come close to the path (Extreme a couple of units off the timing window's
+    // runs), which is what makes a mistimed press die; blocks keep their distance
+    m_hazMargin = m_plan.baseDifficulty > 5.0f ? std::max(2.5f, m_margin - (m_plan.baseDifficulty - 5.0f)) : m_margin;
+    m_faceMargin = m_plan.baseDifficulty > 5.0f ? std::max(1.0f, 5.0f - (m_plan.baseDifficulty - 5.0f) * 1.2f) : 5.0f;
     // about a block and a half to each wall at Insane, Grief's 25 at the top
     m_waveMargin = std::clamp(76.0f - 6.0f * m_plan.baseDifficulty, 24.0f, 70.0f);
     m_seed = m_rng.next();
@@ -1265,7 +1613,7 @@ StructureResult Structurer::run() {
         bool held = false;
         while (s.tick < m_path.endTick && !s.dead) {
             // the state well before each click (early presses are simulated from there)
-            while (ci < m_path.clicks.size() && std::max(0, m_path.clicks[ci].tick - 2 * m_halfWin - 3) <= s.tick) { pre[ci] = s; ++ci; }
+            while (ci < m_path.clicks.size() && std::max(0, m_path.clicks[ci].tick - std::max(3 * m_halfWin, 24) - 3) <= s.tick) { pre[ci] = s; ++ci; }
             int next = s.tick + 1;
             while (ei < ev.size() && ev[ei].tick <= next) { held = ev[ei].press; ++ei; }
             phys::step(W, s, held);
@@ -1275,6 +1623,8 @@ StructureResult Structurer::run() {
         return s.dead ? s.tick : -1;
     };
     if (int dt = nominalRun(m_W, m_nominal, m_pre); dt >= 0) m_res.notes.push_back("the path dies before the structures are built (tick " + std::to_string(dt) + ")");
+    const float endX = std::floor(((m_nominal.empty() ? 600.0f : m_nominal.back().x) - 45.0f) / 30.0f) * 30.0f + 15;
+    m_xMax = endX - 15;
     buildEnvelope();
     waveWalls();
     // Easy and Normal ground parts have at most two spikes in a row, Hard and Harder three
@@ -1284,9 +1634,12 @@ StructureResult Structurer::run() {
     placeModules(2, 3);
     m_groundStretch = false;
     extendPillars();
+    joinShapes();
     // what the structures do not force yet gets a hazard of its own
     if (m_prm.necessity) necessity();
     else for (auto& c : m_path.clicks) m_res.checks.push_back({c.click, false, 0, 0});
+    if (m_prm.necessity) tighten();
+    if (m_prm.necessity) threadPath();
     // ---- the finished layout: path objects, platform pieces (as planned), structures, hazards
     level::Level& L = m_res.level;
     // an edge line with filled cells on both sides is inside a shape
@@ -1311,7 +1664,7 @@ StructureResult Structurer::run() {
     for (auto& o : m_objects) L.objects.push_back(o);
     for (auto& h : m_hazards) L.objects.push_back(h);
     // the end: a little before the last planned position (the run beyond it is not planned)
-    LevelObject end = make(oid::TrigEnd, std::floor(((m_nominal.empty() ? 600.0f : m_nominal.back().x) - 45.0f) / 30.0f) * 30.0f + 15, 600);
+    LevelObject end = make(oid::TrigEnd, endX, 600);
     end.setProp(36, std::string("1"));
     L.objects.push_back(end);
     // ---- verified on the finished layout itself: the designed run, then the timing windows

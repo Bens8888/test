@@ -85,6 +85,21 @@ Report makeReport(const level::Level& lvl, const bot::InputTrack& inputs, const 
         r.curveCorrelation = n > 2 ? float((n * sxy - sx * sy) / den) : 0;
     }
     for (auto& p : plan.parts) r.modeSeconds[size_t(int(p.mode))] += p.t1 - p.t0;
+    {
+        std::array<std::vector<double>, 8> ws;
+        for (auto& c : clicks) {
+            if (c.dropped) continue;
+            const auto& ck = plan.clicks[size_t(c.click)];
+            const int m = int(plan.parts[size_t(std::clamp(ck.part, 0, int(plan.parts.size()) - 1))].mode);
+            if (m >= 0 && m < 8) ws[size_t(m)].push_back(c.windowMs());
+        }
+        for (size_t m = 0; m < 8; ++m) {
+            auto& w = ws[m];
+            if (w.empty()) continue;
+            std::sort(w.begin(), w.end());
+            r.perMode[m] = {int(w.size()), w[w.size() / 2], w[w.size() / 4]};
+        }
+    }
     for (auto& p : parts) {
         if (p.fallback) {
             ++r.fallbackParts;
@@ -157,6 +172,13 @@ std::string Report::toText() const {
     s += buf;
     std::snprintf(buf, sizeof(buf), "%d objects (%d gameplay, %d portals, %d triggers)\n", objects, gameplayObjects, portals, triggers);
     s += buf;
+    for (int m = 0; m < 8; ++m) {
+        const auto& pm = perMode[size_t(m)];
+        if (pm.clicks == 0) continue;
+        std::snprintf(buf, sizeof(buf), "  %-6s %5.1f s  %4d clicks  %.1f/s  windows: median %3.0f ms, tightest quarter %3.0f ms\n", level::modeName(level::Mode(m)),
+                      modeSeconds[size_t(m)], pm.clicks, pm.clicks / std::max(1.0, modeSeconds[size_t(m)]), pm.medianMs, pm.lowMs);
+        s += buf;
+    }
     if (!risky.empty()) {
         s += "risky spots:\n";
         for (size_t i = 0; i < std::min<size_t>(risky.size(), 8); ++i) {

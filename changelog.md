@@ -1,6 +1,15 @@
 # Changelog
 
 ## v0.2.0
+- Demons are harder, closer to real ones (measured against a Bloodbath run logged in GD): normal
+  speed with the hazards packed close, spikes along the whole path (on the ground, on faces and on
+  short pillars grown from the structures), and a spike for every click a badly timed press would
+  still get through
+- Nothing hangs from the sky any more: ground parts without a ceiling put only one connected band
+  over the player, and every style keeps shapes from hanging from nothing
+- Some stretches join their shapes into one big structure (the gaps between them are filled)
+- Nothing is built behind the start or after the end, and the path no longer climbs far off the
+  top of the screen (a flipped cube or spider with nothing above it)
 - Classic structures learned from about 680 levels (was about 70): the most liked rated Easy to
   Insane levels join RobTop's levels, with wider spacing as in those levels
 - Orbs, pads and gravity portals by rating: Easy only yellow orbs and pads, Normal adds pink and

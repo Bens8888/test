@@ -100,7 +100,12 @@ GenResult generateVariantV2(const audio::MusicAnalysis& A, const GenOptions& opt
         }
         phys::World failed(st.level);
         const bot::Failure why = bot::firstFailure(failed, path.inputs);
-        res.notes.push_back("the check died at x " + std::to_string(int(why.x)) + " y " + std::to_string(int(why.y)) + ": " + phys::deathCauseName(why.cause));
+        std::string what;
+        if (why.levelObject >= 0 && size_t(why.levelObject) < st.level.objects.size()) {
+            const auto& o = st.level.objects[size_t(why.levelObject)];
+            what = " (object " + std::to_string(o.id) + " at " + std::to_string(int(o.x)) + ", " + std::to_string(int(o.y)) + ")";
+        }
+        res.notes.push_back("the check died at x " + std::to_string(int(why.x)) + " y " + std::to_string(int(why.y)) + ": " + phys::deathCauseName(why.cause) + what);
         res.notes.push_back(attempt == 0 ? "structures thinned out: the full version failed the final check"
                             : attempt == 1 ? "structures simplified: the thinned version failed the final check"
                                            : "necessity hazards removed: the simplified version failed the final check");

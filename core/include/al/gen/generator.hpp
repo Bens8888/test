@@ -29,6 +29,9 @@ struct Report {
     float musicAlignment = 0;                          // fraction of clicks on strong musical events
     int objects = 0, gameplayObjects = 0, portals = 0, triggers = 0;
     std::array<double, 8> modeSeconds{};
+    // per gamemode: clicks, and the timing windows of its clicks (median and the tightest quarter)
+    struct ModeStat { int clicks = 0; double medianMs = 0, lowMs = 0; };
+    std::array<ModeStat, 8> perMode{};
     bool beatable = false;
     bool intendedInputs = false;   // the level is beaten with the designed inputs (not a bot search)
     int fallbackParts = 0;
