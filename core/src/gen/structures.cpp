@@ -1593,7 +1593,8 @@ void Structurer::waveWalls() {
                     if (fits && (x - hw < m_nominal[size_t(i)].x + 60.f || x + hw > m_nominal[size_t(j - 1)].x - 60.f)) {
                         auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x - hw - 40.f, [](const Sample& q, float v) { return q.x < v; });
                         for (; fits && it != m_nominal.end() && it->x <= x + hw + 40.f; ++it) {
-                            const float r = std::max(it->half, 15.f) + 3.f;
+                            if (it->mode == Mode::Wave) continue; // the wave itself: checked below
+                            const float r = it->half + 3.f;
                             fits = !(it->x + r > x - hw && it->x - r < x + hw && it->y + r > y - half && it->y - r < y + half);
                         }
                     }

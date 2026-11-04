@@ -780,8 +780,10 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     if (hiFree > 750) s -= 40.0;
     if (e.bounded && !c.trace.empty()) {
         int edge = 0, waveEdge = 0;
+        const bool q0mini = e.mini;
         // a wave's walls need their whole distance from the path (as in the structurer) plus a piece
-        const float wallRoom = std::clamp(76.0f - 6.0f * m_plan.baseDifficulty, 24.0f, 70.0f) + 18.0f;
+        // (mini: 1.6 times the distance, and a steep piece is two blocks tall)
+        const float wallRoom = std::clamp(76.0f - 6.0f * m_plan.baseDifficulty, 24.0f, 70.0f) * (q0mini ? 1.6f : 1.0f) + (q0mini ? 36.0f : 18.0f);
         for (auto& q : c.trace) {
             if (q.y - q.half <= e.floorY + 1 || q.y + q.half >= e.ceilY - 1) ++boundContact;
             else if (q.y - q.half <= e.floorY + 25 || q.y + q.half >= e.ceilY - 25) ++edge;
