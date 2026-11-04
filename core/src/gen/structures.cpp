@@ -838,7 +838,7 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         std::vector<bool> solid(objs.size());
         for (size_t k = 0; k < objs.size(); ++k) {
             phys::SimObject so;
-            solid[k] = phys::World::makeSimObject(objs[k], 0, so) && so.kind == level::Kind::Solid;
+            solid[k] = phys::World::makeSimObject(objs[k], 0, so) && (so.kind == level::Kind::Solid || so.kind == level::Kind::Slope);
             if (solid[k]) boxes[k] = {so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh};
         }
         // groups of touching solid pieces; a group of only upright edge lines is a lone line
@@ -859,6 +859,15 @@ bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, 
         std::vector<bool> lone(size_t(groups), true);
         for (size_t k = 0; k < objs.size(); ++k)
             if (group[k] >= 0 && !(objs[k].id == oid::OutlineTop && std::fmod(std::fabs(objs[k].rotation), 180.0) == 90)) lone[size_t(group[k])] = false;
+        // so is a scrap of a few bare lines (edge lines, outline slopes) left from a shape cut short
+        std::vector<int> pieces(size_t(groups), 0), thin(size_t(groups), 0);
+        for (size_t k = 0; k < objs.size(); ++k) {
+            if (group[k] < 0) continue;
+            ++pieces[size_t(group[k])];
+            if (objs[k].id == oid::OutlineTop || objs[k].id == 1338 || objs[k].id == 1339) ++thin[size_t(group[k])];
+        }
+        for (int g = 0; g < groups; ++g)
+            if (pieces[size_t(g)] <= 3 && thin[size_t(g)] == pieces[size_t(g)]) lone[size_t(g)] = true;
         std::vector<LevelObject> kept;
         for (size_t k = 0; k < objs.size(); ++k)
             if (group[k] < 0 || !lone[size_t(group[k])]) kept.push_back(objs[k]);
@@ -1657,6 +1666,30 @@ StructureResult Structurer::run() {
             kept.push_back(o);
         }
         m_objects = std::move(kept);
+    }
+    // a saw bites into something (a block, the ground, a bound): one alone in the air is dropped
+    {
+        std::vector<Box> solids;
+        for (auto& o : m_objects) {
+            phys::SimObject so;
+            if (phys::World::makeSimObject(o, 0, so) && so.kind == level::Kind::Solid) solids.push_back({so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh});
+        }
+        auto attached = [&](const LevelObject& o) {
+            phys::SimObject so;
+            if (!phys::World::makeSimObject(o, 0, so) || so.kind != level::Kind::Saw) return true;
+            const float r = so.hw + 4;
+            if (so.y - r <= 0) return true;
+            auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), so.x, [](const Sample& q, float v) { return q.x < v; });
+            if (it != m_nominal.end() && it->bounded && (so.y - r <= it->floorY || so.y + r >= it->ceilY)) return true;
+            const Box b{so.x - r, so.y - r, so.x + r, so.y + r};
+            for (int cx = int(std::floor(b.x0 / kCell)); cx <= int(std::floor(b.x1 / kCell)); ++cx)
+                for (int cy = int(std::floor(b.y0 / kCell)); cy <= int(std::floor(b.y1 / kCell)); ++cy)
+                    if (m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy)) return true;
+            for (auto& sb : solids) if (overlap(b, sb, 0)) return true;
+            return false;
+        };
+        m_objects.erase(std::remove_if(m_objects.begin(), m_objects.end(), [&](const LevelObject& o) { return !attached(o); }), m_objects.end());
+        m_hazards.erase(std::remove_if(m_hazards.begin(), m_hazards.end(), [&](const LevelObject& o) { return !attached(o); }), m_hazards.end());
     }
     L = m_base;
     mergePlatforms(L.objects);

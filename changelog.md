@@ -8,6 +8,8 @@
 - Nothing hangs from the sky any more: ground parts without a ceiling put only one connected band
   over the player, and every style keeps shapes from hanging from nothing
 - Some stretches join their shapes into one big structure (the gaps between them are filled)
+- Fast rhythms are no longer cube parts that take an orb on every click; long orb chains are rarer
+- Saws floating in the air and scraps of a few bare lines left from a cut-off shape are dropped
 - Nothing is built behind the start or after the end, and the path no longer climbs far off the
   top of the screen (a flipped cube or spider with nothing above it)
 - Classic structures learned from about 680 levels (was about 70): the most liked rated Easy to

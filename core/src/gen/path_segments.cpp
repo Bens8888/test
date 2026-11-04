@@ -26,7 +26,12 @@ bool nearDownbeat(const audio::MusicAnalysis& A, double t) {
 float rhythmFit(Mode m, double med, double shortest, float holds) {
     auto band = [](double x, double lo, double hi) { return x >= lo && x <= hi ? 1.0f : float(std::exp(-std::pow((x < lo ? lo - x : x - hi) / 0.08, 2))); };
     switch (m) {
-        case Mode::Cube: return 0.25f + 0.75f * band(med, 0.24, 0.8) - 0.3f * holds;
+        // a cube cannot land between clicks much under a quarter second apart: every click would be
+        // an orb, a chain no real layout has (faster rhythms are ufo, ball, wave or ship)
+        case Mode::Cube: {
+            const float fast = med < 0.24 ? float(std::exp(-std::pow((0.24 - med) / 0.04, 2))) : 1.0f;
+            return (0.25f + 0.75f * band(med, 0.24, 0.8) - 0.3f * holds) * fast;
+        }
         case Mode::Robot: return 0.2f + 0.5f * band(med, 0.26, 0.8) + 0.5f * holds;
         case Mode::Ball: return 0.2f + 0.7f * band(med, 0.22, 0.6);
         case Mode::Spider: return 0.2f + 0.7f * band(med, 0.16, 0.5);

@@ -722,6 +722,8 @@ double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const Node* n = m_node;
     if (n && n->used && n->act == c.act && n->sub == c.sub && c.act == Act::Orb) s -= 0.6;
     if (n && n->parent && n->parent->used && n->parent->act == c.act && n->parent->sub == c.sub && c.act == Act::Orb) s -= 0.3;
+    // real layouts take a few orbs in a row, not a whole chain of them (the player lands in between)
+    if (c.act == Act::Orb && n && n->used && n->act == Act::Orb && n->parent && n->parent->used && n->parent->act == Act::Orb) s -= 0.6;
     // big actions on strong hits
     const bool big = (c.act == Act::Orb && (c.sub == oid::OrbRed || c.sub == oid::OrbBlack || c.sub == oid::OrbDash || c.sub == oid::OrbGreen || c.sub == oid::OrbBlue));
     if (big) s += 0.8 * (ck.strength - 0.45);
