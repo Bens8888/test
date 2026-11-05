@@ -34,6 +34,10 @@ enum class Act : uint8_t {
 };
 const char* actName(Act a);
 
+// A cube in a fast part jumps on clicks at least this far apart (seconds) and lets the notes
+// between go.
+inline constexpr double kCubeGap = 0.26;
+
 // One gamemode stretch of the song.
 struct PathSegment {
     int first = 0, last = 0;    // click indices (inclusive)

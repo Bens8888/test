@@ -46,7 +46,7 @@ float rhythmFit(Mode m, double med, double shortest, float holds, double cubeMin
 
 // How much of a real layout each gamemode gets: cube and ship carry most of it, spider and swing
 // are seasoning (cube, ship, ball, ufo, wave, robot, spider, swing).
-constexpr float kModeShare[kModeCount] = {2.4f, 1.8f, 0.8f, 0.9f, 1.3f, 0.8f, 0.5f, 0.6f};
+constexpr float kModeShare[kModeCount] = {2.4f, 1.8f, 0.8f, 0.9f, 1.3f, 0.8f, 0.35f, 0.3f};
 
 float styleSwitchRate(Style s) {
     switch (s) {
@@ -76,11 +76,13 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         const float intensity = P ? P->intensity : 0.5f;
         const float rate = std::clamp(switchRate * (0.6f + 0.8f * intensity), 0.0f, 1.0f);
         const double meanLen = 20.0 + (1.6 - 20.0) * rate;
-        const double easierL = 1.0 + 0.22 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        // (demons: a part every four to five seconds, an Extreme every three or four, as measured)
+        const double demonL = plan.baseDifficulty >= 9.0f ? 1.15 : plan.baseDifficulty >= 5.0f ? 1.4 : 1.0;
+        const double easierL = (1.0 + 0.22 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0)) * demonL;
         const int L = std::max(1, int(std::lround(meanLen * easierL * rng.uniform(0.6, 1.4))));
         // a stretch needs a few seconds: structures repeat over it, and it reads as a part
         // (longer below demon ratings: fewer portals to react to)
-        const double easier = 1.0 + 0.27 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0);
+        const double easier = (1.0 + 0.27 * std::clamp(6.5 - double(plan.baseDifficulty), 0.0, 5.0)) * demonL;
         const double minLen = switchRate >= 1.0f ? 0.0 : (2.5 * (1.0 - switchRate) + 1.2) * easier;
         int lo = std::min(n - 1, i + std::max(0, L / 2 - 1));
         while (lo + 1 < n && C[size_t(lo)].time - C[size_t(i)].time < minLen) ++lo;
@@ -139,11 +141,34 @@ std::vector<PathSegment> planSegments(const DesignPlan& plan, const audio::Music
         double longest = sorted.empty() ? 0.0 : sorted.back();
         if (a < n) longest = std::max(longest, C[size_t(a)].time - (a > 0 ? C[size_t(a - 1)].time : 0.0));
         const float holdFrac = float(holds) / float(std::max(1, b - a + 1));
+        // a cube in a fast part jumps on the main hits and lets the quick notes between go (as in
+        // real Harder levels and demons, cube near 40% of the time): its rhythm is the thinned one
+        double cubeMed = med;
+        float cubeKeep = 1.0f;
+        if (D >= 3 && b > a) {
+            std::vector<double> kept;
+            double last = -1.0;
+            int dropped = 0;
+            for (int j = a; j <= b && j < n; ++j) {
+                const double tj = C[size_t(j)].time;
+                if (last < 0 || tj - last >= kCubeGap || (C[size_t(j)].strength > 0.75f && tj - last >= 0.2)) {
+                    if (last >= 0) kept.push_back(tj - last);
+                    last = tj;
+                } else ++dropped;
+            }
+            if (!kept.empty()) {
+                std::sort(kept.begin(), kept.end());
+                cubeMed = kept[kept.size() / 2];
+            }
+            // every other note let go is fine (a 16th-note part jumped on the 8ths), more is not
+            cubeKeep = std::clamp(1.0f - 1.5f * std::max(0.0f, float(dropped) / float(b - a + 1) - 0.5f), 0.2f, 1.0f);
+        }
         float w[kModeCount];
         float total = 0;
         for (int m = 0; m < kModeCount; ++m) {
             float user = opt.modeWeights[size_t(m)] < 0 ? 1.0f : opt.modeWeights[size_t(m)];
-            float x = rhythmFit(Mode(m), med, shortest, holdFrac) * user;
+            float x = (Mode(m) == Mode::Cube ? std::max(rhythmFit(Mode::Cube, med, shortest, holdFrac), rhythmFit(Mode::Cube, cubeMed, shortest, holdFrac) * cubeKeep)
+                                             : rhythmFit(Mode(m), med, shortest, holdFrac)) * user;
             if (opt.profile) x *= opt.profile->modeFactor(m);
             if (Mode(m) == prev) x *= 0.12f;
             if (Mode(m) == prev2) x *= 0.6f;

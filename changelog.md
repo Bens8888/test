@@ -1,6 +1,11 @@
 # Changelog
 
 ## v0.2.0
+- Demons are about a third cube, as real ones (was a fifth): a cube in a fast part jumps on the
+  main hits and lets the quick notes between go instead of turning each into an orb, and a
+  gamemode portal now fits between quick notes (it goes in alone when the speed portal does not
+  fit too; before, a fast part never switched and one gamemode ran on). Demon parts last four to
+  five seconds, as measured
 - Fixed: Extreme layouts on most songs failed their final check and fell back to fewer
   structures. A ship leaving a wave part grazed the last wall piece (a ship is taller than a wave),
   and a ship passing over a slope was pulled down onto it; both bent the run off the checked path

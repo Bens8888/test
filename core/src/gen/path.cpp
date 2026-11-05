@@ -236,6 +236,7 @@ private:
     const Progress* m_progress;
     std::vector<PathSegment> m_segs;
     std::vector<int> m_segOf;
+    std::vector<bool> m_letGo;
     level::LevelSettings m_settings;
     int m_nextGid = 1;
     uint64_t m_noiseSeed = 0;
@@ -560,7 +561,13 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
         const PathSegment& sg = *want;
         const int lead = std::max(30, int(0.22 * phys::kTPS));
         const int P = std::clamp(Tn - lead, T + 12, std::max(T + 12, Tn - 18));
-        if (P < until && Tn - T >= int(0.2 * phys::kTPS)) {
+        // hard demons switch between quick notes (a click every sixth of a second), as real ones do
+        const double minGap = m_D >= 7.0f ? 0.15 : m_D >= 5.0f ? 0.17 : 0.2;
+        // all the portals at once; when they do not fit, the gamemode alone (the rest follows in a
+        // later gap: a fast part would otherwise never get to switch)
+        for (int attempt = 0; attempt < 2 && P < until && Tn - T >= int(minGap * phys::kTPS); ++attempt) {
+            const bool alone = attempt == 1;
+            if (alone && (cur.mode == sg.mode || (sg.speed == int(cur.speed) && sg.mini == cur.mini))) break;
             Cand c = base;
             const TraceSample& q = at(base, P);
             // each portal goes where the player is after the ones before it
@@ -571,14 +578,14 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
             };
             // speed, gamemode, size, gravity: one after the other, all ahead of the player
             float px = std::round(q.x / 15.0f) * 15.0f;
-            if (sg.speed != int(cur.speed)) { addObj(c, make(speedPortalId(sg.speed), px, portalY(px)), Act::ModePortal, k); px += 45; }
+            if (!alone && sg.speed != int(cur.speed)) { addObj(c, make(speedPortalId(sg.speed), px, portalY(px)), Act::ModePortal, k); px += 45; }
             addObj(c, make(portalIdFor(sg.mode), px, portalY(px)), Act::ModePortal, k);
-            if (sg.mini != cur.mini) { px += 45; addObj(c, make(sg.mini ? oid::PortalSizeMini : oid::PortalSizeNormal, px, portalY(px)), Act::ModePortal, k); }
+            if (!alone && sg.mini != cur.mini) { px += 45; addObj(c, make(sg.mini ? oid::PortalSizeMini : oid::PortalSizeNormal, px, portalY(px)), Act::ModePortal, k); }
             // upside down with nothing above, a part that starts high falls up off the screen and
             // climbs on from platform to platform: it stays the right way up
             // (the ceiling of the part before does not count: the new mode may have none)
             const bool flip = sg.flipped && q.y < 360.0f;
-            if (flip != cur.upsideDown) { px += 45; addObj(c, make(flip ? oid::PortalGravFlip : oid::PortalGravNormal, px, portalY(px)), Act::ModePortal, k); }
+            if (!alone && flip != cur.upsideDown) { px += 45; addObj(c, make(flip ? oid::PortalGravFlip : oid::PortalGravNormal, px, portalY(px)), Act::ModePortal, k); }
             if (px <= at(base, Tn - 12).x && evaluate(c, until) && c.end.p[0].mode == sg.mode) {
                 // after the portals the new mode may need a surface for its first click
                 std::vector<Cand> landed;
@@ -688,6 +695,8 @@ void Planner::rescue(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
 double Planner::scoreCand(const Cand& c, int k, int T, int Tn) const {
     const Click& ck = m_plan.clicks[size_t(k)];
     double s = c.used ? 1.0 : -3.0;
+    // a cube in a fast part lets the quick notes between its jumps go
+    if (size_t(k) < m_letGo.size() && m_letGo[size_t(k)]) s = c.used ? -1.0 : 0.5;
     // wave: turning on every beat (held through to the next click) is the wave look
     if (c.holdOn) s += 1.2;
     // action preferences (a hand-made style profile; replaced by the one learned from real levels)
@@ -938,6 +947,19 @@ void Planner::makeSegments(const std::vector<uint64_t>& salts) {
     m_segOf.assign(size_t(n), 0);
     for (size_t s = 0; s < m_segs.size(); ++s)
         for (int i = m_segs[s].first; i <= m_segs[s].last && i < n; ++i) m_segOf[size_t(i)] = int(s);
+    // the quick notes a cube in a fast part lets go (the same thinning the segment planner chose
+    // the cube by)
+    m_letGo.assign(size_t(n), false);
+    if (m_plan.baseDifficulty < 3.0f) return;
+    for (auto& sg : m_segs) {
+        if (sg.mode != Mode::Cube) continue;
+        double last = -1.0;
+        for (int j = sg.first; j <= sg.last && j < n; ++j) {
+            const auto& ck = m_plan.clicks[size_t(j)];
+            if (last < 0 || ck.time - last >= kCubeGap || (ck.strength > 0.75f && ck.time - last >= 0.2)) last = ck.time;
+            else m_letGo[size_t(j)] = true;
+        }
+    }
 }
 
 PathPlan Planner::run() {
