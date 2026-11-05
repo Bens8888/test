@@ -623,7 +623,17 @@ void Planner::bridges(Cand base, int k, int T, int Tn, std::vector<Cand>& out) {
                 for (size_t i = 0; i < l.trace.size(); ++i) if (l.trace[i].onGround && int(i) + t0 > T + 6) { landTick = int(i) + t0; break; }
                 if (landTick > 0 && Tn - landTick > int(0.26 * phys::kTPS)) {
                     const TraceSample& q = at(l, landTick);
-                    const auto& sf = l.surfaces.back().second;
+                    // the platform under the pad (the one the player landed on, not just the last one
+                    // built: a pad on another one's height floats in the air)
+                    const float padX = std::round((q.x + 20) / 15.0f) * 15.0f;
+                    const PathSurface* under = nullptr;
+                    for (auto& [gid, s] : l.surfaces) {
+                        const float face = s.g > 0 ? (s.cy1 + 1) * kCell : s.cy0 * kCell;
+                        const float feet = s.g > 0 ? q.y - q.half : q.y + q.half;
+                        if (padX - 8 >= s.cx0 * kCell && padX + 8 <= (s.cx1 + 1) * kCell && std::fabs(face - feet) < 3.0f) under = &s;
+                    }
+                    if (!under) { out.push_back(std::move(l)); continue; }
+                    const auto& sf = *under;
                     const float surfY = sf.g > 0 ? (sf.cy1 + 1) * kCell : sf.cy0 * kCell;
                     for (int id : {oid::PadYellow, oid::PadPink, oid::PadRed, oid::PadBlue}) {
                         // Easy only the yellow pad, Normal the pink one, from Hard all

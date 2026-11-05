@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <array>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -352,6 +353,133 @@ int main(int argc, char** argv) {
                         stretches[stretches.size() / 4], haz / secs, sol / secs, orb / secs, pad / secs, grav * 60.0 / secs, spd);
             for (double v : share) std::printf("\t%.0f%%", 100.0 * v / secs);
             std::printf("\n");
+        }
+        return 0;
+    }
+    if (cmd == "lint" && argc >= 3) {
+        // structure bugs a player would see: spikes in the air or inside blocks, orbs, pads and
+        // portals inside blocks, pads in the air, objects twice in one place, blocks half over blocks
+        // (one line per level with the counts; -v lists them)
+        bool verbose = false;
+        for (int a = 2; a < argc; ++a) if (std::string(argv[a]) == "-v") verbose = true;
+        std::printf("level\tfloating spikes\tspikes in blocks\tin blocks\tfloating pads\tdoubles\tblock overlaps\n");
+        for (int a = 2; a < argc; ++a) {
+            if (std::string(argv[a]) == "-v") continue;
+            std::string text, err;
+            if (!readFile(argv[a], text)) { std::fprintf(stderr, "cannot read %s\n", argv[a]); continue; }
+            auto lvl = text.rfind("<?xml", 0) == 0 ? level::Level::fromGmd(text, &err) : level::Level::fromLevelString(text, &err);
+            if (!lvl) { std::fprintf(stderr, "cannot parse %s: %s\n", argv[a], err.c_str()); continue; }
+            struct B { double x0, y0, x1, y1; int idx; };
+            auto quarterOf = [](const level::LevelObject& o) {
+                double r = std::fmod(o.rotation, 360.0);
+                if (r < 0) r += 360;
+                return int(std::lround(r / 90.0)) % 4;
+            };
+            auto boxOf = [&](const level::LevelObject& o, double w, double h) {
+                w *= std::fabs(o.scale * o.scaleX);
+                h *= std::fabs(o.scale * o.scaleY);
+                if (quarterOf(o) % 2 == 1) std::swap(w, h);
+                return B{o.x - w / 2, o.y - h / 2, o.x + w / 2, o.y + h / 2, 0};
+            };
+            std::map<long, std::vector<B>> solids; // by 60-unit column
+            auto col = [](double x) { return long(std::floor(x / 60.0)); };
+            for (size_t i = 0; i < lvl->objects.size(); ++i) {
+                const auto& o = lvl->objects[i];
+                const auto& info = o.info();
+                if (info.kind != level::Kind::Solid && info.kind != level::Kind::Slope) continue;
+                if (o.props.count(134) && o.prop(134) == "1") continue;
+                B b = boxOf(o, info.w, info.h);
+                b.idx = int(i);
+                for (long c = col(b.x0); c <= col(b.x1); ++c) solids[c].push_back(b);
+            }
+            auto solidAt = [&](double x, double y, double shrink, int skip = -1) -> const B* {
+                auto it = solids.find(col(x));
+                if (it == solids.end()) return nullptr;
+                for (auto& b : it->second)
+                    if (b.idx != skip && x > b.x0 + shrink && x < b.x1 - shrink && y > b.y0 + shrink && y < b.y1 - shrink) return &b;
+                return nullptr;
+            };
+            // any solid within r of the point (a face line is only a unit and a half thick)
+            auto solidNear = [&](double x, double y, double r) {
+                for (long c = col(x - r); c <= col(x + r); ++c) {
+                    auto it = solids.find(c);
+                    if (it == solids.end()) continue;
+                    for (auto& b : it->second)
+                        if (x + r > b.x0 && x - r < b.x1 && y + r > b.y0 && y - r < b.y1) return true;
+                }
+                return false;
+            };
+            // the floor and ceiling the game draws in a flying, ball or spider part (from its portal)
+            std::vector<std::array<double, 3>> bounds; // x, floor, ceiling (ceiling 0: none)
+            for (auto& o : lvl->objects) {
+                const auto& info = o.info();
+                if (info.kind != level::Kind::ModePortal) continue;
+                const level::Mode m = level::Mode(info.sub);
+                const double H = m == level::Mode::Ship || m == level::Mode::Ufo || m == level::Mode::Wave || m == level::Mode::Swing ? 300 : m == level::Mode::Ball ? 240 : m == level::Mode::Spider ? 270 : 0;
+                const double f = H > 0 ? std::max(0.0, 30.0 * (std::floor((o.y - (H / 2 + 30)) / 30.0) + 1.0)) : 0.0;
+                bounds.push_back({o.x - 30, f, H > 0 ? f + H : 0.0}); // (the new bounds show from the portal's front)
+            }
+            {
+                // a level that starts flying has the floor at 0 and its bounds over it
+                const level::Mode m = level::Mode(lvl->settings.startMode);
+                const double H = m == level::Mode::Ship || m == level::Mode::Ufo || m == level::Mode::Wave || m == level::Mode::Swing ? 300 : m == level::Mode::Ball ? 240 : m == level::Mode::Spider ? 270 : 0;
+                bounds.push_back({-1e9, 0.0, H});
+            }
+            std::sort(bounds.begin(), bounds.end());
+            auto onBound = [&](double x, double y, double r) {
+                auto it = std::upper_bound(bounds.begin(), bounds.end(), std::array<double, 3>{x, 1e18, 1e18});
+                if (it == bounds.begin()) return false;
+                --it;
+                return (*it)[2] > 0 && (std::fabs(y - (*it)[1]) <= r || std::fabs(y - (*it)[2]) <= r);
+            };
+            int floating = 0, spikeIn = 0, in = 0, padAir = 0, dup = 0, overlap = 0;
+            auto say = [&](const char* what, const level::LevelObject& o) {
+                if (verbose) std::printf("  %s: id %d at %.0f,%.0f rot %.0f%s\n", what, o.id, o.x, o.y, o.rotation, o.flipY ? " flipY" : "");
+            };
+            std::map<std::tuple<int, long, long>, int> seen;
+            for (size_t i = 0; i < lvl->objects.size(); ++i) {
+                const auto& o = lvl->objects[i];
+                const auto& info = o.info();
+                if (info.kind == level::Kind::Deco || info.kind == level::Kind::Trigger || info.kind == level::Kind::StartPos || info.kind == level::Kind::EndTrigger) continue;
+                if (seen[{o.id, std::lround(o.x), std::lround(o.y)}]++) { ++dup; say("double", o); }
+                if (info.kind == level::Kind::Hazard) {
+                    // the spike's base: the side it stands on, half a cell from its middle
+                    const int q = quarterOf(o);
+                    // (half the drawn height: a half spike or a row of tiny ones sits low)
+                    const double half = o.id == 39 || o.id == 205 || o.id == 217 ? 7.0 : o.id == 103 || o.id == 145 || o.id == 218 ? 9.0
+                                      : o.id == 392 || o.id == 458 || o.id == 459 ? 5.0 : 15.0;
+                    const double s = half * std::fabs(o.scale * o.scaleY);
+                    double bx = o.x, by = o.y;
+                    if (q == 0) by += o.flipY ? s : -s;
+                    else if (q == 2) by += o.flipY ? -s : s;
+                    else if (q == 1) bx += o.flipX ? s : -s;
+                    else bx += o.flipX ? -s : s;
+                    if (by > 1.0 && !solidNear(bx, by, 4.0) && !onBound(bx, by, 4.0)) { ++floating; say("floating spike", o); }
+                    if (solidAt(o.x, o.y, 3.0)) { ++spikeIn; say("spike in a block", o); }
+                } else if (info.kind == level::Kind::Orb || info.kind == level::Kind::Pad || info.kind == level::Kind::ModePortal ||
+                           info.kind == level::Kind::GravityPortal || info.kind == level::Kind::SpeedPortal || info.kind == level::Kind::SizePortal) {
+                    if (solidAt(o.x, o.y, 3.0)) { ++in; say("in a block", o); }
+                    if (info.kind == level::Kind::Pad) {
+                        const bool down = (quarterOf(o) == 2) != o.flipY;
+                        const double by = o.y + (down ? 1 : -1) * (info.h / 2 + 1);
+                        if (by > 1.0 && !solidNear(o.x, by, 3.0) && !onBound(o.x, by, 3.0)) { ++padAir; say("floating pad", o); }
+                    }
+                } else if (info.kind == level::Kind::Solid) {
+                    B b = boxOf(o, info.w, info.h);
+                    auto it = solids.find(col(o.x));
+                    if (it != solids.end())
+                        for (auto& c : it->second) {
+                            if (c.idx <= int(i)) continue;
+                            const double ox = std::min(b.x1, c.x1) - std::max(b.x0, c.x0), oy = std::min(b.y1, c.y1) - std::max(b.y0, c.y0);
+                            // one block over another in full is a layer (fine); half over it is a seam
+                            const bool same = std::fabs(b.x0 - c.x0) < 1 && std::fabs(b.x1 - c.x1) < 1 && std::fabs(b.y0 - c.y0) < 1 && std::fabs(b.y1 - c.y1) < 1;
+                            if (ox > 3 && oy > 3 && !same) { ++overlap; say("block overlap", o); break; }
+                        }
+                }
+            }
+            std::string name = argv[a];
+            name = name.substr(name.find_last_of("/\\") + 1);
+            std::printf("%s\t%d\t%d\t%d\t%d\t%d\t%d\n", name.c_str(), floating, spikeIn, in, padAir, dup, overlap);
         }
         return 0;
     }

@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <map>
 #include <set>
+#include <tuple>
 #include <string>
 
 namespace al::gen {
@@ -800,11 +801,24 @@ void Structurer::placeObject(const LevelObject& o) {
 // path. Thin rails running out of the bounds are cut off; anything else out of them rejects it.
 bool Structurer::placeModule(const Module& m, bool mirrorX, bool under, int cx, int row, int floorRow, int ceilRow) {
     const ModulePiece* pieces = modulePieces() + m.first;
+    // many source levels built a shape a few units off the grid: the whole module goes onto it (its
+    // blocks then join the cells and draw one outline, not filled blocks half over each other); one
+    // whose blocks are off the grid by different amounts is left out
+    auto isSquare = [](int id) { return id == 1 || id == 2 || id == 3 || id == 4 || id == 6 || id == 7 || (id >= 467 && id <= 471 && id != 468); };
+    auto offGrid = [](float v) { float r = std::fmod(v - 15.0f, 30.0f); if (r < 0) r += 30.0f; return r >= 15.0f ? r - 30.0f : r; };
+    float snapX = 0, snapY = 0;
+    bool snapped = false;
+    for (int i = 0; i < m.count; ++i) {
+        const ModulePiece& p = pieces[i];
+        if (!isSquare(p.id)) continue;
+        if (!snapped) { snapX = offGrid(p.x); snapY = offGrid(p.y); snapped = true; }
+        else if (std::fabs(offGrid(p.x - snapX)) > 0.5f || std::fabs(offGrid(p.y - snapY)) > 0.5f) return false;
+    }
     std::vector<LevelObject> objs;
     objs.reserve(size_t(m.count));
     for (int i = 0; i < m.count; ++i) {
         const ModulePiece& p = pieces[i];
-        float x = p.x, y = p.y;
+        float x = p.x - snapX, y = p.y - snapY;
         int rot = p.rot;
         bool fx = p.fx != 0, fy = p.fy != 0;
         if (under) { y = float(m.h) * kCell - y; rot = -rot; fy = !fy; }
@@ -1768,11 +1782,76 @@ StructureResult Structurer::run() {
         m_objects.erase(std::remove_if(m_objects.begin(), m_objects.end(), [&](const LevelObject& o) { return !attached(o); }), m_objects.end());
         m_hazards.erase(std::remove_if(m_hazards.begin(), m_hazards.end(), [&](const LevelObject& o) { return !attached(o); }), m_hazards.end());
     }
+    // a spike stands on something (a shape, a platform, the ground, the floor or ceiling the game
+    // draws in a flying part) and is not inside a shape: a row run on past the end of a block, one
+    // hanging under another or one left in a filled cell is dropped
+    {
+        std::vector<Box> solids;
+        auto addSolid = [&](const LevelObject& o) {
+            phys::SimObject so;
+            if (phys::World::makeSimObject(o, 0, so) && (so.kind == level::Kind::Solid || so.kind == level::Kind::Slope))
+                solids.push_back({so.x - so.hw, so.y - so.hh, so.x + so.hw, so.y + so.hh});
+        };
+        for (auto& o : m_objects) addSolid(o);
+        for (auto& o : m_base.objects) addSolid(o);
+        auto filled = [&](float x, float y) {
+            const int cx = int(std::floor(x / kCell)), cy = int(std::floor(y / kCell));
+            return m_res.cells.filled(cx, cy) || m_platforms.filled(cx, cy);
+        };
+        auto supported = [&](float x, float y) {
+            if (y <= 4.0f) return true;
+            const Box b{x - 4, y - 4, x + 4, y + 4};
+            for (auto& s : solids) if (overlap(b, s, 0)) return true;
+            // a filled cell touching the base point
+            for (float dx : {-3.0f, 3.0f})
+                for (float dy : {-3.0f, 3.0f})
+                    if (filled(x + dx, y + dy)) return true;
+            auto it = std::lower_bound(m_nominal.begin(), m_nominal.end(), x, [](const Sample& q, float v) { return q.x < v; });
+            return it != m_nominal.end() && it->bounded && (std::fabs(y - it->floorY) <= 4.0f || std::fabs(y - it->ceilY) <= 4.0f);
+        };
+        auto stray = [&](const LevelObject& o) {
+            const auto& info = level::objectInfo(o.id);
+            if (info.kind != level::Kind::Hazard) return false;
+            Box d;
+            if (!drawnBox(o, d)) return false;
+            // the drawn middle inside a filled cell: buried in a shape
+            if (filled(float(o.x), float(o.y))) return true;
+            double r = std::fmod(o.rotation, 360.0);
+            if (r < 0) r += 360;
+            const int q = int(std::lround(r / 90.0)) % 4;
+            const bool flip = o.flipY;
+            float bx = float(o.x), by = float(o.y);
+            if (q == 0) by = flip ? d.y1 : d.y0;
+            else if (q == 2) by = flip ? d.y0 : d.y1;
+            else if (q == 1) bx = o.flipX ? d.x1 : d.x0;
+            else bx = o.flipX ? d.x0 : d.x1;
+            return !supported(bx, by);
+        };
+
+        m_objects.erase(std::remove_if(m_objects.begin(), m_objects.end(), stray), m_objects.end());
+        m_hazards.erase(std::remove_if(m_hazards.begin(), m_hazards.end(), stray), m_hazards.end());
+    }
     L = m_base;
     mergePlatforms(L.objects);
     tileCells(m_res.cells, m_prm.look, L.objects);
     for (auto& o : m_objects) L.objects.push_back(o);
     for (auto& h : m_hazards) L.objects.push_back(h);
+    // one object twice in the same place (two shapes drawing their shared edge) is kept once
+    {
+        std::set<std::tuple<int, long, long, long, bool, bool, long>> seen;
+        std::vector<LevelObject> kept;
+        kept.reserve(L.objects.size());
+        for (auto& o : L.objects) {
+            double r = std::fmod(o.rotation, 360.0);
+            if (r < 0) r += 360;
+            // a face line turned half round or flipped is the same line
+            const bool line = o.id == oid::OutlineTop;
+            const auto key = line ? std::make_tuple(o.id, std::lround(o.x * 4), std::lround(o.y * 4), std::lround(std::fmod(r, 180.0)), false, false, std::lround(o.scale * 100))
+                                  : std::make_tuple(o.id, std::lround(o.x * 4), std::lround(o.y * 4), std::lround(r), o.flipX, o.flipY, std::lround(o.scale * 100));
+            if (seen.insert(key).second) kept.push_back(o);
+        }
+        L.objects = std::move(kept);
+    }
     // the end: a little before the last planned position (the run beyond it is not planned)
     LevelObject end = make(oid::TrigEnd, endX, 600);
     end.setProp(36, std::string("1"));

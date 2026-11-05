@@ -1,6 +1,12 @@
 # Changelog
 
 ## v0.2.0
+- Cleaner structures: no spikes left in the air (a row run on past the end of a block, one hanging
+  under another, one alone near an orb), none inside a shape, no pad floating above its platform
+  (it went on the last platform built, not the one landed on), shapes from real levels built a few
+  units off the grid are put onto it (they showed as filled blocks half over each other), and no
+  object twice in one place. `alcli lint` counts these in any level (27 test layouts: about 1350
+  floating spikes before, 2 now, which stand on the edge of the game's own flying-part ceiling)
 - Demons are about a third cube, as real ones (was a fifth): a cube in a fast part jumps on the
   main hits and lets the quick notes between go instead of turning each into an orb, and a
   gamemode portal now fits between quick notes (it goes in alone when the speed portal does not
